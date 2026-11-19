@@ -156,17 +156,18 @@ test_workflows_never_check_out_pr_code() {
   local wf perms
   for wf in "$PLUGIN_DIR"/templates/github/workflows/*.yml; do
     assert_not_contains "$(cat "$wf")" "github.event.pull_request.head" "$(basename "$wf") checks out PR code"
-    # The only secret is the optional project token (delta pr-task-linking: Quyền tối thiểu cho workflow).
-    assert_eq "" "$(grep -o 'secrets\.[A-Za-z_]*' "$wf" | grep -v '^secrets\.SCRUM_PROJECT_TOKEN$' || true)" "$(basename "$wf") uses another secret"
+    # Only optional secrets: the project token, and the digest webhook in the digest workflow
+    # (spec pr-task-linking: Quyền tối thiểu cho workflow).
+    assert_eq "" "$(grep -o 'secrets\.[A-Za-z_]*' "$wf" | grep -v '^secrets\.SCRUM_PROJECT_TOKEN$' \
+      | { if [ "$(basename "$wf")" = scrum-daily-digest.yml ]; then grep -v '^secrets\.SCRUM_DIGEST_WEBHOOK$'; else cat; fi; } || true)" \
+      "$(basename "$wf") uses another secret"
     perms="$(yq -o=json '.permissions' "$wf" | jq -c -S .)"
     case "$(basename "$wf")" in
       scrum-project-sync.yml) assert_eq '{"contents":"read","issues":"write"}' "$perms" "$(basename "$wf") permissions" ;;
       *) assert_eq '{"contents":"read","issues":"write","pull-requests":"read"}' "$perms" "$(basename "$wf") permissions" ;;
     esac
   done
-  for wf in scrum-pr-link-check.yml scrum-daily-digest.yml; do
-    assert_not_contains "$(cat "$PLUGIN_DIR/templates/github/workflows/$wf")" "secrets." "$wf needs no secret"
-  done
+  assert_not_contains "$(cat "$PLUGIN_DIR/templates/github/workflows/scrum-pr-link-check.yml")" "secrets." "the PR check needs no secret"
 }
 
 test_init_second_run_does_not_ask_to_commit() {
@@ -335,4 +336,11 @@ test_init_updates_unedited_file_from_older_version() {
   run_scrum init
   assert_contains "$OUT" "updated       .github/pull_request_template.md"
   assert_contains "$(cat "$pr")" "Closes #"
+}
+
+# delta repo-bootstrap "Secret webhook cho workflow digest"
+test_digest_workflow_passes_the_webhook_secret() {
+  init_env
+  run_scrum init
+  assert_contains "$(cat "$SCRUM_REPO_DIR/.github/workflows/scrum-daily-digest.yml")" 'SCRUM_DIGEST_WEBHOOK: ${{ secrets.SCRUM_DIGEST_WEBHOOK }}'
 }

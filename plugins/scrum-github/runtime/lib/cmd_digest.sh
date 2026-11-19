@@ -42,4 +42,27 @@ cmd_digest() {
     --argjson strings "$(strings_json)" --argjson attention "${ATTENTION_LINES:-[]}")"
   printf '%s' "$body" | jq -c '{body}' | gh_send POST "repos/$repo/issues/$n/comments" >/dev/null
   info "Posted the digest on #$n."
+  send_webhook "$(printf '%s' "$body" | jq -r '.body | split("\n") | map(select(test("^<!--") | not)) | join("\n")')"
+}
+
+# send_webhook TEXT  POST the digest to SCRUM_DIGEST_WEBHOOK, if set, in digest.webhook_format.
+# Best effort: a failure is a warning, the digest comment is already posted.
+send_webhook() {
+  local url="${SCRUM_DIGEST_WEBHOOK:-}" format payload code
+  [ -n "$url" ] || return 0
+  format="$(config_get '.digest.webhook_format // "slack"')"
+  case "$format" in
+    telegram) payload="$(jq -nc --arg t "$1" '{text: $t, disable_web_page_preview: true}')" ;;
+    *) payload="$(jq -nc --arg t "$1" '{text: $t}')" ;;
+  esac
+  # The URL holds a secret: never print it.
+  if ! code="$(printf '%s' "$payload" | "${SCRUM_CURL:-curl}" -sS -o /dev/null -w '%{http_code}' -X POST \
+      -H 'Content-Type: application/json' --data-binary @- "$url" 2>/dev/null)"; then
+    warn "the digest webhook could not be reached; the digest comment was posted"
+    return 0
+  fi
+  case "$code" in
+    2??) info "Sent the digest to the $format webhook." ;;
+    *) warn "the digest webhook answered HTTP $code; the digest comment was posted" ;;
+  esac
 }

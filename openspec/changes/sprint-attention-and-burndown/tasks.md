@@ -26,7 +26,7 @@
 
 ## 6. Webhook (design mục 5; spec sprint-reporting "Digest hằng ngày", repo-bootstrap)
 
-- [ ] 6.1 Gửi webhook trong `cmd_digest.sh` (slack, telegram, lỗi chỉ cảnh báo) với `curl` giả trong test; thêm secret vào `templates/github/workflows/scrum-daily-digest.yml` và test template. Kiểm tra: `bash tests/run.sh test_report` và `test_init` xanh
+- [x] 6.1 Gửi webhook trong `cmd_digest.sh` (slack, telegram, lỗi chỉ cảnh báo) với `curl` giả trong test; thêm secret vào `templates/github/workflows/scrum-daily-digest.yml` và test template. Kiểm tra: `bash tests/run.sh test_report` và `test_init` xanh
 
 ## 7. Tổng kết khi đóng sprint (design mục 6; spec sprint-lifecycle)
 

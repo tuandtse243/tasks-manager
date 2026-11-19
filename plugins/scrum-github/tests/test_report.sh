@@ -425,3 +425,71 @@ test_cmd_report_in_vietnamese() {
   assert_eq "vi" "$(jq -r .language <<<"$data")"
   assert_eq "Theo người" "$(jq -r .strings.report_by_person <<<"$data")"
 }
+
+# ---------- digest webhook (delta sprint-reporting "Digest hằng ngày") ----------
+
+fake_curl() { # fake_curl HTTP_CODE|fail  -> SCRUM_CURL logs its arguments and body to $T/curl.log
+  cat > "$T/fake-curl" <<CURL
+#!/usr/bin/env bash
+printf 'ARGS %s\n' "\$*" >> "$T/curl.log"
+printf 'BODY %s\n' "\$(cat)" >> "$T/curl.log"
+[ "$1" = fail ] && exit 7
+printf '%s' "$1"
+CURL
+  chmod +x "$T/fake-curl"
+  export SCRUM_CURL="$T/fake-curl"
+}
+webhook_env() {
+  digest_env
+  route_json 'api -X POST repos/acme/blog/issues/8/comments*' '{}'
+  route_json 'api --paginate repos/acme/blog/issues/8/comments*' '[]'
+}
+
+test_digest_webhook_slack() {
+  webhook_env
+  fake_curl 200
+  SCRUM_DIGEST_WEBHOOK=https://hooks.example/T/x run_scrum digest
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$(cat "$T/curl.log")" "https://hooks.example/T/x"
+  local body; body="$(sed -n 's/^BODY //p' "$T/curl.log")"
+  assert_contains "$(jq -r .text <<<"$body")" "## Sprint 1 digest, 2014-09-24"
+  assert_not_contains "$(jq -r .text <<<"$body")" "<!-- scrum:digest -->"
+  assert_eq '["text"]' "$(jq -c keys <<<"$body")"
+  assert_contains "$OUT" "Sent the digest to the slack webhook."
+}
+
+test_digest_webhook_telegram() {
+  webhook_env
+  printf 'version: 1\ndigest:\n  webhook_format: telegram\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  fake_curl 200
+  SCRUM_DIGEST_WEBHOOK='https://api.telegram.org/botTOKEN/sendMessage?chat_id=42' run_scrum digest
+  assert_status 0 "$STATUS" "$ERR"
+  local body; body="$(sed -n 's/^BODY //p' "$T/curl.log")"
+  assert_eq '["disable_web_page_preview","text"]' "$(jq -c keys <<<"$body")"
+}
+
+test_digest_webhook_error_is_a_warning() {
+  webhook_env
+  fake_curl 500
+  SCRUM_DIGEST_WEBHOOK=https://hooks.example/T/x run_scrum digest
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$ERR" "the digest webhook answered HTTP 500"
+  assert_contains "$(gh_calls)" 'api -X POST repos/acme/blog/issues/8/comments'
+  assert_not_contains "$ERR" "hooks.example" "the secret URL is never printed"
+}
+
+test_digest_webhook_unreachable_is_a_warning() {
+  webhook_env
+  fake_curl fail
+  SCRUM_DIGEST_WEBHOOK=https://hooks.example/T/x run_scrum digest
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$ERR" "could not be reached"
+}
+
+test_digest_without_webhook_calls_no_curl() {
+  webhook_env
+  fake_curl 200
+  run_scrum digest
+  assert_status 0 "$STATUS" "$ERR"
+  [ ! -f "$T/curl.log" ] || _fail "curl was called"
+}

@@ -35,6 +35,7 @@ Không có.
 - `scrum-config`: thêm `sprint.working_days`, `attention.*`, `language`, `digest.webhook_format` và quy tắc kiểm tra của chúng.
 - `sprint-lifecycle`: "Đóng sprint" thêm bản tổng kết.
 - `repo-bootstrap`: workflow digest nhận thêm secret webhook.
+- `pr-task-linking`: "Quyền tối thiểu cho workflow" cho phép workflow digest đọc secret tuỳ chọn `SCRUM_DIGEST_WEBHOOK`.
 
 ## Impact
 
