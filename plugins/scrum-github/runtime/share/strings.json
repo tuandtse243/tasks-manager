@@ -62,7 +62,11 @@
     "summary_carry": "Carried over to the next sprint",
     "summary_none": "None.",
     "summary_unestimated": "unestimated",
-    "summary_compare_one": "The sprint before: {avg} ({list})."
+    "summary_compare_one": "The sprint before: {avg} ({list}).",
+    "digest_in_review": "Waiting for review",
+    "digest_nothing_in_review": "Nothing waiting for review.",
+    "attention_review": "{ref} has waited for review for {n} working days.",
+    "attention_review_one": "{ref} has waited for review for {n} working day."
   },
   "vi": {
     "assignee": "Người nhận",
@@ -121,6 +125,9 @@
     "summary_done": "Đã xong",
     "summary_carry": "Chuyển sang sprint sau",
     "summary_none": "Không có.",
-    "summary_unestimated": "chưa ước lượng"
+    "summary_unestimated": "chưa ước lượng",
+    "digest_in_review": "Chờ review",
+    "digest_nothing_in_review": "Không có task nào chờ review.",
+    "attention_review": "{ref} đã chờ review {n} ngày làm việc."
   }
 }

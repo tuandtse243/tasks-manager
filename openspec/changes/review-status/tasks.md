@@ -16,7 +16,7 @@
 
 ## 4. Báo cáo (design mục 1, 4; spec sprint-reporting)
 
-- [ ] 4.1 `progress`, `progress-table.jq`, `digest.jq`, `report-data.jq`, `report.html` dựng cột và mục từ `roles($cfg)`; `attention.jq` loại `review`; chuỗi `en`, `vi`; test bật và tắt (output tắt giống hệt trước). Kiểm tra: `bash tests/run.sh test_report` xanh
+- [x] 4.1 `progress`, `progress-table.jq`, `digest.jq`, `report-data.jq`, `report.html` dựng cột và mục từ `roles($cfg)`; `attention.jq` loại `review`; chuỗi `en`, `vi`; test bật và tắt (output tắt giống hệt trước). Kiểm tra: `bash tests/run.sh test_report` xanh
 
 ## 5. Board (design mục 3; spec project-board-sync)
 

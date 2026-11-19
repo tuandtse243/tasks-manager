@@ -493,3 +493,49 @@ test_digest_without_webhook_calls_no_curl() {
   assert_status 0 "$STATUS" "$ERR"
   [ ! -f "$T/curl.log" ] || _fail "curl was called"
 }
+
+# ---------- with statuses.in_review set (delta sprint-reporting "Báo cáo khi bật In review") ----------
+
+review_defaults() { defaults | jq -c '.statuses.in_review = "In review"'; }
+review_issues() { jq -c '(.[] | select(.number == 3) | .labels) |= map(if .name == "status: In progress" then {name: "status: In review"} else . end)' "$FIXTURES/issues-sprint1.json"; }
+
+test_review_progress_and_table_have_the_column() {
+  local p table
+  p="$(jqt progress -n --argjson cfg "$(review_defaults)" --argjson sprint "$(sprint1)" --argjson issues "$(review_issues)" --arg today 2014-09-24)"
+  assert_eq '{"count":1,"points":1}' "$(jq -c '.rows[] | select(.assignee == "david") | .in_review' <<<"$p")"
+  table="$(jqt progress-table -r --argjson cfg "$(review_defaults)" --argjson strings "$(strings en)" <<<"$p")"
+  assert_contains "$table" "Assignee  New        In progress  In review  Done        Total"
+}
+
+test_review_off_progress_has_no_review_key() {
+  local p
+  p="$(progress_of "$(cat "$FIXTURES/issues-sprint1.json")" 2014-09-24)"
+  assert_eq "false" "$(jq '.total | has("in_review")' <<<"$p")"
+}
+
+test_review_digest_section() {
+  local body
+  body="$(jqt digest -n --argjson cfg "$(review_defaults)" --argjson sprint "$(sprint1)" --argjson issues "$(review_issues)" \
+    --argjson comments '[]' --arg today 2014-09-24 --argjson off 0 --argjson strings "$(strings en)" --argjson attention '[]' | jq -r .body)"
+  assert_contains "$body" "### Waiting for review"
+  assert_contains "$body" "- @david: #3 Write a post (1 pt)"
+  assert_contains "$body" "- Nothing in progress."
+}
+
+test_review_attention_waiting_too_long() {
+  local cfg issues a
+  cfg="$(review_defaults)"
+  issues="$(at_issue 12 'In review' 3 alice 2026-11-16T10:00:00Z | jq -sc .)"
+  a="$(jqt attention -n --argjson cfg "$cfg" --argjson sprint "$AT_SPRINT" --argjson issues "$issues" --argjson blocked '{}' \
+    --argjson prs '[]' --arg today 2026-11-20 --argjson off 0 --arg repo acme/blog --argjson strings "$(strings en)")"
+  assert_eq '["#12 Task 12 has waited for review for 4 working days."]' "$(jq -c .lines <<<"$a")"
+}
+
+test_review_report_data_has_four_roles() {
+  local data
+  data="$(jqt report-data -n --argjson cfg "$(review_defaults)" --argjson sprint "$(sprint1)" --argjson issues "$(review_issues)" \
+    --argjson ms "$(cat "$FIXTURES/milestones.json")" --arg today 2014-09-24 --argjson off 0 --arg now 2014-09-24T08:00:00Z --arg repo acme/blog \
+    --argjson hissues "$(review_issues)" --argjson attention '{"lines":[]}' --argjson strings "$(strings en)" --argjson limited false)"
+  assert_eq '["new","in_progress","in_review","done"]' "$(jq -c .roles <<<"$data")"
+  assert_eq "In review" "$(jq -r .statuses.in_review <<<"$data")"
+}

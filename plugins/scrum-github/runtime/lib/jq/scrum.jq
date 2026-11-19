@@ -167,9 +167,10 @@ def progress($cfg; $sprint; $issues; $today):
   | ($issues | report_tasks($cfg)) as $t
   | def row($xs): {
         new: ([$xs[] | select(._role == "new")] | bucket),
-        in_progress: ([$xs[] | select(._role == "in_progress")] | bucket),
-        done: ([$xs[] | select(._role == "done")] | bucket),
-        total: ($xs | bucket) };
+        in_progress: ([$xs[] | select(._role == "in_progress")] | bucket) }
+      + (if review_on($cfg) then {in_review: ([$xs[] | select(._role == "in_review")] | bucket)} else {} end)
+      + { done: ([$xs[] | select(._role == "done")] | bucket),
+          total: ($xs | bucket) };
   ([$t[]._who[]] | unique) as $people
   | ( ($people | map(. as $p | {assignee: $p} + row([$t[] | select(._who | any(.[]; . == $p))])))
       + (if any($t[]; (._who | length) == 0) then [{assignee: "Unassigned"} + row([$t[] | select((._who | length) == 0)])] else [] end)
