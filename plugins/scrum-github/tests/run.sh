@@ -51,7 +51,8 @@ route_first() { # route_first 'GLOB' FILE  Like route, but ahead of every earlie
   mv "$FAKE_GH_DIR/routes.new" "$FAKE_GH_DIR/routes"
 }
 route_json() { # route_json 'GLOB' 'json text'
-  local f="r$(wc -l < "$FAKE_GH_DIR/routes" | tr -d ' ').json"
+  local f
+  f="r$(wc -l < "$FAKE_GH_DIR/routes" | tr -d ' ').json"
   printf '%s' "$2" > "$FAKE_GH_DIR/$f"
   route "$1" "$f"
 }
@@ -65,6 +66,7 @@ setup_repo() { # setup_repo [yaml-content]
   if [ $# -gt 0 ]; then printf '%s\n' "$1" > "$SCRUM_REPO_DIR/.github/scrum.yml"; fi
 }
 
+# shellcheck disable=SC2034  # OUT, ERR and STATUS are read by the test files
 run_scrum() { # run_scrum args...  -> sets OUT, ERR, STATUS
   set +e
   OUT="$("$BASH" "$SCRUM" "$@" 2>"$T/stderr")"; STATUS=$?
@@ -86,6 +88,7 @@ for file in "$TESTS_DIR"/test_*.sh; do
     T="$(mktemp -d "${TMPDIR:-/tmp}/scrumtest.XXXXXX")"
     export T
     # Not inside `if`: errexit must stay active in the subshell.
+    # shellcheck source=/dev/null  # the test file is chosen at run time
     ( set -e; cd "$T"; . "$file"; "$name" ) 2>"$T/.err"
     rc=$?
     if [ "$rc" -eq 0 ]; then

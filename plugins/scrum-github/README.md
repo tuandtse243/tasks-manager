@@ -79,13 +79,9 @@ Plan files have their own commands too (all but `check` and `apply` work offline
 | `scrum plan apply FILE [--dry-run] [--update]` | Create the missing issues, link sub-issues and dependencies, record the numbers |
 | `scrum doc check FILE [--type brief\|context]` | Check the required sections of a brief or of the project context |
 
-> **New in 0.4.0:** `/scrum-github:task-pr` and `/scrum-github:project-setup`; `discover` can
-> write a questionnaire for someone who is not in the session; the pull request template has
-> "Evidence" and "Merge Danger" sections. A repository set up earlier keeps its old template:
-> run `scrum init --force-file .github/pull_request_template.md` to replace it.
->
-> **Renamed in 0.3.0:** `/scrum-github:sprint-plan` is now `/scrum-github:plan`. Old plan files
-> (no `version` key) still apply as before.
+What changed in each version: [CHANGELOG.md](CHANGELOG.md). A repository set up before 0.4.0
+keeps its old pull request template: run `scrum init --force-file .github/pull_request_template.md`
+to replace it.
 
 Workflows installed in the target repo call `scrum event`, `scrum pr-check` and `scrum digest`
 (and `scrum project sync` when the project board is on, see below).
@@ -345,6 +341,18 @@ branch needs `.github/` from `scrum init`.
 bash tests/run.sh            # all tests, offline, with a fake gh
 bash tests/run.sh config     # only tests/test_config.sh
 ```
+
+Lint the shell code (not `vendor/`) and validate the plugin, from this directory:
+
+```
+shellcheck --severity=warning runtime/bin/scrum runtime/lib/*.sh scripts/*.sh wizards/*.sh tests/run.sh tests/test_*.sh tests/fake-gh
+claude plugin validate .     # run by hand; CI does not install Claude Code
+```
+
+`tests/.shellcheckrc` and `wizards/.shellcheckrc` hold the settings: the test files are Bash
+without a shebang, and the part of the wizard copied from `vendor/pocock/wizard/template.sh` is
+not edited. The CI workflow of this repository (`.github/workflows/ci.yml`) runs the tests on
+Ubuntu and macOS and the `shellcheck` command above.
 
 Calculations are pure jq programs in `runtime/lib/jq/` and are tested with JSON fixtures.
 GitHub calls go through `ghx`, which tests replace with `tests/fake-gh` via `SCRUM_GH`.

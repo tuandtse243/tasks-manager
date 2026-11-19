@@ -150,6 +150,7 @@ test_vendor_sync_clones_when_no_source_is_given() {
   fake_upstream "$T/src"
   mkdir -p "$T/tmp"
   set +e
+  # shellcheck disable=SC2034  # stdout is captured to keep it out of the test output
   OUT="$(TMPDIR="$T/tmp" VENDOR_DEST="$T/dest" VENDOR_UPSTREAM_URL="file://$T/src" bash "$VSYNC" 2>"$T/stderr")"; STATUS=$?
   set -e
   assert_status 0 "$STATUS" "$(cat "$T/stderr")"

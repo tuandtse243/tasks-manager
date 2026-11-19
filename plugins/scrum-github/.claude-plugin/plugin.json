@@ -5,5 +5,8 @@
   "author": {
     "name": "tasks-manager maintainers"
   },
+  "repository": "https://github.com/tuandtse243/tasks-manager",
+  "homepage": "https://github.com/tuandtse243/tasks-manager/tree/main/plugins/scrum-github#readme",
+  "license": "MIT",
   "keywords": ["scrum", "github", "sprint", "milestone", "issues", "burndown"]
 }

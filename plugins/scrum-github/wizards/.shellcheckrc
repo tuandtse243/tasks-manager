@@ -1,0 +1,4 @@
+# The part of project-board.sh above "# STAGES" must stay byte-identical to
+# vendor/pocock/wizard/template.sh (tests/test_wizard.sh), so its findings are not fixed here.
+# SC1087: "$s$DIM$e[Enter ..." is a literal "[" after a colour code, not an array index.
+disable=SC1087

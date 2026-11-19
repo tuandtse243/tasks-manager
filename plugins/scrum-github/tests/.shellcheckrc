@@ -1,0 +1,2 @@
+# The test files are sourced by run.sh and have no shebang; they are Bash.
+shell=bash

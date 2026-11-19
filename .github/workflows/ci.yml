@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# The workflow runs the code of the pull request, so it gets read access only and no secret.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install yq
+        if: runner.os == 'macOS'
+        run: brew install yq
+      - name: Tool versions
+        run: |
+          bash --version | head -1
+          jq --version
+          yq --version
+      - name: Offline tests
+        run: bash plugins/scrum-github/tests/run.sh
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: shellcheck
+        working-directory: plugins/scrum-github
+        run: |
+          shellcheck --version
+          shellcheck --severity=warning runtime/bin/scrum runtime/lib/*.sh scripts/*.sh wizards/*.sh tests/run.sh tests/test_*.sh tests/fake-gh
