@@ -24,6 +24,8 @@ Backlog and sprints
   backlog [--json]                                Open tasks without a sprint, with points, parent and blockers
   sprint new [--title T] [--start YYYY-MM-DD] [--length DAYS] [--goal TEXT]
   sprint close [SPRINT] [--yes] [--create-next]
+  sprint fill [SPRINT] [--capacity N] [--add N,N,...] [--yes]
+                                                  Capacity from velocity, the backlog, and adding tasks to the sprint
 
 Tasks
   task new --title T [--body B] [--points N] [--assignee LOGIN]... [--sprint S] [--bug]
@@ -101,7 +103,8 @@ case "$cmd" in
     case "$sub" in
       new) cmd_sprint_new "$@" ;;
       close) cmd_sprint_close "$@" ;;
-      *) die "unknown sprint command '${sub}'. Use: scrum sprint new | scrum sprint close" ;;
+      fill) cmd_sprint_fill "$@" ;;
+      *) die "unknown sprint command '${sub}'. Use: scrum sprint new | close | fill" ;;
     esac
     ;;
   task)

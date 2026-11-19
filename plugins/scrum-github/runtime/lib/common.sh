@@ -99,6 +99,9 @@ repo_dir() {
   git rev-parse --show-toplevel 2>/dev/null || pwd
 }
 
+# comment_issue REPO NUMBER TEXT  Post a comment on an issue.
+comment_issue() { jq -n --arg b "$3" '{body: $b}' | gh_send POST "repos/$1/issues/$2/comments" >/dev/null; }
+
 # write_atomic FILE  Writes stdin to FILE through a temporary file in the same directory, so
 # FILE is always complete (a rename within one file system is atomic).
 write_atomic() {

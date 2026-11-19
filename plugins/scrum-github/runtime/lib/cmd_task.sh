@@ -122,8 +122,6 @@ task_issue() {
   printf '%s' "$issue"
 }
 
-comment() { jq -n --arg b "$3" '{body: $b}' | gh_send POST "repos/$1/issues/$2/comments" >/dev/null; }
-
 cmd_task_list() {
   local mine=0 sprint_name="" backlog=0 status="" json=0 repo issues me="" sprint list
   while [ $# -gt 0 ]; do
@@ -195,7 +193,7 @@ cmd_task_move() {
       continue
     fi
     jq -n --argjson m "$to_number" '{milestone: $m}' | gh_send PATCH "repos/$repo/issues/$n" >/dev/null
-    comment "$repo" "$n" "Moved from $from to $to_title."
+    comment_issue "$repo" "$n" "Moved from $from to $to_title."
     info "Moved #$n from $from to $to_title."
     project_touch "$repo" "$n"
   done
@@ -261,7 +259,7 @@ cmd_task_drop() {
   load_config
   repo="$(repo_slug)"
   task_issue "$repo" "$n" >/dev/null
-  if [ -n "$reason" ]; then comment "$repo" "$n" "Dropped (not planned): $reason"; fi
+  if [ -n "$reason" ]; then comment_issue "$repo" "$n" "Dropped (not planned): $reason"; fi
   printf '{"state":"closed","state_reason":"not_planned"}' | gh_send PATCH "repos/$repo/issues/$n" >/dev/null
   info "#$n is closed as not planned; it no longer counts in points or velocity."
   project_touch "$repo" "$n"

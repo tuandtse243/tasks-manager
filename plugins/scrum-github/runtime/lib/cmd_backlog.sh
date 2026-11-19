@@ -7,6 +7,14 @@ BACKLOG_BLOCKED_LIMIT=50   # "blocked by" is one call per task; later tasks show
 # backlog_issues REPO  Open issues without a milestone (raw).
 backlog_issues() { gh_get_all "repos/$1/issues?milestone=none&state=open&per_page=100"; }
 
+# backlog_count REPO  Number of tasks in the backlog; fails when GitHub cannot be read.
+backlog_count() {
+  local issues
+  issues="$(backlog_issues "$1")" || return 1
+  printf '%s' "$issues" | jq -L "$JQ_LIB" --argjson cfg "$CONFIG_JSON" \
+    'include "scrum"; [.[] | select(.state == "open" and .milestone == null and is_task($cfg))] | length'
+}
+
 # fetch_backlog REPO [ISSUES]  Sets BACKLOG to the output of backlog.jq.
 fetch_backlog() {
   local issues="${2:-}" nums n list blocked='{}'

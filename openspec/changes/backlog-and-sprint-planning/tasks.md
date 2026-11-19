@@ -20,10 +20,10 @@
 
 ## 3. Lập kế hoạch sprint (design mục 1, 4; spec sprint-lifecycle)
 
-- [ ] 3.1 Tạo `runtime/lib/jq/sprint-fill.jq` và test jq: sức chứa từ velocity, chưa có velocity, `--capacity`, vượt sức chứa, chưa có điểm, bị chặn ngoài sprint, số không hợp lệ. Kiểm tra: `bash tests/run.sh sprint` xanh
-- [ ] 3.2 Lệnh `scrum sprint fill [SPRINT] [--capacity N] [--add N,N,…] [--yes]`: xem trước, chỉ ghi khi `--yes`, dừng khi có lỗi; test lệnh cho xem trước không ghi, ghi (milestone, comment), số không hợp lệ không ghi gì. Kiểm tra: `bash tests/run.sh sprint` xanh
-- [ ] 3.3 `scrum sprint new` gợi ý `/scrum-github:sprint-fill` khi backlog có task; test có và không có backlog. Kiểm tra: `bash tests/run.sh sprint` xanh
-- [ ] 3.4 Tạo `skills/sprint-fill/SKILL.md` (đề xuất tập task vừa sức chứa theo thứ tự phụ thuộc, người dùng sửa rồi duyệt); sửa `skills/sprint-new/SKILL.md` gợi ý bước này. Kiểm tra: `claude plugin validate .` đạt
+- [x] 3.1 Tạo `runtime/lib/jq/sprint-fill.jq` và test jq: sức chứa từ velocity, chưa có velocity, `--capacity`, vượt sức chứa, chưa có điểm, bị chặn ngoài sprint, số không hợp lệ. Kiểm tra: `bash tests/run.sh sprint` xanh
+- [x] 3.2 Lệnh `scrum sprint fill [SPRINT] [--capacity N] [--add N,N,…] [--yes]`: xem trước, chỉ ghi khi `--yes`, dừng khi có lỗi; test lệnh cho xem trước không ghi, ghi (milestone, comment), số không hợp lệ không ghi gì. Kiểm tra: `bash tests/run.sh sprint` xanh
+- [x] 3.3 `scrum sprint new` gợi ý `/scrum-github:sprint-fill` khi backlog có task; test có và không có backlog. Kiểm tra: `bash tests/run.sh sprint` xanh
+- [x] 3.4 Tạo `skills/sprint-fill/SKILL.md` (đề xuất tập task vừa sức chứa theo thứ tự phụ thuộc, người dùng sửa rồi duyệt); sửa `skills/sprint-new/SKILL.md` gợi ý bước này. Kiểm tra: `claude plugin validate .` đạt
 
 ## 4. `next` (design mục 6; spec next-step-guidance)
 
