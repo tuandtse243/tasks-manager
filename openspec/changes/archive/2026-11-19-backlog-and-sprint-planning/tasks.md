@@ -38,7 +38,7 @@
 ## 6. Kiểm tra tích hợp
 
 - [x] 6.1 Toàn bộ `bash tests/run.sh` (jq 1.8.1 và 1.8.2), `shellcheck`, `openspec validate backlog-and-sprint-planning --strict`, `claude plugin validate .`. Kiểm tra: tất cả đạt
-- [ ] 6.2 Mở pull request, CI xanh, merge. Kiểm tra: CI trên `main` (gồm macOS) xanh
+- [x] 6.2 Mở pull request, CI xanh, merge. Kiểm tra: CI trên `main` (gồm macOS) xanh
 
 ## Workflow follow-up
 

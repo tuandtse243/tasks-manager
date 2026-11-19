@@ -6,7 +6,7 @@ Trả lời câu "giờ tôi làm gì tiếp": từ trạng thái của repo, sp
 ## Requirements
 
 ### Requirement: Một bước kế tiếp theo thứ tự ưu tiên
-Lệnh `scrum next` (và skill `/scrum-github:next`) SHALL nêu đúng một bước, là điều kiện đầu tiên đúng theo thứ tự: chưa khởi tạo; `.github/` chưa có trên nhánh mặc định của remote; không có sprint mở; sprint hiện tại đã quá ngày kết thúc; người dùng có task In progress trong sprint; sprint có task chưa xong mà chưa có điểm, hoặc task In progress chưa giao ai; còn task New để nhận; không còn gì để nhận. Mỗi bước MUST kèm một lệnh.
+Lệnh `scrum next` (và skill `/scrum-github:next`) SHALL nêu đúng một bước, là điều kiện đầu tiên đúng theo thứ tự: chưa khởi tạo; `.github/` chưa có trên nhánh mặc định của remote; không có sprint mở; sprint hiện tại đã quá ngày kết thúc; sprint hiện tại chưa có task nào trong khi backlog có task; người dùng có task In progress trong sprint; sprint có task chưa xong mà chưa có điểm, hoặc task In progress chưa giao ai; còn task New để nhận; không còn gì để nhận. Mỗi bước MUST kèm một lệnh.
 
 #### Scenario: Chưa khởi tạo
 - **WHEN** repo chưa có `.github/scrum.yml`
@@ -23,6 +23,10 @@ Lệnh `scrum next` (và skill `/scrum-github:next`) SHALL nêu đúng một bư
 #### Scenario: Sprint quá hạn
 - **WHEN** sprint hiện tại có ngày kết thúc trước hôm nay
 - **THEN** bước kế tiếp là đóng sprint bằng `/scrum-github:sprint-close`, kể cả khi người dùng còn task In progress
+
+#### Scenario: Sprint rỗng, backlog có task
+- **WHEN** sprint hiện tại còn hạn, chưa có task nào, và backlog có 4 task
+- **THEN** bước kế tiếp là chọn task cho sprint bằng `/scrum-github:sprint-fill`
 
 #### Scenario: Đang làm dở
 - **WHEN** sprint còn hạn và người dùng được giao task #12 đang In progress
