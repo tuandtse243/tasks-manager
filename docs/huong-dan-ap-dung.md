@@ -146,12 +146,18 @@ hình gợi ý cho team ở Việt Nam:
 ```yaml
 version: 1
 timezone: Asia/Ho_Chi_Minh        # "hôm nay", burndown và digest tính theo giờ Việt Nam
+language: vi                      # bảng tiến độ, digest, báo cáo HTML, tổng kết sprint bằng tiếng Việt
 sprint:
   length_days: 12                 # ngày lịch, tính cả ngày đầu: thứ 2 tuần 1 tới thứ 6 tuần 2
+  working_days: [1, 2, 3, 4, 5]   # ngày làm việc (1 = thứ 2); mặc định đã là thứ 2 tới thứ 6
 points:
   scale: [1, 2, 3, 5, 8]          # Fibonacci; task lớn hơn 8 thì nên chia nhỏ
 digest:
   cron: "0 1 * * 1-5"             # giờ UTC: 8 giờ sáng giờ Việt Nam, thứ 2 tới thứ 6
+  webhook_format: slack           # gửi thêm digest ra chat: slack (cả Google Chat, Mattermost) hoặc telegram
+attention:
+  stale_days: 2                   # task In progress không có hoạt động quá 2 ngày làm việc thì "cần chú ý"
+  behind_percent: 15              # sprint chậm hơn đường lý tưởng quá 15% phạm vi thì "cần chú ý"
 planning:
   hours_per_point: 4              # tuỳ chọn: plan.md hiện thêm số giờ (1 điểm = 4 giờ)
 ```
@@ -422,10 +428,10 @@ scrum task new --title "Viết tài liệu API" --sprint "Sprint 4"
 
 | Muốn biết | Lệnh | Kết quả |
 |---|---|---|
-| Ai đang làm gì, còn bao nhiêu điểm | `/scrum-github:sprint-status` hoặc `scrum status` | Bảng theo người và trạng thái, % điểm đã xong, task chưa có điểm, số ngày còn lại |
+| Ai đang làm gì, còn bao nhiêu điểm | `/scrum-github:sprint-status` hoặc `scrum status` | Bảng theo người và trạng thái, % điểm đã xong, task chưa có điểm, số ngày làm việc còn lại, và mục "Cần chú ý" (task bị chặn, task In progress không động, task thiếu người nhận hoặc điểm, sprint chậm) |
 | Hỏi một câu cụ thể | `/scrum-github:sprint-status An đang làm gì?` | Claude trả lời từ bảng |
-| Tin tóm tắt mỗi sáng | Tự động | Workflow comment vào issue `Sprint N digest` theo `digest.cron` |
-| Burndown và velocity để gửi stakeholder | `/scrum-github:sprint-report` hoặc `scrum report --out sprint-3.html` | File HTML mở được khi không có mạng. Mặc định ghi vào `scrum-reports/<sprint>.html` |
+| Tin tóm tắt mỗi sáng | Tự động | Workflow comment vào issue `Sprint N digest` theo `digest.cron`, kèm mục "Cần chú ý". Muốn nhận cả trên Slack, Google Chat, Mattermost hay Telegram: đặt secret `SCRUM_DIGEST_WEBHOOK` của repo (Telegram: `https://api.telegram.org/bot<TOKEN>/sendMessage?chat_id=<CHAT_ID>`, kèm `digest.webhook_format: telegram`) |
+| Burndown và velocity để gửi stakeholder | `/scrum-github:sprint-report` hoặc `scrum report --out sprint-3.html` | File HTML mở được khi không có mạng, burndown dựng lại từ lịch sử task (task thêm, bỏ hay đổi điểm giữa sprint được tính đúng ngày) kèm đường phạm vi. Mặc định ghi vào `scrum-reports/<sprint>.html` |
 
 ### Flow F: Đóng sprint
 
@@ -442,7 +448,9 @@ sprint kế tiếp (tạo mới nếu chưa có). Khi bạn xác nhận, plugin:
 - ghi velocity vào milestone,
 - tạo sprint kế tiếp nếu chưa có,
 - chuyển các task còn mở sang sprint mới, kèm comment trên từng task,
-- đóng milestone.
+- đóng milestone,
+- đăng bản tổng kết (mục tiêu, velocity so với các sprint trước, phạm vi thay đổi, task xong, task
+  chuyển tiếp) thành comment trên issue `Sprint N digest`, để cả team đọc ở buổi review.
 
 Bằng CLI: `scrum sprint close` để xem kế hoạch, rồi `scrum sprint close --yes --create-next` để thực hiện.
 
@@ -466,7 +474,8 @@ Nên thống nhất ở buổi kick-off.
 5. **Mọi task trong sprint đều có điểm**, kể cả bug. Task không có điểm vẫn hiện trong báo cáo nhưng
    không vào burndown.
 6. **Task cần nhiều hơn mức điểm lớn nhất thì chia nhỏ.**
-7. **Không đổi điểm giữa sprint**, vì burndown dùng điểm hiện tại cho cả sprint (xem mục 9).
+7. **Hạn chế đổi điểm giữa sprint.** Burndown ghi nhận đúng ngày đổi điểm, nhưng ước lượng hay đổi làm
+   velocity khó so sánh giữa các sprint. Khi cần đổi thì dùng `/scrum-github:task`.
 
 ---
 
@@ -583,8 +592,6 @@ sửa từng lỗi. Bảng dưới cho những trường hợp `doctor` không t
 
 ## 9. Giới hạn hiện tại
 
-- Burndown dùng **điểm hiện tại** và coi mọi task có mặt từ ngày đầu sprint. Thêm task hoặc đổi điểm
-  giữa sprint sẽ làm đường burndown lệch.
 - Không hỗ trợ GitHub Enterprise Server. Trên Windows chỉ chạy qua WSL.
 - Kéo thẻ trên board chỉ đến label ở lần đồng bộ định kỳ kế tiếp.
 

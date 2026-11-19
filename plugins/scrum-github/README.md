@@ -115,9 +115,11 @@ Workflows installed in the target repo call `scrum event`, `scrum pr-check` and 
 ```yaml
 version: 1
 timezone: UTC                      # used for "today", burndown days and the digest
+language: en                       # en or vi: status table, digest, HTML report, sprint summary
 sprint:
-  length_days: 5
+  length_days: 5                   # calendar days
   name_pattern: "Sprint {n}"
+  working_days: [1, 2, 3, 4, 5]    # 1 = Monday ... 7 = Sunday; days left and the ideal line use them
 points:
   scale: [0, 1, 3, 7]              # e.g. [1, 2, 3, 5, 8]
   label_prefix: "points: "
@@ -137,6 +139,10 @@ branch:
 digest:
   enabled: true
   cron: "0 1 * * 1-5"              # baked into the workflow; re-run init after changing it
+  webhook_format: slack            # slack (also Google Chat, Mattermost) or telegram; see below
+attention:                         # "Needs attention" in status, digest and report
+  stale_days: 2                    # In progress with no activity for this many working days
+  behind_percent: 15               # remaining above the ideal line by more than this % of scope
 colors: {}                         # label name -> hex color, overrides the defaults
 planning:
   dir: docs/plans                  # plan folders: <dir>/<slug>/plan.json, plan.md, brief.md
@@ -153,6 +159,27 @@ project:                           # optional board, see "Project board" below
   points_field: Points             # number field filled from "points: N"; null to turn off
   poll_cron: "*/15 * * * *"        # how often board changes reach the labels
 ```
+
+### Needs attention, burndown and the digest in a chat
+
+`scrum status`, the digest and the HTML report list what needs attention: tasks blocked by an open
+task, tasks In progress with no activity (the issue, or an open pull request that closes it) for
+`attention.stale_days` working days, tasks without an assignee or points, and a sprint behind the
+ideal line. The section is left out when there is nothing.
+
+The burndown in `scrum report` is rebuilt from each task's history: which tasks were in the sprint
+and how many points they had on each day, so tasks added, removed or re-estimated mid-sprint count
+from the day it happened. The report also draws the scope line. History is read for at most 100
+tasks of the sprint and 30 that may have left it; the report says so when it hits a limit.
+
+To send the digest to a chat as well, add a repository secret `SCRUM_DIGEST_WEBHOOK`:
+
+- Slack, Google Chat or Mattermost: the incoming webhook URL, with `digest.webhook_format: slack`.
+- Telegram: `https://api.telegram.org/bot<TOKEN>/sendMessage?chat_id=<CHAT_ID>`, with
+  `digest.webhook_format: telegram`.
+
+A webhook that fails only warns; the digest comment is always posted. Run `/scrum-github:init`
+after updating to 0.7.0 so the digest workflow passes the secret.
 
 ## Plans: from a requirement to issues
 

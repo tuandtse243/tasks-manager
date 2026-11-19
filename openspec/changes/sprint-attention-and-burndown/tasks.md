@@ -34,7 +34,7 @@
 
 ## 8. Phiên bản và tài liệu
 
-- [ ] 8.1 Phiên bản 0.7.0, mục CHANGELOG (ghi rõ burndown đổi số với sprint có thay đổi phạm vi); README plugin (cấu hình mới, webhook, Telegram) và `docs/huong-dan-ap-dung.md` gốc repo (cấu hình, digest webhook, bỏ dòng giới hạn về burndown). Kiểm tra: `bash tests/run.sh manifest` xanh; `grep -n 'điểm hiện tại' docs/huong-dan-ap-dung.md` không còn ở mục Giới hạn
+- [x] 8.1 Phiên bản 0.7.0, mục CHANGELOG (ghi rõ burndown đổi số với sprint có thay đổi phạm vi); README plugin (cấu hình mới, webhook, Telegram) và `docs/huong-dan-ap-dung.md` gốc repo (cấu hình, digest webhook, bỏ dòng giới hạn về burndown). Kiểm tra: `bash tests/run.sh manifest` xanh; `grep -n 'điểm hiện tại' docs/huong-dan-ap-dung.md` không còn ở mục Giới hạn
 
 ## 9. Kiểm tra tích hợp
 

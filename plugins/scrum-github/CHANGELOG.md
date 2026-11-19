@@ -4,6 +4,27 @@ All notable changes to the `scrum-github` plugin. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the plugin uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-11-19
+
+### Added
+
+- "Needs attention" in `scrum status`, the digest and the HTML report: blocked tasks, tasks In
+  progress with no activity for `attention.stale_days` working days, tasks without an assignee
+  or points, and a sprint behind the ideal line by more than `attention.behind_percent`.
+- `sprint.working_days`: days left count working days, and the ideal line stays flat on days off.
+- `language: vi`: the status table, digest, HTML report and sprint summary in Vietnamese.
+- The digest can also go to Slack, Google Chat, Mattermost or Telegram through the repository
+  secret `SCRUM_DIGEST_WEBHOOK` (`digest.webhook_format`).
+- `scrum sprint close` posts a sprint summary (goal, velocity against the sprints before, scope
+  change, done and carried-over tasks) on the sprint's digest issue.
+
+### Changed
+
+- **Burndown numbers change** for sprints whose scope changed: the burndown is rebuilt from each
+  task's history (when it joined or left the sprint, its points on each day), and the report draws
+  the scope line with the points added and removed after the first day. Velocity is unchanged.
+- The digest workflow passes the optional webhook secret; `init` updates it when unedited.
+
 ## [0.6.0] - 2026-11-19
 
 ### Added
@@ -130,7 +151,8 @@ All notable changes to the `scrum-github` plugin. The format follows
   each pull request links a task, and a daily digest.
 - A task issue form with a points dropdown and a pull request template with `Closes #`.
 
-[0.6.0]: https://github.com/tuandtse243/tasks-manager/tree/main/plugins/scrum-github
+[0.7.0]: https://github.com/tuandtse243/tasks-manager/tree/main/plugins/scrum-github
+[0.6.0]: https://github.com/tuandtse243/tasks-manager/commit/b47c3ac
 [0.5.0]: https://github.com/tuandtse243/tasks-manager/commit/0ee7981
 [0.4.0]: https://github.com/tuandtse243/tasks-manager/commit/83dd11b
 [0.3.0]: https://github.com/tuandtse243/tasks-manager/commit/cffe202
