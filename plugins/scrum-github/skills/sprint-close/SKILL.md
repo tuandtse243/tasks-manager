@@ -5,10 +5,11 @@ description: Close a Scrum sprint on GitHub - show velocity, done tasks and unfi
 
 # Close a sprint
 
-The script is `${CLAUDE_PLUGIN_ROOT}/runtime/bin/scrum`; run it with `bash` from the root of the
-target repository.
+`scrum` is on the PATH while this plugin is enabled. If `scrum` is not found, or `scrum --version`
+does not print the plugin's version, run `bash "${CLAUDE_PLUGIN_ROOT}/runtime/bin/scrum"` instead.
+Run it from the root of the target repository.
 
-1. **Plan.** Run `bash "${CLAUDE_PLUGIN_ROOT}/runtime/bin/scrum" sprint close [SPRINT]`
+1. **Plan.** Run `scrum sprint close [SPRINT]`
    (no sprint name = the current sprint). This changes nothing. Show the user the velocity,
    the done tasks, the tasks that will be carried over and the next sprint.
 2. **Confirm.** Ask the user to confirm. If the next sprint does not exist yet, say that it will be
@@ -19,4 +20,4 @@ target repository.
    for the final burndown, generated before closing if the user wants it.
 
 Never pass `--yes` without the user's confirmation in this conversation.
-`gh` cannot read its keychain token inside the Claude Code sandbox; run outside it if needed.
+If a `scrum` or `gh` command fails on login or network, run `/scrum-github:doctor`.

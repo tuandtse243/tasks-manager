@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Fake gh for tests. Logs every call to $FAKE_GH_LOG and answers from $FAKE_GH_DIR/routes:
 # each line is "GLOB<TAB>FILE"; the first GLOB matching the joined arguments wins.
-# FILE "!fail" makes the call exit 1. No match prints nothing and exits 0.
+# FILE "!fail" makes the call exit 1 (HTTP 422), "!404" exits 1 with "Not Found (HTTP 404)".
+# No match prints nothing and exits 0.
 # A call made with GH_TOKEN set (the project token) is logged as "TOKEN <value>" first.
 args="$*"
 if [ -n "${GH_TOKEN:-}" ]; then printf 'TOKEN %s\n' "$GH_TOKEN" >> "$FAKE_GH_LOG"; fi
@@ -32,6 +33,7 @@ while IFS="$(printf '\t')" read -r pat file; do
           file="${rest%%,*}" ;;
       esac
       if [ "$file" = "!fail" ]; then echo "gh: HTTP 422 (fake failure)" >&2; exit 1; fi
+      if [ "$file" = "!404" ]; then echo "gh: Not Found (HTTP 404)" >&2; exit 1; fi
       [ -n "$file" ] && cat "$FAKE_GH_DIR/$file"
       exit 0
       ;;

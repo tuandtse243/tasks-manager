@@ -9,10 +9,10 @@ PLUGIN_DIR="$(cd "$TESTS_DIR/.." && pwd)"
 SCRUM="$PLUGIN_DIR/runtime/bin/scrum"
 FIXTURES="$TESTS_DIR/fixtures"
 export TESTS_DIR PLUGIN_DIR SCRUM FIXTURES
-# The runtime behaves differently inside GitHub Actions. Tests that need that set these
+# The runtime behaves differently inside GitHub Actions and the Claude Code sandbox. Tests that need that set these
 # themselves, so a CI runner's own values must not leak in.
 unset GITHUB_ACTIONS GITHUB_EVENT_NAME GITHUB_EVENT_PATH GITHUB_REPOSITORY GITHUB_STEP_SUMMARY \
-  SCRUM_PROJECT_TOKEN
+  SCRUM_PROJECT_TOKEN SANDBOX_RUNTIME
 
 pattern="${1:-}"
 pass=0; fail=0; failed_names=""
@@ -76,6 +76,21 @@ run_scrum() { # run_scrum args...  -> sets OUT, ERR, STATUS
   OUT="$("$BASH" "$SCRUM" "$@" 2>"$T/stderr")"; STATUS=$?
   ERR="$(cat "$T/stderr")"
   set -e
+}
+
+# path_without_yq  Prints a PATH with jq and git, and the system directories without yq (some
+# runners install yq in /usr/bin).
+path_without_yq() {
+  local d f
+  mkdir -p "$T/noyq/bin" "$T/noyq/sys"
+  ln -sf "$(command -v jq)" "$T/noyq/bin/jq"
+  ln -sf "$(command -v git)" "$T/noyq/bin/git"
+  for d in /usr/bin /bin; do
+    for f in "$d"/*; do
+      [ "${f##*/}" = yq ] || [ -e "$T/noyq/sys/${f##*/}" ] || [ -L "$T/noyq/sys/${f##*/}" ] || ln -s "$f" "$T/noyq/sys/${f##*/}"
+    done
+  done
+  printf '%s' "$T/noyq/bin:$T/noyq/sys"
 }
 
 # jq program from runtime/lib/jq

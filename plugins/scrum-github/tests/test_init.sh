@@ -241,6 +241,98 @@ test_pr_template_has_four_sections() {
 
 test_version_matches_plugin_json() {
   run_scrum --version
-  assert_eq "0.4.0" "$OUT"
+  assert_eq "0.5.0" "$OUT"
   assert_eq "$(jq -r .version "$PLUGIN_DIR/.claude-plugin/plugin.json")" "$OUT"
+}
+
+# ---------- record of generated files (delta repo-bootstrap "Cài template vào repo") ----------
+
+points_options() { yq -o=json '.body[] | select(.id == "points") | .attributes.options' "$SCRUM_REPO_DIR/.github/ISSUE_TEMPLATE/task.yml" | jq -c .; }
+
+test_init_records_generated_files() {
+  init_env
+  run_scrum init
+  assert_status 0 "$STATUS" "$ERR"
+  local rec="$SCRUM_REPO_DIR/.github/scrum/files.json"
+  [ -f "$rec" ] || _fail "no files.json"
+  assert_eq "$(git hash-object "$SCRUM_REPO_DIR/.github/pull_request_template.md")" \
+    "$(jq -r '.files[".github/pull_request_template.md"]' "$rec")"
+  assert_eq "5" "$(jq '.files | length' "$rec")"
+}
+
+test_init_updates_issue_form_after_scale_change() {
+  init_env
+  run_scrum init
+  printf 'points:\n  scale: [1, 2, 3, 5, 8]\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  run_scrum init
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "updated       .github/ISSUE_TEMPLATE/task.yml"
+  assert_eq '["1","2","3","5","8"]' "$(points_options)"
+  assert_not_contains "$OUT" "conflict"
+}
+
+test_init_updates_digest_after_cron_change() {
+  init_env
+  run_scrum init
+  printf 'digest:\n  cron: "30 2 * * 1-5"\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  run_scrum init
+  assert_contains "$OUT" "updated       .github/workflows/scrum-daily-digest.yml"
+  assert_contains "$(cat "$SCRUM_REPO_DIR/.github/workflows/scrum-daily-digest.yml")" 'cron: "30 2 * * 1-5"'
+}
+
+test_init_dry_run_reports_update_and_writes_nothing() {
+  init_env
+  run_scrum init
+  local form; form="$(cat "$SCRUM_REPO_DIR/.github/ISSUE_TEMPLATE/task.yml")"
+  local rec; rec="$(cat "$SCRUM_REPO_DIR/.github/scrum/files.json")"
+  printf 'points:\n  scale: [1, 2, 3, 5, 8]\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  run_scrum init --dry-run
+  assert_contains "$OUT" "would update  .github/ISSUE_TEMPLATE/task.yml"
+  assert_eq "$form" "$(cat "$SCRUM_REPO_DIR/.github/ISSUE_TEMPLATE/task.yml")"
+  assert_eq "$rec" "$(cat "$SCRUM_REPO_DIR/.github/scrum/files.json")"
+}
+
+test_init_keeps_hand_edited_file_after_scale_change() {
+  init_env
+  run_scrum init
+  printf '# our form\n' >> "$SCRUM_REPO_DIR/.github/ISSUE_TEMPLATE/task.yml"
+  local form; form="$(cat "$SCRUM_REPO_DIR/.github/ISSUE_TEMPLATE/task.yml")"
+  printf 'points:\n  scale: [1, 2, 3, 5, 8]\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  run_scrum init
+  assert_contains "$OUT" "conflict      .github/ISSUE_TEMPLATE/task.yml"
+  assert_eq "$form" "$(cat "$SCRUM_REPO_DIR/.github/ISSUE_TEMPLATE/task.yml")"
+}
+
+test_init_without_record_treats_difference_as_conflict() {
+  init_env
+  run_scrum init
+  rm "$SCRUM_REPO_DIR/.github/scrum/files.json"   # installed by a version that kept no record
+  printf 'points:\n  scale: [1, 2, 3, 5, 8]\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  run_scrum init
+  assert_contains "$OUT" "conflict      .github/ISSUE_TEMPLATE/task.yml"
+  assert_eq '["0","1","3","7"]' "$(points_options)"
+  [ -f "$SCRUM_REPO_DIR/.github/scrum/files.json" ] || _fail "record written for the files that matched"
+}
+
+test_init_updates_automatically_after_forced_overwrite() {
+  init_env
+  run_scrum init
+  local pr="$SCRUM_REPO_DIR/.github/pull_request_template.md" rec="$SCRUM_REPO_DIR/.github/scrum/files.json"
+  printf 'Our own template\n' > "$pr"
+  run_scrum init --force-file .github/pull_request_template.md
+  assert_contains "$OUT" "overwritten   .github/pull_request_template.md"
+  assert_eq "$(git hash-object "$pr")" "$(jq -r '.files[".github/pull_request_template.md"]' "$rec")" "recorded after overwrite"
+}
+
+# delta repo-bootstrap "Nâng plugin, file chưa sửa": the recorded copy is an older template.
+test_init_updates_unedited_file_from_older_version() {
+  init_env
+  run_scrum init
+  local pr="$SCRUM_REPO_DIR/.github/pull_request_template.md" rec="$SCRUM_REPO_DIR/.github/scrum/files.json"
+  printf 'Template of an older version\n' > "$pr"
+  jq --arg h "$(git hash-object "$pr")" '.files[".github/pull_request_template.md"] = $h' "$rec" > "$T/rec"
+  mv "$T/rec" "$rec"
+  run_scrum init
+  assert_contains "$OUT" "updated       .github/pull_request_template.md"
+  assert_contains "$(cat "$pr")" "Closes #"
 }

@@ -17,26 +17,82 @@ template_vars() {
   }'
 }
 
-# install_file SRC_TEMPLATE REL_PATH  (uses DIR, DRY, FORCE, FORCE_FILES, VARS)
+# managed_files [all]  Prints "TEMPLATE<TAB>PATH" for every file init installs (needs CONFIG_JSON).
+# "all" also lists the board workflow when the board is off: it may remain from when it was on.
+managed_files() {
+  local tpl="$SCRUM_ROOT/../templates/github"
+  printf '%s\t%s\n' \
+    "$tpl/ISSUE_TEMPLATE/task.yml" ".github/ISSUE_TEMPLATE/task.yml" \
+    "$tpl/pull_request_template.md" ".github/pull_request_template.md" \
+    "$tpl/workflows/scrum-status-sync.yml" ".github/workflows/scrum-status-sync.yml" \
+    "$tpl/workflows/scrum-pr-link-check.yml" ".github/workflows/scrum-pr-link-check.yml" \
+    "$tpl/workflows/scrum-daily-digest.yml" ".github/workflows/scrum-daily-digest.yml"
+  if [ "${1:-}" = all ] || project_enabled; then
+    printf '%s\t%s\n' "$tpl/workflows/scrum-project-sync.yml" ".github/workflows/scrum-project-sync.yml"
+  fi
+}
+
+# ---------- record of generated files: .github/scrum/files.json ----------
+# Maps each managed path to the git blob hash of the content init last wrote (or found identical),
+# so a later run can tell a file the user edited from one that is only out of date.
+RECORD_FILE=".github/scrum/files.json"
+
+file_hash() { git hash-object "$1"; }
+
+# record_load  Sets RECORD from $DIR/.github/scrum/files.json ({} when missing or unreadable).
+record_load() {
+  RECORD='{}'
+  if [ -f "$DIR/$RECORD_FILE" ]; then
+    RECORD="$(jq -c '.files // {} | with_entries(select(.value | type == "string"))' "$DIR/$RECORD_FILE" 2>/dev/null)" \
+      || RECORD='{}'
+  fi
+}
+record_get() { printf '%s' "$RECORD" | jq -r --arg p "$1" '.[$p] // ""'; }
+record_set() { RECORD="$(printf '%s' "$RECORD" | jq -c --arg p "$1" --arg h "$2" '.[$p] = $h')"; }
+record_save() { printf '%s' "$RECORD" | jq '{version: 1, files: .}' | write_atomic "$DIR/$RECORD_FILE"; }
+
+# is_pristine REL TEMPLATE  True when the file is what init last wrote, or what it would write now.
+is_pristine() {
+  local dest="$DIR/$1" recorded tmp rc=1
+  recorded="$(record_get "$1")"
+  if [ -n "$recorded" ] && [ "$(file_hash "$dest")" = "$recorded" ]; then return 0; fi
+  tmp="$(mktemp "${TMPDIR:-/tmp}/scrum-render.XXXXXX")"
+  render_template "$2" "$VARS" > "$tmp"
+  if cmp -s "$tmp" "$dest"; then rc=0; fi
+  rm -f "$tmp"
+  return "$rc"
+}
+
+# install_file SRC_TEMPLATE REL_PATH  (uses DIR, DRY, FORCE, FORCE_FILES, VARS, RECORD)
 install_file() {
-  local src="$1" rel="$2" dest tmp forced=0
+  local src="$1" rel="$2" dest tmp forced=0 recorded
   dest="$DIR/$rel"
-  tmp="$(mktemp "${TMPDIR:-/tmp}/scrum-init.XXXXXX")"
+  tmp="$(mktemp "${TMPDIR:-/tmp}/scrum-render.XXXXXX")"
   render_template "$src" "$VARS" > "$tmp"
   if [ "$FORCE" = 1 ]; then forced=1; fi
   case "$FORCE_FILES" in *"|$rel|"*) forced=1 ;; esac
+  recorded="$(record_get "$rel")"
   if [ ! -f "$dest" ]; then
     if [ "$DRY" = 1 ]; then info "  would create  $rel"
     else mkdir -p "$(dirname "$dest")"; cp "$tmp" "$dest"; info "  created       $rel"; fi
+    record_set "$rel" "$(file_hash "$tmp")"
     FILES_CHANGED=1
   elif cmp -s "$tmp" "$dest"; then
     info "  unchanged     $rel"
+    record_set "$rel" "$(file_hash "$dest")"
+  elif [ -n "$recorded" ] && [ "$(file_hash "$dest")" = "$recorded" ]; then
+    # Not edited since init wrote it: only the configuration or the template changed.
+    if [ "$DRY" = 1 ]; then info "  would update  $rel"
+    else cp "$tmp" "$dest"; info "  updated       $rel"; fi
+    record_set "$rel" "$(file_hash "$tmp")"
+    FILES_CHANGED=1
   elif [ "$forced" = 1 ]; then
     if [ "$DRY" = 1 ]; then info "  would overwrite $rel"
     else cp "$tmp" "$dest"; info "  overwritten   $rel"; fi
+    record_set "$rel" "$(file_hash "$tmp")"
     FILES_CHANGED=1
   else
-    info "  conflict      $rel (your version differs; kept. Overwrite with: --force-file $rel)"
+    info "  conflict      $rel (not the version init wrote; kept. Overwrite with: --force-file $rel)"
     CONFLICTS=1
   fi
   rm -f "$tmp"
@@ -127,17 +183,17 @@ cmd_init() {
   sync_labels
 
   VARS="$(template_vars)"
+  record_load   # before sync_runtime, which replaces .github/scrum/
   info "Files:"
-  install_file "$tpl/github/ISSUE_TEMPLATE/task.yml" ".github/ISSUE_TEMPLATE/task.yml"
-  install_file "$tpl/github/pull_request_template.md" ".github/pull_request_template.md"
-  install_file "$tpl/github/workflows/scrum-status-sync.yml" ".github/workflows/scrum-status-sync.yml"
-  install_file "$tpl/github/workflows/scrum-pr-link-check.yml" ".github/workflows/scrum-pr-link-check.yml"
-  install_file "$tpl/github/workflows/scrum-daily-digest.yml" ".github/workflows/scrum-daily-digest.yml"
-  if project_enabled; then
-    install_file "$tpl/github/workflows/scrum-project-sync.yml" ".github/workflows/scrum-project-sync.yml"
-  fi
+  local src rel
+  while IFS="$(printf '\t')" read -r src rel; do
+    install_file "$src" "$rel"
+  done <<EOF
+$(managed_files)
+EOF
 
   sync_runtime
+  [ "$DRY" = 1 ] || record_save
 
   if [ "$DRY" = 1 ]; then
     info ""; info "Nothing was written. Run without --dry-run to apply."

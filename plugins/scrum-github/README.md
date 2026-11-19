@@ -9,7 +9,7 @@ This plugin automates the six steps of the guide "Quản lý dự án theo Scrum
 | Step in the guide | Done manually in the guide | What the plugin does |
 |---|---|---|
 | 1. Create a sprint | Create a milestone | `sprint-new` creates `Sprint {n}` with start/end dates |
-| 2. Task states | Create labels by hand | `scrum-init` syncs status, points and helper labels |
+| 2. Task states | Create labels by hand | `init` syncs status, points and helper labels |
 | 3. Create a task | New issue, add labels | `task-new`, `plan` (AI breakdown into a plan file), task issue form |
 | 4. Link a PR | Write `Solve #1` | `task-pr` writes the description with `Closes #`; PR template; a check that fails without a link |
 | 5. Sprint review | Change labels, close issues | Status follows PR/issue events; `sprint-close` records velocity and carries over unfinished tasks |
@@ -43,19 +43,34 @@ From a local clone of this repository, `/plugin marketplace add ./` at its root 
 Then, inside a clone of the repository you want to manage:
 
 ```
-/scrum-github:scrum-init
+/scrum-github:init
 ```
 
-Commit and push the files it writes under `.github/`.
+Commit and push the files it writes under `.github/`. Then check the whole setup at once, and
+ask what to do next:
+
+```
+/scrum-github:doctor
+/scrum-github:next
+```
+
+**Updating from 0.4 or earlier:** `/scrum-github:scrum-init` is now `/scrum-github:init` (the old
+name still works in 0.5.x). Run it once after updating: it starts recording the files it writes,
+so this first run still reports every file that differs from the new template as a `conflict`.
+From then on, files nobody edited are updated on their own.
 
 ## Commands
 
 Plugin skills are namespaced, so each command is typed as `/scrum-github:<name>`.
-Every skill runs the same script, which also works on its own: `runtime/bin/scrum <command>`.
+Every skill runs the same script. While the plugin is enabled it is on the PATH of Claude Code's
+shell as `scrum`; elsewhere run `runtime/bin/scrum <command>` (or `bin/scrum`).
 
 | Claude Code | Script | What it does |
 |---|---|---|
-| `/scrum-github:scrum-init` | `scrum init [--dry-run] [--force] [--force-file PATH]` | Create `.github/scrum.yml`, sync labels, install templates, workflows and the runtime |
+| `/scrum-github:init` | `scrum init [--dry-run] [--force] [--force-file PATH]` | Create `.github/scrum.yml`, sync labels, install or update templates, workflows and the runtime |
+| `/scrum-github:doctor` | `scrum doctor [--json]` | Check tools, `gh` login and scopes, configuration, labels, what is pushed, versions and the board secret; each problem with its fix. Read-only |
+| `/scrum-github:next` | `scrum next [--json]` | The one thing to do next, with its command. Read-only |
+| – | `scrum uninstall [--dry-run] [--yes]` | Remove what `init` installed from the working tree; keeps `.github/scrum.yml`, files you edited, and everything on GitHub |
 | `/scrum-github:sprint-new` | `scrum sprint new [--title T] [--start DATE] [--length DAYS] [--goal TEXT]` | Create the next sprint |
 | `/scrum-github:project-scan` | `scrum context inventory`, `scrum context status`, `scrum context stamp` | Describe an existing codebase in `docs/project-context.md` (with a commit stamp) |
 | `/scrum-github:discover` | `scrum plan init`, `scrum doc check FILE` | Clarify a vague idea through research and an interview; writes `docs/plans/<slug>/brief.md` |
@@ -79,9 +94,11 @@ Plan files have their own commands too (all but `check` and `apply` work offline
 | `scrum plan apply FILE [--dry-run] [--update]` | Create the missing issues, link sub-issues and dependencies, record the numbers |
 | `scrum doc check FILE [--type brief\|context]` | Check the required sections of a brief or of the project context |
 
-What changed in each version: [CHANGELOG.md](CHANGELOG.md). A repository set up before 0.4.0
-keeps its old pull request template: run `scrum init --force-file .github/pull_request_template.md`
-to replace it.
+What changed in each version: [CHANGELOG.md](CHANGELOG.md).
+
+`init` records what it writes in `.github/scrum/files.json`. When the configuration or the
+plugin changes, it updates every file nobody edited since; a file edited by hand is reported as a
+`conflict` and kept, and `--force-file PATH` replaces it.
 
 Workflows installed in the target repo call `scrum event`, `scrum pr-check` and `scrum digest`
 (and `scrum project sync` when the project board is on, see below).
@@ -114,7 +131,7 @@ branch:
   pattern: "feat/{number}-{slug}"
 digest:
   enabled: true
-  cron: "0 1 * * 1-5"              # baked into the workflow; re-run scrum-init --force-file after changing it
+  cron: "0 1 * * 1-5"              # baked into the workflow; re-run init after changing it
 colors: {}                         # label name -> hex color, overrides the defaults
 planning:
   dir: docs/plans                  # plan folders: <dir>/<slug>/plan.json, plan.md, brief.md
@@ -282,8 +299,9 @@ asking. It keeps the token in no file. Steps 5 to 7 are printed at the end. The 
 
    `GITHUB_TOKEN` cannot reach Projects, so the plain workflow token is not enough.
 4. Add the `project:` block to `.github/scrum.yml` (`enabled: true`, `owner`, `number`).
-5. Run `scrum init --force-file .github/workflows/scrum-status-sync.yml`. This installs
-   `scrum-project-sync.yml`, and adds the token to the status workflow of an earlier install.
+5. Run `scrum init`. This installs `scrum-project-sync.yml`. A repository set up before 0.2.0
+   and not updated since may report `scrum-status-sync.yml` as a `conflict`: add
+   `--force-file .github/workflows/scrum-status-sync.yml` to take the version that passes the token.
 6. On your machine run `gh auth refresh -s project`, then:
    - `scrum project init --dry-run`, then `scrum project init`.
    - The command checks the Status options, stops if a conflicting workflow is still on, creates
@@ -332,6 +350,8 @@ branch needs `.github/` from `scrum init`.
   split. After `apply`, GitHub holds the live status.
 - **Done** = closed as completed. Issues closed as "not planned" count nowhere.
 - **Velocity** = points of tasks closed as completed in the sprint.
+- **Generated files** = `.github/scrum/files.json` holds the git hash of each file `init` wrote,
+  so a later `init` can tell a file edited by hand from one that is only out of date.
 - **Board** (optional) = a GitHub Projects card per task. Its Status mirrors the label; the text
   field *Synced status* holds the status of the last sync, so the sync can tell which side changed.
 
@@ -345,7 +365,7 @@ bash tests/run.sh config     # only tests/test_config.sh
 Lint the shell code (not `vendor/`) and validate the plugin, from this directory:
 
 ```
-shellcheck --severity=warning runtime/bin/scrum runtime/lib/*.sh scripts/*.sh wizards/*.sh tests/run.sh tests/test_*.sh tests/fake-gh
+shellcheck --severity=warning bin/scrum runtime/bin/scrum runtime/lib/*.sh scripts/*.sh wizards/*.sh tests/run.sh tests/test_*.sh tests/fake-gh
 claude plugin validate .     # run by hand; CI does not install Claude Code
 ```
 
@@ -382,6 +402,12 @@ runs, are in [docs/e2e-testing.md](docs/e2e-testing.md).
 
 ### Running inside the Claude Code sandbox
 
-The sandbox blocks `gh` from reading its token in the macOS keychain, so `gh auth status`
-reports "token invalid" even when you are logged in. Commands that call GitHub must run
-outside the sandbox (you will be asked to approve them), or adjust it with `/sandbox`.
+The sandbox blocks `gh` from reading its token in the macOS keychain and from reaching GitHub, so
+`gh auth status` reports "token invalid" even when you are logged in. `scrum doctor` and the
+login error of every command recognize this (the sandbox sets `SANDBOX_RUNTIME=1`) and say so.
+Commands that call GitHub must run outside the sandbox (you will be asked to approve them), or
+adjust it with `/sandbox`.
+
+If `scrum --version` prints something other than this plugin's version, another `scrum` comes
+first on your PATH (the plugin's `bin/` comes after your own entries); use
+`bash "${CLAUDE_PLUGIN_ROOT}/runtime/bin/scrum"` or the full path to this repository's `bin/scrum`.

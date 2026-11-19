@@ -6,8 +6,9 @@ argument-hint: "[--full]"
 
 # Scan the project into a context document
 
-`scrum` below means `bash "${CLAUDE_PLUGIN_ROOT}/runtime/bin/scrum"`, run from the root of the
-target repository. The only file this skill writes is `planning.context_file` (default
+`scrum` is on the PATH while this plugin is enabled. If `scrum` is not found, or `scrum --version`
+does not print the plugin's version, run `bash "${CLAUDE_PLUGIN_ROOT}/runtime/bin/scrum"` instead.
+Run it from the root of the target repository. The only file this skill writes is `planning.context_file` (default
 `docs/project-context.md`). It never runs the application and writes nothing to GitHub.
 
 ## 1. Where things stand

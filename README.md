@@ -22,8 +22,9 @@ Claude Code**. Hiện marketplace có một plugin là [`scrum-github`](plugins/
    /plugin install scrum-github@tasks-manager
    ```
    Nếu đã clone repo này về máy, có thể chạy `/plugin marketplace add ./` ở thư mục gốc của nó.
-3. Mở Claude Code trong repo dự án của bạn, chạy `/scrum-github:scrum-init`, rồi commit và push
-   thư mục `.github/` lên nhánh mặc định.
+3. Mở Claude Code trong repo dự án của bạn, chạy `/scrum-github:init`, rồi commit và push
+   thư mục `.github/` lên nhánh mặc định. Kiểm tra cả bộ bằng `/scrum-github:doctor`; không biết
+   làm gì tiếp thì hỏi `/scrum-github:next`.
 4. Tạo sprint đầu tiên bằng `/scrum-github:sprint-new`, rồi thêm task bằng `/scrum-github:plan`
    hoặc `/scrum-github:task-new`.
 5. Dev nhận task bằng `/scrum-github:task-start <số>`, mở PR bằng `/scrum-github:task-pr`. Merge PR
@@ -67,7 +68,7 @@ bash plugins/scrum-github/tests/run.sh plan     # chỉ chạy tests/test_plan.s
 Lint mã shell (không lint `vendor/`) và kiểm tra plugin:
 
 ```bash
-(cd plugins/scrum-github && shellcheck --severity=warning runtime/bin/scrum runtime/lib/*.sh scripts/*.sh wizards/*.sh tests/run.sh tests/test_*.sh tests/fake-gh)
+(cd plugins/scrum-github && shellcheck --severity=warning bin/scrum runtime/bin/scrum runtime/lib/*.sh scripts/*.sh wizards/*.sh tests/run.sh tests/test_*.sh tests/fake-gh)
 claude plugin validate plugins/scrum-github     # chạy tay, CI không cài Claude Code
 ```
 

@@ -26,7 +26,7 @@ test_missing_config_points_to_init() {
   setup_repo
   run_scrum sprint new
   assert_status 1 "$STATUS"
-  assert_contains "$ERR" "/scrum-github:scrum-init"
+  assert_contains "$ERR" "/scrum-github:init"
   assert_eq "" "$(gh_writes)" "no GitHub writes"
 }
 
@@ -70,18 +70,8 @@ sprint: ]'
 test_missing_yq_is_reported_before_github() {
   setup_fake_gh
   setup_repo 'version: 1'
-  mkdir -p "$T/bin" "$T/sys"
-  ln -s "$(command -v jq)" "$T/bin/jq"
-  ln -s "$(command -v git)" "$T/bin/git"
-  # The system directories without yq: some runners install it in /usr/bin.
-  local d f
-  for d in /usr/bin /bin; do
-    for f in "$d"/*; do
-      [ "${f##*/}" = yq ] || [ -e "$T/sys/${f##*/}" ] || [ -L "$T/sys/${f##*/}" ] || ln -s "$f" "$T/sys/${f##*/}"
-    done
-  done
   set +e
-  ERR="$(PATH="$T/bin:$T/sys" "$BASH" "$SCRUM" sprint new 2>&1 >/dev/null)"; STATUS=$?
+  ERR="$(PATH="$(path_without_yq)" "$BASH" "$SCRUM" sprint new 2>&1 >/dev/null)"; STATUS=$?
   set -e
   assert_status 1 "$STATUS"
   assert_contains "$ERR" "yq is required (mikefarah v4)"
@@ -107,6 +97,20 @@ test_gh_not_logged_in() {
   run_scrum sprint new
   assert_status 1 "$STATUS"
   assert_contains "$ERR" "gh auth login"
+  assert_not_contains "$ERR" "sandbox"
+  assert_eq "" "$(gh_writes)"
+}
+
+# delta scrum-config "gh báo lỗi trong sandbox"
+test_gh_not_logged_in_inside_the_sandbox() {
+  setup_fake_gh
+  setup_repo 'version: 1'
+  route 'auth status*' '!fail'
+  SANDBOX_RUNTIME=1 run_scrum sprint new
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "Claude Code sandbox"
+  assert_contains "$ERR" "outside the sandbox"
+  assert_contains "$ERR" "/scrum-github:doctor"
   assert_eq "" "$(gh_writes)"
 }
 

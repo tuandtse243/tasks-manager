@@ -15,7 +15,7 @@ merge_config() {
 load_config() {
   local file="${1:-$(config_path)}" raw merged errors
   if [ ! -f "$file" ]; then
-    die "no Scrum configuration found at .github/scrum.yml. Run /scrum-github:scrum-init first (or: scrum init)"
+    die "no Scrum configuration found at .github/scrum.yml. Run /scrum-github:init first (or: scrum init)"
   fi
   if ! raw="$(yq -o=json '.' "$file" 2>&1)"; then
     die "cannot read $file: $raw"

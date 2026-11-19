@@ -6,13 +6,16 @@ argument-hint: "[task number]"
 
 # Write the pull request for a task
 
+`scrum` is on the PATH while this plugin is enabled. If `scrum` is not found, or `scrum --version`
+does not print the plugin's version, run `bash "${CLAUDE_PLUGIN_ROOT}/runtime/bin/scrum"` instead.
+
 Run the commands from the root of the target repository. Nothing is created or changed on GitHub
 before the user approves the description.
 
 ## 1. Find the task and the change
 
 1. The task number: the argument if given. Otherwise read `branch.pattern` from
-   `bash "${CLAUDE_PLUGIN_ROOT}/runtime/bin/scrum" config` and take the number at the place of
+   `scrum config` and take the number at the place of
    `{number}` in the current branch name (`git branch --show-current`); `feat/12-comments` is
    task 12. If the branch name has no task number, ask the user for it. If they say the pull
    request belongs to no task, leave out the "Closes" line and tell them to add the `no_task`
@@ -69,5 +72,4 @@ Report the pull request URL. The check `scrum-pr-link-check` passes when the des
 "Closes" line; opening the pull request moves the task to In progress, and merging it moves the
 task to Done.
 
-`gh` cannot read its keychain token inside the Claude Code sandbox; run the `gh` commands outside
-it if needed.
+If a `scrum` or `gh` command fails on login or network, run `/scrum-github:doctor`.

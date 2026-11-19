@@ -26,3 +26,44 @@ test_jq_libraries_include_nothing() {
     ! grep -qE '^(include|import) ' "$lib" || _fail "$name.jq includes another library"
   done
 }
+
+# The plugin's bin/ is on the PATH in Claude Code; bin/scrum forwards to runtime/bin/scrum.
+test_bin_scrum_forwards_to_the_runtime() {
+  [ -x "$PLUGIN_DIR/bin/scrum" ] || _fail "bin/scrum is not executable"
+  assert_eq "$(cat "$PLUGIN_DIR/runtime/VERSION")" "$("$PLUGIN_DIR/bin/scrum" --version)"
+}
+
+test_bin_scrum_works_through_a_symlink() {
+  mkdir -p "$T/a/b"
+  ln -s "$PLUGIN_DIR/bin/scrum" "$T/a/scrum"
+  ln -s ../scrum "$T/a/b/scrum"
+  assert_eq "$(cat "$PLUGIN_DIR/runtime/VERSION")" "$("$T/a/scrum" --version)"
+  assert_eq "$(cat "$PLUGIN_DIR/runtime/VERSION")" "$("$T/a/b/scrum" --version)"
+}
+
+# Skills call `scrum` (on the PATH), with one fallback line to the full path.
+test_skills_call_scrum_with_a_fallback() {
+  local f fallback='run `bash "${CLAUDE_PLUGIN_ROOT}/runtime/bin/scrum"` instead.'
+  for f in "$PLUGIN_DIR"/skills/*/SKILL.md; do
+    case "$f" in */skills/scrum-init/*) continue ;; esac
+    if grep -q '`scrum ' "$f"; then
+      grep -qF "$fallback" "$f" || _fail "$f runs scrum without the fallback line"
+    fi
+    [ "$(grep -c 'runtime/bin/scrum' "$f")" = "$(grep -cF "$fallback" "$f")" ] \
+      || _fail "$f names runtime/bin/scrum outside the fallback line"
+  done
+}
+
+test_skills_point_to_doctor_not_the_old_sandbox_line() {
+  local f
+  for f in "$PLUGIN_DIR"/skills/*/SKILL.md; do
+    ! grep -q 'cannot read its keychain token inside the Claude Code sandbox' "$f" \
+      || _fail "$f still has the old sandbox line"
+  done
+}
+
+test_only_the_transition_skill_has_the_old_init_name() {
+  local hits
+  hits="$(grep -rl 'scrum-init' "$PLUGIN_DIR/skills" "$PLUGIN_DIR/agents" "$PLUGIN_DIR/reference" "$PLUGIN_DIR/runtime" || true)"
+  assert_eq "$PLUGIN_DIR/skills/scrum-init/SKILL.md" "$hits"
+}
