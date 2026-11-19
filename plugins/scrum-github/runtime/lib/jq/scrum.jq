@@ -99,6 +99,12 @@ def sprint_title($pattern; $n): $pattern | gsub("\\{n\\}"; "\($n)");
 def max_sprint_number($cfg): [.[] | .title | pattern_number($cfg.sprint.name_pattern)] | max // 0;
 
 # Input: milestones. The open sprint whose dates contain $today, else the open one ending first.
+# Input: milestones. The (up to) three most recently closed sprints that recorded a velocity,
+# oldest first, as sprint_info objects with closed_at.
+def recent_velocity_sprints:
+  [.[]? | select(.state == "closed") | . as $m | sprint_info + {closed_at: $m.closed_at}
+   | select(.velocity != null)] | sort_by(.closed_at // .end // "") | .[-3:];
+
 def current_sprint($today):
   [.[] | select(.state == "open")] as $open
   | ([$open[] | . as $ms | sprint_info | select(.start != null and .end != null and .start <= $today and $today <= .end) | $ms]

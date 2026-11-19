@@ -1,6 +1,7 @@
 # The one next step (spec: next-step-guidance), first true condition wins.
 # -n --argjson init BOOL --argjson pushed BOOL --argjson sprint MILESTONE_OR_NULL
 #    --argjson issues ISSUES_OF_THE_SPRINT --arg me LOGIN --arg today YYYY-MM-DD --argjson cfg CONFIG
+#    --argjson backlog_count N (tasks in the backlog; only needed when the sprint has no task)
 # Output: {step, message, command, issues: [numbers]}
 include "scrum";
 
@@ -26,7 +27,10 @@ else
       | [$t[] | select(._role == "in_progress" and (._who | length) == 0)] as $orphans
       | [$t[] | select(._role == "new")] as $new
       | ([$new[] | select(._who | index($me))] + [$new[] | select((._who | length) == 0)]) as $pickable
-      | if ($mine | length) > 0 then
+      | if ($t | length) == 0 and $backlog_count > 0 then
+          step("fill"; "\($s.title) has no tasks yet, and \($backlog_count) task\(if $backlog_count == 1 then " waits" else "s wait" end) in the backlog. Choose what fits its capacity.";
+               "/scrum-github:sprint-fill"; [])
+        elif ($mine | length) > 0 then
           step("continue"; "You are working on \($mine | refs). When it is done, open its pull request.";
                "/scrum-github:task-pr"; [$mine[].number])
         elif ($unestimated | length) > 0 then

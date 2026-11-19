@@ -9,8 +9,8 @@ description: Say the one thing to do next in Scrum on GitHub - set up, push .git
 does not print the plugin's version, run `bash "${CLAUDE_PLUGIN_ROOT}/runtime/bin/scrum"` instead.
 
 1. From the root of the repository, run `scrum next`. It prints one step and its command, chosen
-   in this order: set up → push `.github/` → create a sprint → close an overdue sprint → your task
-   in progress → tasks without points, or In progress with nobody assigned → the next New task
+   in this order: set up → push `.github/` → create a sprint → close an overdue sprint → fill an
+   empty sprint from the backlog → your task in progress → tasks without points, or In progress with nobody assigned → the next New task
    (yours first, then unassigned) → nothing left.
 2. Tell the user that step in one or two sentences, in their words, with the command.
 3. Offer to do it. Commands of this plugin (such as `/scrum-github:task-start 20`) run as usual,

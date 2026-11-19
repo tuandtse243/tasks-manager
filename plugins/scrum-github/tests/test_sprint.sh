@@ -192,3 +192,141 @@ test_cmd_close_already_closed() {
   assert_contains "$OUT" "Sprint 1 is already closed"
   assert_eq "" "$(gh_writes)"
 }
+
+# ---------- sprint fill (delta sprint-lifecycle) ----------
+
+fill_ms() { # closed sprints with the given velocities, then the open Sprint 9
+  jq -nc --args '[ ($ARGS.positional | to_entries[] | {number: (.key + 1), title: "Sprint \(.key + 1)", state: "closed",
+      closed_at: "2026-0\(.key + 1)-28T00:00:00Z", description: "<!-- scrum:velocity=\(.value) -->"}),
+    {number: 9, title: "Sprint 9", state: "open", description: "<!-- scrum:start=2026-11-16 end=2026-11-27 -->"} ]' "$@"
+}
+fill_issue() { # NUMBER POINTS STATUS
+  jq -nc --argjson n "$1" --arg p "$2" --arg s "${3:-New}" '{number: $n, title: "T\($n)", state: "open", body: "",
+    labels: ([{name: "status: \($s)"}] + (if $p == "" then [] else [{name: "points: \($p)"}] end)), assignees: []}'
+}
+fill_backlog() { # JSON of backlog.jq for tasks "N:POINTS:BLOCKERS" (BLOCKERS: comma list, "-" = not checked)
+  jq -nc --args '{tasks: [$ARGS.positional[] | split(":") | {number: (.[0] | tonumber), title: "T\(.[0])",
+      points: (if .[1] == "" then null else (.[1] | tonumber) end), assignees: [], parent: null,
+      blocked_by: (if .[2] == "-" then null elif .[2] == "" then [] else (.[2] | split(",") | map(tonumber)) end)}]}' "$@"
+}
+fill_plan() { # MILESTONES SPRINT_ISSUES BACKLOG ADD CAPACITY
+  jqt sprint-fill -n --argjson ms "$1" --argjson sprint "$(printf '%s' "$1" | jq -c '.[] | select(.state == "open")')" \
+    --argjson issues "$2" --argjson backlog "$3" --argjson add "$4" --argjson capacity "$5" --argjson cfg "$(defaults)"
+}
+
+test_fill_capacity_from_velocity() {
+  local p
+  p="$(fill_plan "$(fill_ms 99 10 12 14)" "$( { fill_issue 1 3; fill_issue 2 1; fill_issue 3 1 Done; } | jq -sc .)" "$(fill_backlog '30:3:')" '[]' null)"
+  assert_eq "12 velocity 5 7" "$(printf '%s' "$p" | jq -r '"\(.capacity) \(.capacity_source) \(.planned) \(.free)"')"
+  assert_eq '["Sprint 2","Sprint 3","Sprint 4"]' "$(printf '%s' "$p" | jq -c '[.velocity.sprints[].title]')"
+}
+
+test_fill_without_velocity() {
+  local p
+  p="$(fill_plan "$(fill_ms)" '[]' "$(fill_backlog '30:3:')" '[]' null)"
+  assert_eq "null null null" "$(printf '%s' "$p" | jq -r '"\(.capacity) \(.capacity_source) \(.free)"')"
+}
+
+test_fill_capacity_option_wins() {
+  local p
+  p="$(fill_plan "$(fill_ms 10 12 14)" '[]' "$(fill_backlog '30:3:')" '[]' 8)"
+  assert_eq "8 option" "$(printf '%s' "$p" | jq -r '"\(.capacity) \(.capacity_source)"')"
+}
+
+test_fill_over_capacity_unestimated_and_blocked() {
+  local p
+  p="$(fill_plan "$(fill_ms 6)" "$(fill_issue 1 4 | jq -sc .)" "$(fill_backlog '30:3:' '33::30' '34:1:-' '35:0:1')" '[33,34,35]' null)"
+  assert_eq "[]" "$(printf '%s' "$p" | jq -c .errors)"
+  assert_contains "$(printf '%s' "$p" | jq -c .warnings)" "#33 has no points"
+  assert_contains "$(printf '%s' "$p" | jq -c .warnings)" "#33 is blocked by #30, not in Sprint 9"
+  assert_contains "$(printf '%s' "$p" | jq -c .warnings)" "#34: its blockers were not checked"
+  assert_not_contains "$(printf '%s' "$p" | jq -c .warnings)" "#35 is blocked"
+  p="$(fill_plan "$(fill_ms 6)" "$(fill_issue 1 4 | jq -sc .)" "$(fill_backlog '30:3:')" '[30]' null)"
+  assert_contains "$(printf '%s' "$p" | jq -c .warnings)" "over capacity by 1 point (capacity 6, planned 4, adding 3)"
+}
+
+test_fill_unknown_number_is_an_error() {
+  local p
+  p="$(fill_plan "$(fill_ms 6)" '[]' "$(fill_backlog '30:3:')" '[30,31]' null)"
+  assert_contains "$(printf '%s' "$p" | jq -c .errors)" "#31 is not an open task in the backlog"
+}
+
+fill_env() {
+  setup_fake_gh
+  setup_repo 'version: 1'
+  export SCRUM_TODAY=2026-11-19
+  fill_ms 10 12 14 > "$FAKE_GH_DIR/ms.json"
+  { fill_issue 1 3; fill_issue 2 2; } | jq -s . > "$FAKE_GH_DIR/sprint.json"
+  { fill_issue 30 3; fill_issue 33 ''; } | jq -s 'map(. + {milestone: null})' > "$FAKE_GH_DIR/backlog.json"
+  route 'api --paginate repos/acme/blog/milestones*' ms.json
+  route 'api --paginate repos/acme/blog/issues?milestone=9*' sprint.json
+  route 'api --paginate repos/acme/blog/issues?milestone=none*' backlog.json
+  route_json 'api --paginate repos/acme/blog/issues/33/dependencies/blocked_by*' '[{"number":30,"state":"open"}]'
+}
+
+test_cmd_fill_shows_capacity_and_backlog() {
+  fill_env
+  run_scrum sprint fill
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "Capacity: 12 points (average velocity of Sprint 1: 10, Sprint 2: 12, Sprint 3: 14)"
+  assert_contains "$OUT" "Planned: 5 points; free: 7 points"
+  assert_contains "$OUT" "#33  -  -  T33  (blocked by #30)"
+  assert_eq "" "$(gh_writes)"
+}
+
+test_cmd_fill_preview_writes_nothing() {
+  fill_env
+  run_scrum sprint fill --add 30,33
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "After adding: 8 of 12 points"
+  assert_contains "$OUT" "#33 has no points"
+  assert_contains "$OUT" "run again with --yes"
+  assert_eq "" "$(gh_writes)"
+}
+
+test_cmd_fill_yes_moves_and_comments() {
+  fill_env
+  run_scrum sprint fill --add 30 --yes
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$(gh_calls)" '-X PATCH repos/acme/blog/issues/30'
+  assert_contains "$(gh_calls)" 'STDIN {"milestone":9}'
+  assert_contains "$(gh_calls)" 'Moved from the backlog to Sprint 9.'
+  assert_contains "$OUT" "Added #30 to Sprint 9."
+}
+
+test_cmd_fill_unknown_number_writes_nothing() {
+  fill_env
+  run_scrum sprint fill --add 30,31 --yes
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "#31 is not an open task in the backlog"
+  assert_eq "" "$(gh_writes)"
+}
+
+test_cmd_fill_without_velocity_suggests_capacity() {
+  fill_env
+  fill_ms > "$FAKE_GH_DIR/ms.json"
+  run_scrum sprint fill
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "Capacity: unknown"
+  assert_contains "$OUT" "--capacity N"
+  assert_contains "$OUT" "Backlog: 2 tasks"
+}
+
+# delta sprint-lifecycle "Gợi ý lập kế hoạch sau khi tạo sprint"
+test_cmd_sprint_new_suggests_fill_when_backlog_has_tasks() {
+  sprint_env
+  route_json 'api -X POST repos/acme/blog/milestones*' '{"number":2,"title":"Sprint 2","html_url":"u"}'
+  route_json 'api --paginate repos/acme/blog/issues?milestone=none*' '[{"number":30,"state":"open","milestone":null,"labels":[],"assignees":[]},{"number":31,"state":"open","milestone":null,"labels":[{"name":"type: feature"}],"assignees":[]}]'
+  run_scrum sprint new --start 2014-09-29
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "from the backlog (1 waiting): /scrum-github:sprint-fill"
+}
+
+test_cmd_sprint_new_no_hint_with_empty_backlog() {
+  sprint_env
+  route_json 'api -X POST repos/acme/blog/milestones*' '{"number":2,"title":"Sprint 2","html_url":"u"}'
+  route_json 'api --paginate repos/acme/blog/issues?milestone=none*' '[]'
+  run_scrum sprint new --start 2014-09-29
+  assert_status 0 "$STATUS" "$ERR"
+  assert_not_contains "$OUT" "sprint-fill"
+}

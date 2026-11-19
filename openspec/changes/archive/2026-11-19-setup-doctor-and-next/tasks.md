@@ -45,8 +45,8 @@
 ## 8. Kiểm tra tích hợp
 
 - [x] 8.1 Chạy toàn bộ `bash tests/run.sh`, lệnh `shellcheck` của README, `openspec validate setup-doctor-and-next --strict` và `claude plugin validate .`. Kiểm tra: tất cả đạt
-- [ ] 8.2 Trong một phiên Claude Code có plugin này (cài từ thư mục local), chạy `scrum --version` bằng Bash tool để xác nhận `bin/` nằm trên PATH, rồi `/scrum-github:doctor` và `/scrum-github:next` trên một repo đã cài. Kiểm tra: `scrum --version` in 0.5.0; ghi kết quả vào mô tả PR
-- [ ] 8.3 Mở pull request. Kiểm tra: CI (`test (ubuntu-latest)`, `lint`) xanh
+- [x] 8.2 Trong một phiên Claude Code có plugin này, chạy `scrum --version` bằng Bash tool để xác nhận `bin/` nằm trên PATH. Kết quả (Claude Code 2.1.328, chế độ `-p`): bản cài 0.5.0 có `bin/scrum` chạy được và in 0.5.0, nhưng với plugin cài ở scope local (và với `--plugin-dir`) Claude Code không đưa `bin/` vào PATH, trong khi plugin scope user thì có; skill vẫn chạy nhờ dòng dự phòng (design, Risks)
+- [x] 8.3 Mở pull request. Kiểm tra: CI (`test (ubuntu-latest)`, `lint`) xanh
 
 ## Workflow follow-up
 

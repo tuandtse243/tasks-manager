@@ -45,7 +45,6 @@ test_bin_scrum_works_through_a_symlink() {
 test_skills_call_scrum_with_a_fallback() {
   local f fallback='run `bash "${CLAUDE_PLUGIN_ROOT}/runtime/bin/scrum"` instead.'
   for f in "$PLUGIN_DIR"/skills/*/SKILL.md; do
-    case "$f" in */skills/scrum-init/*) continue ;; esac
     if grep -q '`scrum ' "$f"; then
       grep -qF "$fallback" "$f" || _fail "$f runs scrum without the fallback line"
     fi
@@ -62,8 +61,9 @@ test_skills_point_to_doctor_not_the_old_sandbox_line() {
   done
 }
 
-test_only_the_transition_skill_has_the_old_init_name() {
+# The transition skill scrum-init was removed in 0.6.0, as announced in 0.5.0.
+test_the_old_init_name_is_gone() {
   local hits
   hits="$(grep -rl 'scrum-init' "$PLUGIN_DIR/skills" "$PLUGIN_DIR/agents" "$PLUGIN_DIR/reference" "$PLUGIN_DIR/runtime" || true)"
-  assert_eq "$PLUGIN_DIR/skills/scrum-init/SKILL.md" "$hits"
+  assert_eq "" "$hits"
 }

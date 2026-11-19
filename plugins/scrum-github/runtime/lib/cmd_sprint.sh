@@ -38,6 +38,12 @@ cmd_sprint_new() {
     goal: $g }')"
   created="$(create_sprint "$repo" "$ms" "$args")"
   printf '%s' "$created" | jq -r '"Created \(.title) (\(._start) to \(._end)): \(.html_url // "")"'
+  # A hint only: if the backlog cannot be read, the sprint is still created.
+  . "$SCRUM_ROOT/lib/cmd_backlog.sh"
+  local waiting
+  if waiting="$(backlog_count "$repo" 2>/dev/null)" && [ "${waiting:-0}" -gt 0 ]; then
+    info "Next: choose tasks for $(printf '%s' "$created" | jq -r .title) from the backlog ($waiting waiting): /scrum-github:sprint-fill (or: scrum sprint fill)"
+  fi
 }
 
 cmd_sprint_close() {
@@ -119,4 +125,69 @@ cmd_sprint_close() {
 
   printf '%s' "$plan" | jq -c '{description, state: "closed"}' | gh_send PATCH "repos/$repo/milestones/$number" >/dev/null
   info "Closed $title. Velocity: $(printf '%s' "$plan" | jq -r .velocity) points."
+}
+
+# ---------- sprint fill ----------
+
+cmd_sprint_fill() {
+  local name="" capacity=null add="" yes=0 repo ms sprint issues plan title n add_json
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --capacity) capacity="${2:-}"; shift
+        case "$capacity" in ""|*[!0-9]*) die "--capacity needs a whole number of points" ;; esac ;;
+      --add) add="$add,${2:-}"; shift ;;
+      --yes|-y) yes=1 ;;
+      -*) die "unknown option for sprint fill: $1" ;;
+      *) name="$1" ;;
+    esac
+    shift
+  done
+  add_json="$(printf '%s' "$add" | tr ',' '\n' | sed 's/^#//; /^$/d' | jq -R -s -c 'split("\n") | map(select(. != "")) |
+    map(if test("^[0-9]+$") then tonumber else error("not an issue number: \(.)") end) | unique')" \
+    || die "--add takes issue numbers, for example --add 30,33"
+
+  require_tools
+  load_config
+  repo="$(repo_slug)"
+  ms="$(fetch_milestones "$repo")"
+  sprint="$(resolve_sprint "$ms" "$name")"
+  title="$(printf '%s' "$sprint" | jq -r .title)"
+  [ "$(printf '%s' "$sprint" | jq -r .state)" = open ] || die "$title is closed"
+  issues="$(fetch_milestone_issues "$repo" "$(printf '%s' "$sprint" | jq -r .number)")"
+  . "$SCRUM_ROOT/lib/cmd_backlog.sh"
+  fetch_backlog "$repo"
+  plan="$(jqlib sprint-fill -n --argjson ms "$ms" --argjson sprint "$sprint" --argjson issues "$issues" \
+    --argjson backlog "$BACKLOG" --argjson add "$add_json" --argjson capacity "$capacity" --argjson cfg "$CONFIG_JSON")"
+
+  printf '%s' "$plan" | jq -r '
+    "\(.sprint.title) (\(.sprint.start // "?") to \(.sprint.end // "?"))",
+    ( if .capacity_source == "option" then "Capacity: \(.capacity) points (--capacity)"
+      elif .capacity_source == "velocity" then "Capacity: \(.capacity) points (average velocity of \(.velocity.sprints | map("\(.title): \(.velocity)") | join(", ")))"
+      else "Capacity: unknown: no closed sprint has recorded a velocity yet. Pass --capacity N to set one." end ),
+    "Planned: \(.planned) points\(if .free == null then "" else "; free: \(.free) points" end)"'
+  if [ "$add_json" = "[]" ]; then
+    info ""
+    print_backlog
+    return 0
+  fi
+  printf '%s' "$plan" | jq -r '
+    "", "To add:",
+    (.adding.tasks[] | "  #\(.number)  \(if .points == null then "-" else "\(.points) pt" end)  \(.title)"),
+    "After adding: \(.after)\(if .capacity == null then "" else " of \(.capacity)" end) points",
+    (if (.warnings | length) > 0 then "", "Warnings:", (.warnings[] | "  - " + .) else empty end)'
+  if [ "$(printf '%s' "$plan" | jq '.errors | length')" != 0 ]; then
+    printf '%s' "$plan" | jq -r '.errors[] | "scrum: error: " + .' >&2
+    die "nothing was changed"
+  fi
+  if [ "$yes" != 1 ]; then
+    info ""; info "Nothing changed. To apply, run again with --yes."
+    return 0
+  fi
+  info ""
+  for n in $(printf '%s' "$plan" | jq -r '.adding.tasks[].number'); do
+    jq -n --argjson m "$(printf '%s' "$sprint" | jq .number)" '{milestone: $m}' | gh_send PATCH "repos/$repo/issues/$n" >/dev/null
+    comment_issue "$repo" "$n" "Moved from the backlog to $title."
+    info "Added #$n to $title."
+    project_touch "$repo" "$n"
+  done
 }

@@ -4,6 +4,27 @@ All notable changes to the `scrum-github` plugin. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the plugin uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-11-19
+
+### Added
+
+- `/scrum-github:backlog` and `scrum backlog [--json]`: open tasks without a sprint, with
+  points, assignees, parent feature and open blockers (read for the first 50 tasks), totals and
+  how many are not estimated.
+- `/scrum-github:sprint-fill` and `scrum sprint fill [SPRINT] [--capacity N] [--add N,N,…] [--yes]`:
+  capacity from the average velocity of up to three recent closed sprints, points planned and
+  free, the backlog; adding tasks is previewed with warnings (over capacity, no points, blocked
+  from outside the sprint) and written only with `--yes`.
+- `/scrum-github:task` and `scrum task list | move | estimate | assign | drop`: see tasks, move
+  them between sprints and the backlog (with a comment), re-estimate within the scale, assign or
+  unassign, drop as not planned. The board is updated in the same run.
+- `scrum sprint new` and `scrum next` point to `sprint-fill` when the backlog has tasks and the
+  sprint has none.
+
+### Removed
+
+- The transition skill `/scrum-github:scrum-init`: use `/scrum-github:init` (renamed in 0.5.0).
+
 ## [0.5.0] - 2026-11-19
 
 ### Added
@@ -109,7 +130,8 @@ All notable changes to the `scrum-github` plugin. The format follows
   each pull request links a task, and a daily digest.
 - A task issue form with a points dropdown and a pull request template with `Closes #`.
 
-[0.5.0]: https://github.com/tuandtse243/tasks-manager/tree/main/plugins/scrum-github
+[0.6.0]: https://github.com/tuandtse243/tasks-manager/tree/main/plugins/scrum-github
+[0.5.0]: https://github.com/tuandtse243/tasks-manager/commit/0ee7981
 [0.4.0]: https://github.com/tuandtse243/tasks-manager/commit/83dd11b
 [0.3.0]: https://github.com/tuandtse243/tasks-manager/commit/cffe202
 [0.2.0]: https://github.com/tuandtse243/tasks-manager/tree/main/openspec/changes/archive/2026-11-18-projects-v2-board-sync

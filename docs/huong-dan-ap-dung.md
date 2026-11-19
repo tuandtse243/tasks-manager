@@ -72,11 +72,14 @@ có sẵn trên PATH. Sau khi thiết lập, repo dự án có sẵn script tạ
 | `doctor` | Bất kỳ ai, khi cài xong hoặc khi một lệnh báo lỗi | `scrum doctor [--json]` | `/scrum-github:doctor` |
 | `next` | Bất kỳ ai, khi không biết làm gì tiếp | `scrum next [--json]` | `/scrum-github:next` |
 | `sprint-new` | SM, đầu sprint | `scrum sprint new [--start DATE] [--length DAYS] [--goal TEXT]` | `/scrum-github:sprint-new bắt đầu thứ 2 tới, mục tiêu "Đăng ký, đăng nhập"` |
+| `sprint-fill` | SM và team, buổi Sprint Planning | `scrum sprint fill [SPRINT] [--capacity N] [--add N,N] [--yes]` | `/scrum-github:sprint-fill sức chứa 20 điểm` |
+| `backlog` | PO, SM: xem việc chưa vào sprint | `scrum backlog` | `/scrum-github:backlog còn task nào chưa ước lượng?` |
 | `project-scan` | Tech lead, một lần cho dự án có mã sẵn; làm mới khi mã đổi nhiều | `scrum context status` | `/scrum-github:project-scan` |
 | `discover` | PO, khi yêu cầu còn mơ hồ | (không có) | `/scrum-github:discover cho người dùng bình luận dưới bài viết` |
 | `plan` | PO, SM: biến yêu cầu thành task | `scrum plan check FILE`, `scrum plan apply FILE` | `/scrum-github:plan docs/plans/blog-comments/brief.md` |
 | `task-new` | Bất kỳ ai: thêm một task hay bug | `scrum task new --title T [--points N] [--assignee LOGIN] [--bug]` | `/scrum-github:task-new bug: nút Lưu không phản hồi trên Safari, 2 điểm, giao cho an-nguyen` |
 | `task-start` | Dev: nhận task | `scrum task start N` | `/scrum-github:task-start 12` |
+| `task` | Bất kỳ ai: xem, chuyển sprint, đổi điểm, giao, bỏ task | `scrum task list\|move\|estimate\|assign\|drop` | `/scrum-github:task đổi #12 thành 3 điểm` |
 | `task-pr` | Dev: viết mô tả PR và mở PR | (dùng `gh pr create`) | `/scrum-github:task-pr` |
 | `sprint-status` | Cả team, hằng ngày | `scrum status [SPRINT]` | `/scrum-github:sprint-status ai còn nhiều việc nhất?` |
 | `sprint-report` | SM, review hoặc gửi stakeholder | `scrum report [SPRINT] [--out FILE]` | `/scrum-github:sprint-report` |
@@ -174,7 +177,7 @@ Chạy lại `init` lúc nào cũng an toàn: file không đổi báo `unchanged
 với cấu hình hoặc plugin báo `updated` và được cập nhật; file bạn đã sửa tay báo `conflict` và được
 giữ nguyên. Muốn lấy bản mới cho file đó thì dùng `--force-file <path>`.
 
-**Nâng từ 0.4 trở về trước:** lệnh `scrum-init` nay là `/scrum-github:init` (tên cũ vẫn chạy ở 0.5.x).
+**Nâng từ 0.4 trở về trước:** lệnh `scrum-init` nay là `/scrum-github:init` (tên cũ bị bỏ từ 0.6.0).
 Lần chạy đầu sau khi nâng, repo chưa có bản ghi file nên mọi file khác bản mới đều báo `conflict`;
 từ lần sau thì file chưa sửa tự cập nhật.
 
@@ -209,6 +212,19 @@ scrum sprint new --start 2026-11-23 --goal "Đăng ký, đăng nhập"
 - Tên tự tăng theo mẫu `Sprint {n}`; độ dài lấy từ `sprint.length_days` nếu không ghi `--length`.
 - Ngày tương đối ("thứ 2 tới") được Claude đổi thành ngày cụ thể.
 - Lệnh cảnh báo nếu ngày trùng một sprint đang mở.
+
+Nếu backlog đã có task, lệnh nhắc bước kế tiếp là chọn task cho sprint:
+
+```
+/scrum-github:sprint-fill
+```
+
+- Sức chứa mặc định là velocity trung bình của tối đa ba sprint đã đóng gần nhất; chưa có sprint
+  nào đóng thì Claude hỏi một con số (`--capacity N`).
+- Claude đề xuất các task vừa sức chứa, task chặn đứng trước task bị chặn; bạn sửa danh sách, xem
+  trước các cảnh báo (vượt sức chứa, task chưa có điểm, bị chặn bởi task ngoài sprint), rồi mới
+  đồng ý để chuyển task vào sprint.
+- Xem riêng backlog: `/scrum-github:backlog`.
 
 Tiếp theo: [Flow B](#flow-b-từ-yêu-cầu-tới-task) hoặc [Flow D](#flow-d-thêm-task-lẻ-hoặc-bug).
 
@@ -442,9 +458,11 @@ Nên thống nhất ở buổi kick-off.
 1. **Mỗi PR đóng ít nhất một task**, hoặc có label `no-task`.
 2. **Viết `Closes #n`, không viết `Solve #n`.** GitHub chỉ hiểu `close/closes/closed`,
    `fix/fixes/fixed`, `resolve/resolves/resolved`. Check của PR sẽ báo lỗi nếu thấy `Solve`.
-3. **Không sửa label `status:` bằng tay.** Trạng thái đi theo PR. Nếu thật sự cần, hãy đóng hoặc mở
-   lại issue; workflow sẽ chuẩn hoá label.
-4. **Task không làm nữa thì đóng với lý do "Close as not planned"**, để không bị tính vào velocity.
+3. **Không sửa label bằng tay.** Trạng thái đi theo PR. Đổi điểm, đổi sprint, giao người hay bỏ
+   task thì dùng `/scrum-github:task` (ví dụ `/scrum-github:task đưa #12 về backlog`): label luôn
+   đúng một giá trị và board được cập nhật cùng lúc.
+4. **Task không làm nữa thì bỏ bằng `/scrum-github:task bỏ #12`** (đóng với lý do "not planned"),
+   để không bị tính vào velocity.
 5. **Mọi task trong sprint đều có điểm**, kể cả bug. Task không có điểm vẫn hiện trong báo cáo nhưng
    không vào burndown.
 6. **Task cần nhiều hơn mức điểm lớn nhất thì chia nhỏ.**
@@ -569,8 +587,6 @@ sửa từng lỗi. Bảng dưới cho những trường hợp `doctor` không t
   giữa sprint sẽ làm đường burndown lệch.
 - Không hỗ trợ GitHub Enterprise Server. Trên Windows chỉ chạy qua WSL.
 - Kéo thẻ trên board chỉ đến label ở lần đồng bộ định kỳ kế tiếp.
-- Chưa có lệnh gỡ cài đặt. Muốn gỡ thì xoá `.github/scrum*` và các workflow `scrum-*`; label và
-  milestone vẫn giữ.
 
 ---
 
@@ -596,7 +612,7 @@ sửa từng lỗi. Bảng dưới cho những trường hợp `doctor` không t
 
 **Sprint đầu tiên**
 - [ ] Dự án có mã sẵn: chạy `project-scan`, commit `docs/project-context.md`
-- [ ] `sprint-new`, rồi `plan` (chạy `discover` trước nếu yêu cầu còn mơ hồ) hoặc `task-new`
+- [ ] `sprint-new`, rồi `sprint-fill` nếu backlog có task, hoặc `plan` (chạy `discover` trước nếu yêu cầu còn mơ hồ) hay `task-new`
 - [ ] Mỗi dev thử `task-start`, rồi `task-pr` cho một PR `Closes #n`
 - [ ] Sáng hôm sau kiểm tra issue digest
 - [ ] Cuối sprint chạy `sprint-report` và `sprint-close`, lấy velocity làm mốc cho sprint sau

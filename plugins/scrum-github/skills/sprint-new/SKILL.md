@@ -18,8 +18,9 @@ Run it from the root of the target repository.
 2. Run `scrum sprint new [options]`.
 3. Report the created sprint, its dates and link. Pass on any warning (for example dates that
    overlap an open sprint).
-4. Suggest the next step: add tasks with `/scrum-github:task-new` or break a feature down with
-   `/scrum-github:plan`.
+4. Suggest the next step: if the script says the backlog has tasks waiting, choose them for this
+   sprint with `/scrum-github:sprint-fill`; otherwise add tasks with `/scrum-github:task-new` or
+   break a feature down with `/scrum-github:plan`.
 
 If the script says the repository has no configuration, run `/scrum-github:init` first.
 If a `scrum` or `gh` command fails on login or network, run `/scrum-github:doctor`.
