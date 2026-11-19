@@ -42,6 +42,10 @@ jqlib() {
   jq -L "$JQ_LIB" "$@" -f "$JQ_LIB/$prog.jq"
 }
 
+# True inside the Claude Code sandbox, which blocks gh's keychain and network access. The
+# variable is observed, not documented; without it messages fall back to the usual advice.
+in_claude_sandbox() { [ "${SANDBOX_RUNTIME:-}" = 1 ]; }
+
 # Check required tools. Pass "nogh" to skip gh checks (offline commands).
 require_tools() {
   local mode="${1:-}"
@@ -58,6 +62,9 @@ require_tools() {
     command -v gh >/dev/null 2>&1 || die "GitHub CLI (gh) is required. Install it: brew install gh, see https://cli.github.com"
   fi
   if ! ghx auth status >/dev/null 2>&1; then
+    if in_claude_sandbox; then
+      die "gh reports no valid login. Inside the Claude Code sandbox gh cannot read its token from the keychain or reach GitHub, so this may be the sandbox: run the command outside the sandbox. If it still fails, run: gh auth login -h github.com -s repo,workflow. To check everything at once: /scrum-github:doctor"
+    fi
     die "gh is not logged in. Run: gh auth login -h github.com -s repo,workflow"
   fi
 }

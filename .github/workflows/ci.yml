@@ -44,4 +44,4 @@ jobs:
         working-directory: plugins/scrum-github
         run: |
           shellcheck --version
-          shellcheck --severity=warning runtime/bin/scrum runtime/lib/*.sh scripts/*.sh wizards/*.sh tests/run.sh tests/test_*.sh tests/fake-gh
+          shellcheck --severity=warning bin/scrum runtime/bin/scrum runtime/lib/*.sh scripts/*.sh wizards/*.sh tests/run.sh tests/test_*.sh tests/fake-gh

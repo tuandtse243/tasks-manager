@@ -345,7 +345,7 @@ bash tests/run.sh config     # only tests/test_config.sh
 Lint the shell code (not `vendor/`) and validate the plugin, from this directory:
 
 ```
-shellcheck --severity=warning runtime/bin/scrum runtime/lib/*.sh scripts/*.sh wizards/*.sh tests/run.sh tests/test_*.sh tests/fake-gh
+shellcheck --severity=warning bin/scrum runtime/bin/scrum runtime/lib/*.sh scripts/*.sh wizards/*.sh tests/run.sh tests/test_*.sh tests/fake-gh
 claude plugin validate .     # run by hand; CI does not install Claude Code
 ```
 

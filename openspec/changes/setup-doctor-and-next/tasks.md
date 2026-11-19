@@ -4,15 +4,15 @@
 
 ## 1. `scrum` trên PATH (design mục 1)
 
-- [ ] 1.1 Tạo `bin/scrum` (thực thi được): tự tìm đường dẫn thật qua symlink bằng vòng `readlink` không cờ, rồi `exec bash` tới `runtime/bin/scrum`. Thêm test trong `tests/test_cli.sh`: gọi `bin/scrum --version` trực tiếp và qua một symlink ở thư mục tạm, cả hai in đúng `runtime/VERSION`. Kiểm tra: `bash tests/run.sh cli` xanh
-- [ ] 1.2 Thêm `bin/scrum` vào lệnh `shellcheck` ở README plugin, README gốc và `.github/workflows/ci.yml` (gốc repo). Kiểm tra: lệnh `shellcheck` chép từ README trả mã 0; `test_manifest.sh` vẫn xanh
+- [x] 1.1 Tạo `bin/scrum` (thực thi được): tự tìm đường dẫn thật qua symlink bằng vòng `readlink` không cờ, rồi `exec bash` tới `runtime/bin/scrum`. Thêm test trong `tests/test_cli.sh`: gọi `bin/scrum --version` trực tiếp và qua một symlink ở thư mục tạm, cả hai in đúng `runtime/VERSION`. Kiểm tra: `bash tests/run.sh cli` xanh
+- [x] 1.2 Thêm `bin/scrum` vào lệnh `shellcheck` ở README plugin, README gốc và `.github/workflows/ci.yml` (gốc repo). Kiểm tra: lệnh `shellcheck` chép từ README trả mã 0; `test_manifest.sh` vẫn xanh
 
 ## 2. Bản ghi file và cập nhật tự động trong `init` (design mục 2, 3; spec repo-bootstrap "Cài template vào repo", "Chế độ xem trước")
 
-- [ ] 2.1 Tách `managed_files` (template và đường dẫn, kể cả workflow board khi bật) và cho `cmd_init` dùng nó. Kiểm tra: mọi test hiện có của `tests/test_init.sh` vẫn xanh
-- [ ] 2.2 Ghi và đọc `.github/scrum/files.json` (hash `git hash-object`): đọc trước khi chép lại runtime, ghi sau; áp bảng quy tắc của design mục 2, với kết quả mới `updated` (xem trước: `would update`). Thêm test: đổi `points.scale` rồi chạy lại `init` không có `--force-file` thì Issue Form được cập nhật; đổi `digest.cron` tương tự; file sửa tay vẫn là `conflict`; repo không có `files.json` mà file khác bản mới là `conflict`; sau `--force-file` lần chạy sau tự cập nhật; `--dry-run` báo `would update` và không đổi file. Kiểm tra: `bash tests/run.sh init` xanh
-- [ ] 2.3 Đổi mọi thông báo nhắc `/scrum-github:scrum-init` trong `runtime/` sang `/scrum-github:init`. Kiểm tra: `grep -rn 'scrum-init' runtime/` không in gì; test liên quan trong `tests/` cập nhật và xanh
-- [ ] 2.4 `require_tools`: khi `gh auth status` thất bại và `SANDBOX_RUNTIME=1`, thêm câu về sandbox và dẫn tới `/scrum-github:doctor` (spec scrum-config). Thêm test có và không có biến. Kiểm tra: `bash tests/run.sh config` xanh
+- [x] 2.1 Tách `managed_files` (template và đường dẫn, kể cả workflow board khi bật) và cho `cmd_init` dùng nó. Kiểm tra: mọi test hiện có của `tests/test_init.sh` vẫn xanh
+- [x] 2.2 Ghi và đọc `.github/scrum/files.json` (hash `git hash-object`): đọc trước khi chép lại runtime, ghi sau; áp bảng quy tắc của design mục 2, với kết quả mới `updated` (xem trước: `would update`). Thêm test: đổi `points.scale` rồi chạy lại `init` không có `--force-file` thì Issue Form được cập nhật; đổi `digest.cron` tương tự; file sửa tay vẫn là `conflict`; repo không có `files.json` mà file khác bản mới là `conflict`; sau `--force-file` lần chạy sau tự cập nhật; `--dry-run` báo `would update` và không đổi file. Kiểm tra: `bash tests/run.sh init` xanh
+- [x] 2.3 Đổi mọi thông báo nhắc `/scrum-github:scrum-init` trong `runtime/` sang `/scrum-github:init`. Kiểm tra: `grep -rn 'scrum-init' runtime/` không in gì; test liên quan trong `tests/` cập nhật và xanh
+- [x] 2.4 `require_tools`: khi `gh auth status` thất bại và `SANDBOX_RUNTIME=1`, thêm câu về sandbox và dẫn tới `/scrum-github:doctor` (spec scrum-config). Thêm test có và không có biến. Kiểm tra: `bash tests/run.sh config` xanh
 
 ## 3. `scrum uninstall` (design mục 7; spec repo-bootstrap "Gỡ cài đặt")
 

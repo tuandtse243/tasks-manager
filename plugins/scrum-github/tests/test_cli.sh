@@ -26,3 +26,17 @@ test_jq_libraries_include_nothing() {
     ! grep -qE '^(include|import) ' "$lib" || _fail "$name.jq includes another library"
   done
 }
+
+# The plugin's bin/ is on the PATH in Claude Code; bin/scrum forwards to runtime/bin/scrum.
+test_bin_scrum_forwards_to_the_runtime() {
+  [ -x "$PLUGIN_DIR/bin/scrum" ] || _fail "bin/scrum is not executable"
+  assert_eq "$(cat "$PLUGIN_DIR/runtime/VERSION")" "$("$PLUGIN_DIR/bin/scrum" --version)"
+}
+
+test_bin_scrum_works_through_a_symlink() {
+  mkdir -p "$T/a/b"
+  ln -s "$PLUGIN_DIR/bin/scrum" "$T/a/scrum"
+  ln -s ../scrum "$T/a/b/scrum"
+  assert_eq "$(cat "$PLUGIN_DIR/runtime/VERSION")" "$("$T/a/scrum" --version)"
+  assert_eq "$(cat "$PLUGIN_DIR/runtime/VERSION")" "$("$T/a/b/scrum" --version)"
+}

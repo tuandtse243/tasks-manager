@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# scrum on the PATH: Claude Code puts the plugin's bin/ on the Bash tool's PATH while the plugin
+# is enabled. This forwards to runtime/bin/scrum, which stays where it is because `scrum init`
+# copies runtime/ into target repos. Bash 3.2 compatible: readlink -f does not exist on macOS.
+set -euo pipefail
+self="${BASH_SOURCE[0]}"
+while [ -L "$self" ]; do
+  link="$(readlink "$self")"
+  case "$link" in
+    /*) self="$link" ;;
+    *) self="$(dirname "$self")/$link" ;;
+  esac
+done
+exec bash "$(cd "$(dirname "$self")/.." && pwd)/runtime/bin/scrum" "$@"

@@ -67,7 +67,7 @@ bash plugins/scrum-github/tests/run.sh plan     # chỉ chạy tests/test_plan.s
 Lint mã shell (không lint `vendor/`) và kiểm tra plugin:
 
 ```bash
-(cd plugins/scrum-github && shellcheck --severity=warning runtime/bin/scrum runtime/lib/*.sh scripts/*.sh wizards/*.sh tests/run.sh tests/test_*.sh tests/fake-gh)
+(cd plugins/scrum-github && shellcheck --severity=warning bin/scrum runtime/bin/scrum runtime/lib/*.sh scripts/*.sh wizards/*.sh tests/run.sh tests/test_*.sh tests/fake-gh)
 claude plugin validate plugins/scrum-github     # chạy tay, CI không cài Claude Code
 ```
 
