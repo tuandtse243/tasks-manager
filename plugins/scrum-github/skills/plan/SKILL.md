@@ -6,8 +6,9 @@ argument-hint: "<brief path | requirement text> [--quick]"
 
 # Plan a requirement into tasks
 
-`scrum` below means `bash "${CLAUDE_PLUGIN_ROOT}/runtime/bin/scrum"`, run from the root of the
-target repository. Nothing is created on GitHub until the user approves the plan.
+`scrum` is on the PATH while this plugin is enabled. If `scrum` is not found, or `scrum --version`
+does not print the plugin's version, run `bash "${CLAUDE_PLUGIN_ROOT}/runtime/bin/scrum"` instead.
+Run it from the root of the target repository. Nothing is created on GitHub until the user approves the plan.
 
 Input: a brief (`brief.md` from `/scrum-github:discover`), a path to a requirement, or a
 description. `--quick` skips the independent review (step 5).
@@ -127,5 +128,4 @@ if a fallback was used (checklist or "Blocked by" section in the issue body).
   --dry-run --update` first and show the user what will be overwritten.
 - Remind the user to commit `plan.json` and `plan.md`.
 
-`gh` cannot read its keychain token inside the Claude Code sandbox; run `plan check` and
-`plan apply` outside it if needed.
+If a `scrum` or `gh` command fails on login or network, run `/scrum-github:doctor`.

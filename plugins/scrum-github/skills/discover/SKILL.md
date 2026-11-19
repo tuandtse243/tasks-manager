@@ -6,8 +6,9 @@ argument-hint: "<idea | path to a requirement> [--quick | --deep]"
 
 # Clarify a requirement into a brief
 
-`scrum` below means `bash "${CLAUDE_PLUGIN_ROOT}/runtime/bin/scrum"`, run from the root of the
-target repository. This skill writes `brief.md` in the plan folder and, when a decision belongs
+`scrum` is on the PATH while this plugin is enabled. If `scrum` is not found, or `scrum --version`
+does not print the plugin's version, run `bash "${CLAUDE_PLUGIN_ROOT}/runtime/bin/scrum"` instead.
+Run it from the root of the target repository. This skill writes `brief.md` in the plan folder and, when a decision belongs
 to someone who is not in the session, a `questionnaire-<recipient>.md` next to it. It writes
 nothing to GitHub and changes no file outside the plan folder.
 

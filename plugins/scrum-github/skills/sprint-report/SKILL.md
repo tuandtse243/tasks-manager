@@ -5,10 +5,11 @@ description: Generate a self-contained HTML Scrum sprint report from GitHub with
 
 # Sprint report
 
-The script is `${CLAUDE_PLUGIN_ROOT}/runtime/bin/scrum`; run it with `bash` from the root of the
-target repository. It only reads from GitHub and writes one local HTML file.
+`scrum` is on the PATH while this plugin is enabled. If `scrum` is not found, or `scrum --version`
+does not print the plugin's version, run `bash "${CLAUDE_PLUGIN_ROOT}/runtime/bin/scrum"` instead.
+Run it from the root of the target repository. It only reads from GitHub and writes one local HTML file.
 
-1. Run `bash "${CLAUDE_PLUGIN_ROOT}/runtime/bin/scrum" report [SPRINT] [--out FILE]`
+1. Run `scrum report [SPRINT] [--out FILE]`
    (default file: `scrum-reports/<sprint>.html` in the current directory).
 2. Give the user the full path of the file. It works offline and can be attached or shared as is.
 3. Summarize what the burndown shows: on track, behind or ahead of the ideal line, and the trend
@@ -16,4 +17,4 @@ target repository. It only reads from GitHub and writes one local HTML file.
 
 Limits to mention when relevant: points come from each task's current label, and tasks added
 during the sprint are counted from the first day.
-`gh` cannot read its keychain token inside the Claude Code sandbox; run outside it if needed.
+If a `scrum` or `gh` command fails on login or network, run `/scrum-github:doctor`.

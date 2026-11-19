@@ -33,8 +33,8 @@
 
 ## 6. Skill dùng `scrum`, đổi tên `init` (design mục 1, 8, 9; spec repo-bootstrap "Tên lệnh khởi tạo")
 
-- [ ] 6.1 Chuyển `skills/scrum-init/` thành `skills/init/` (tên `init`, nội dung dùng `scrum init`, bỏ các ghi chú `--force-file` cho `digest.cron` và `points.scale`); tạo lại `skills/scrum-init/SKILL.md` là skill chuyển tiếp với `disable-model-invocation: true`. Kiểm tra: `claude plugin validate .` đạt; hai skill có trong danh sách
-- [ ] 6.2 Trong mọi skill: thay `bash "${CLAUDE_PLUGIN_ROOT}/runtime/bin/scrum"` bằng `scrum`, thêm dòng dự phòng của design mục 1, thay dòng cảnh báo sandbox bằng dòng chung của design mục 9; sửa các chỗ nhắc `scrum-init` trong `skills/`, `agents/` và `reference/`. Thêm test trong `tests/test_cli.sh`: mỗi `SKILL.md` gọi lệnh có dòng dự phòng, không còn dòng cảnh báo sandbox cũ, và không còn `scrum-init` ngoài skill chuyển tiếp. Kiểm tra: `bash tests/run.sh cli` xanh
+- [x] 6.1 Chuyển `skills/scrum-init/` thành `skills/init/` (tên `init`, nội dung dùng `scrum init`, bỏ các ghi chú `--force-file` cho `digest.cron` và `points.scale`); tạo lại `skills/scrum-init/SKILL.md` là skill chuyển tiếp với `disable-model-invocation: true`. Kiểm tra: `claude plugin validate .` đạt; hai skill có trong danh sách
+- [x] 6.2 Trong mọi skill: thay `bash "${CLAUDE_PLUGIN_ROOT}/runtime/bin/scrum"` bằng `scrum`, thêm dòng dự phòng của design mục 1, thay dòng cảnh báo sandbox bằng dòng chung của design mục 9; sửa các chỗ nhắc `scrum-init` trong `skills/`, `agents/` và `reference/`. Thêm test trong `tests/test_cli.sh`: mỗi `SKILL.md` gọi lệnh có dòng dự phòng, không còn dòng cảnh báo sandbox cũ, và không còn `scrum-init` ngoài skill chuyển tiếp. Kiểm tra: `bash tests/run.sh cli` xanh
 
 ## 7. Phiên bản và tài liệu
 

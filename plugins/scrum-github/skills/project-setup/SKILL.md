@@ -5,8 +5,9 @@ description: Turn on the GitHub Projects board for Scrum - hand the user an inte
 
 # Set up the project board
 
-`scrum` below means `bash "${CLAUDE_PLUGIN_ROOT}/runtime/bin/scrum"`, run from the root of the
-target repository. The repository needs `.github/scrum.yml` first (`/scrum-github:scrum-init`).
+`scrum` is on the PATH while this plugin is enabled. If `scrum` is not found, or `scrum --version`
+does not print the plugin's version, run `bash "${CLAUDE_PLUGIN_ROOT}/runtime/bin/scrum"` instead.
+Run it from the root of the target repository. The repository needs `.github/scrum.yml` first (`/scrum-github:init`).
 
 ## 1. Hand over the wizard
 
@@ -44,5 +45,4 @@ To change the wizard's stages, read `${CLAUDE_PLUGIN_ROOT}/vendor/pocock/wizard/
 part of `wizards/project-board.sh` above its `STAGES` marker is the vendored library and stays
 as it is.
 
-`gh` cannot read its keychain token inside the Claude Code sandbox; run the `scrum` commands that
-call GitHub outside it if needed.
+If a `scrum` or `gh` command fails on login or network, run `/scrum-github:doctor`.
