@@ -12,7 +12,7 @@
 
 ## 3. Ngôn ngữ (design mục 4; spec scrum-config "Ngôn ngữ")
 
-- [ ] 3.1 Tạo `runtime/share/strings.json` (`en`, `vi`) và hàm `tr`; `progress-table.jq` và `digest.jq` dùng nó; test hai bảng cùng khoá và bảng tiến độ tiếng Việt. Kiểm tra: `bash tests/run.sh test_report` xanh
+- [x] 3.1 Tạo `runtime/share/strings.json` (`en`, `vi`) và hàm `tr`; `progress-table.jq` và `digest.jq` dùng nó; test hai bảng cùng khoá và bảng tiến độ tiếng Việt. Kiểm tra: `bash tests/run.sh test_report` xanh
 
 ## 4. Cần chú ý (design mục 3; spec sprint-reporting "Mục cần chú ý" và bốn yêu cầu con)
 

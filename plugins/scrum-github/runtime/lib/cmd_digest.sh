@@ -36,7 +36,8 @@ cmd_digest() {
   n="$(printf '%s' "$digest_issue" | jq -r .number)"
 
   body="$(jqlib digest -n --argjson cfg "$CONFIG_JSON" --argjson sprint "$sprint" --argjson issues "$issues" \
-    --argjson comments "$comments" --arg today "$(today)" --argjson off "$(tz_offset)")"
+    --argjson comments "$comments" --arg today "$(today)" --argjson off "$(tz_offset)" \
+    --argjson strings "$(strings_json)" --argjson attention "${ATTENTION_LINES:-[]}")"
   printf '%s' "$body" | jq -c '{body}' | gh_send POST "repos/$repo/issues/$n/comments" >/dev/null
   info "Posted the digest on #$n."
 }

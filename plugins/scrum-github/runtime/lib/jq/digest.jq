@@ -1,9 +1,10 @@
 # -n --argjson cfg CONFIG --argjson sprint MILESTONE --argjson issues ISSUES --argjson comments COMMENTS
-#    --arg today DATE --argjson off SECONDS
+#    --arg today DATE --argjson off SECONDS --argjson strings STRINGS (one language)
+#    --argjson attention [lines of "Needs attention"; [] for none]
 # Output: {body} for the digest comment.
 include "scrum";
-def pts: "\(.) pt\(if . == 1 then "" else "s" end)";
-def who: if (._who | length) == 0 then "unassigned" else (._who | map("@" + .) | join(", ")) end;
+def pts: trn($strings; "pts"; .; {});
+def who: if (._who | length) == 0 then tr($strings; "digest_unassigned") else (._who | map("@" + .) | join(", ")) end;
 ($sprint | sprint_info) as $s
 | progress($cfg; $sprint; $issues; $today) as $p
 | ($issues | report_tasks($cfg)) as $t
@@ -15,20 +16,21 @@ def who: if (._who | length) == 0 then "unassigned" else (._who | map("@" + .) |
 | ($p.total.total.points - $p.total.done.points) as $remaining
 | { body: ([
       "<!-- scrum:digest -->",
-      "## \($s.title) digest, \($today)",
+      "## " + tr($strings; "digest_title"; {title: $s.title, today: $today}),
       "",
-      "**Remaining:** \($remaining) of \($p.total.total.points) points. "
-        + (if $p.days_left == null then "" elif $p.days_left == 0 then "The sprint has ended (\($s.end))."
-           else "\($p.days_left) day\(if $p.days_left == 1 then "" else "s" end) left (ends \($s.end))." end),
+      tr($strings; "digest_remaining"; {rem: $remaining, total: $p.total.total.points}) + " "
+        + (if $p.days_left == null then "" elif $p.days_left == 0 then tr($strings; "digest_ended"; {end: $s.end})
+           else trn($strings; "digest_left"; $p.days_left; {end: $s.end}) end),
       "",
-      "### Done since \(if $last then "the last digest" else "the start of the sprint" end)",
-      (if ($done_since | length) == 0 then "- Nothing closed."
+      (if ($attention | length) > 0 then ("### " + tr($strings; "attention_title"), ($attention[] | "- " + .), "") else empty end),
+      "### " + tr($strings; if $last then "digest_done_since_last" else "digest_done_since_start" end),
+      (if ($done_since | length) == 0 then "- " + tr($strings; "digest_nothing_closed")
        else ($done_since | sort_by(.closed_at)[] | "- #\(.number) \(.title) (\(._pts // 0 | pts)), \(who)") end),
       "",
-      "### In progress",
-      (if ($doing | length) == 0 then "- Nothing in progress."
+      "### " + tr($strings; "digest_in_progress"),
+      (if ($doing | length) == 0 then "- " + tr($strings; "digest_nothing_in_progress")
        else ($doing | sort_by(._who[0] // "~")[] | "- \(who): #\(.number) \(.title) (\(._pts // 0 | pts))") end),
       "",
-      "### Not started",
-      "- \($todo | length) task\(if ($todo | length) == 1 then "" else "s" end), \([$todo[]._pts // 0] | add // 0 | pts)"
+      "### " + tr($strings; "digest_not_started"),
+      "- " + trn($strings; "digest_not_started_line"; ($todo | length); {pts: ([$todo[]._pts // 0] | add // 0 | pts)})
     ] | join("\n")) }

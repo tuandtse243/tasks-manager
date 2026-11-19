@@ -25,6 +25,16 @@ def slug_text:
 def slug: slug_text | if . == "" then "task" else . end;
 def is_slug: type == "string" and test("^[a-z0-9]+(-[a-z0-9]+)*$");
 
+# ---------- text in the configured language (share/strings.json) ----------
+# $s is the table of one language. {name} in the text is replaced by $args.name; a missing key
+# prints the key itself, so a gap is visible rather than silent.
+def tr($s; $key; $args):
+  reduce ($args | to_entries[]) as $e (($s[$key] // $key); gsub("\\{" + $e.key + "\\}"; $e.value | tostring));
+def tr($s; $key): tr($s; $key; {});
+# Picks "<key>_one" for 1 when the language has it (English plural), else "<key>"; {n} is $n.
+def trn($s; $key; $n; $args):
+  tr($s; (if $n == 1 and $s[$key + "_one"] != null then $key + "_one" else $key end); $args + {n: $n});
+
 # ---------- labels and tasks ----------
 def label_names: [.labels[]? | if type == "object" then .name else . end];
 def has_label($n): label_names | any(.[]; . == $n);

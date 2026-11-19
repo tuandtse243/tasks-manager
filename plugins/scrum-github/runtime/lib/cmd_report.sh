@@ -24,7 +24,8 @@ cmd_status() {
   load_sprint_data "$name"
   local p
   p="$(jqlib progress -n --argjson cfg "$CONFIG_JSON" --argjson sprint "$SPRINT" --argjson issues "$ISSUES" --arg today "$(today)")"
-  if [ "$json" = 1 ]; then printf '%s\n' "$p"; else printf '%s' "$p" | jqlib progress-table -r; fi
+  if [ "$json" = 1 ]; then printf '%s\n' "$p"; return 0; fi
+  printf '%s' "$p" | jqlib progress-table -r --argjson cfg "$CONFIG_JSON" --argjson strings "$(strings_json)"
 }
 
 cmd_report() {

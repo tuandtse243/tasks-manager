@@ -2,6 +2,7 @@
 
 defaults() { cat "$PLUGIN_DIR/runtime/share/defaults.json"; }
 sprint1() { jq '.[0]' "$FIXTURES/milestones.json"; }
+strings() { jq -c --arg l "$1" '.[$l]' "$PLUGIN_DIR/runtime/share/strings.json"; }
 
 progress_of() { # progress_of ISSUES TODAY
   jqt progress -n --argjson cfg "$(defaults)" --argjson sprint "$(sprint1)" --argjson issues "$1" --arg today "$2"
@@ -31,8 +32,8 @@ test_progress_shared_task_counted_once() {
 
 test_progress_table_text() {
   local table
-  table="$(progress_of "$(cat "$FIXTURES/issues-sprint1.json")" 2014-09-24 | jqt progress-table -r)"
-  assert_contains "$table" "Sprint 1  (2014-09-22 to 2014-09-26, 3 days left)"
+  table="$(progress_of "$(cat "$FIXTURES/issues-sprint1.json")" 2014-09-24 | jqt progress-table -r --argjson cfg "$(defaults)" --argjson strings "$(strings en)")"
+  assert_contains "$table" "Sprint 1  (2014-09-22 to 2014-09-26, 3 working days left)"
   assert_contains "$table" "david     1 (3 pts)  1 (1 pt)     1 (3 pts)   3 (7 pts)"
   assert_contains "$table" "Done: 71% of points (10 of 14)."
 }
@@ -74,7 +75,7 @@ test_cmd_status_table() {
   report_env
   run_scrum status
   assert_status 0 "$STATUS" "$ERR"
-  assert_contains "$OUT" "Sprint 1  (2014-09-22 to 2014-09-26, 3 days left)"
+  assert_contains "$OUT" "Sprint 1  (2014-09-22 to 2014-09-26, 3 working days left)"
   assert_contains "$OUT" "ruby"
   assert_eq "" "$(gh_writes)" "status never writes"
 }
@@ -107,16 +108,18 @@ test_cmd_report_writes_self_contained_html() {
   assert_eq "Register, login, post, comment" "$(jq -r .goal <<<"$data")"
 }
 
-digest_body() { # digest_body COMMENTS TODAY
+digest_body() { # digest_body COMMENTS TODAY [LANG] [ATTENTION_JSON]
   jqt digest -n --argjson cfg "$(defaults)" --argjson sprint "$(sprint1)" --argjson issues "$(cat "$FIXTURES/issues-sprint1.json")" \
-    --argjson comments "$1" --arg today "$2" --argjson off 0 | jq -r .body
+    --argjson comments "$1" --arg today "$2" --argjson off 0 --argjson strings "$(strings "${3:-en}")" \
+    --argjson attention "${4:-[]}" | jq -r .body
 }
 
 test_digest_first_day_counts_from_sprint_start() {
   local body; body="$(digest_body '[]' 2014-09-24)"
   assert_contains "$body" "<!-- scrum:digest -->"
   assert_contains "$body" "## Sprint 1 digest, 2014-09-24"
-  assert_contains "$body" "**Remaining:** 4 of 14 points. 3 days left (ends 2014-09-26)."
+  assert_contains "$body" "**Remaining:** 4 of 14 points. 3 working days left (ends 2014-09-26)."
+  assert_not_contains "$body" "Needs attention"
   assert_contains "$body" "### Done since the start of the sprint"
   assert_contains "$body" "- #2 Login (3 pts), @david"
   assert_contains "$body" "- @david: #3 Write a post (1 pt)"
@@ -212,4 +215,32 @@ test_ideal_is_flat_over_the_weekend() {
 test_working_days_from_config() {
   assert_eq "6" "$(jq -n -L "$PLUGIN_DIR/runtime/lib/jq" --argjson cfg "$(defaults | jq '.sprint.working_days = [1,2,3,4,5,6]')" \
     'include "scrum"; working_days_between($cfg; "2026-11-16"; "2026-11-22")')"
+}
+
+# ---------- language (delta scrum-config "Ngôn ngữ") ----------
+
+test_strings_have_the_same_keys_in_every_language() {
+  # A key may only be missing in vi when it is the English plural form "<key>_one".
+  local missing
+  missing="$(jq -r '(.en | keys) - (.vi | keys) | map(select(endswith("_one") | not)) | .[]' "$PLUGIN_DIR/runtime/share/strings.json")"
+  assert_eq "" "$missing" "keys missing in vi"
+  assert_eq "" "$(jq -r '(.vi | keys) - (.en | keys) | .[]' "$PLUGIN_DIR/runtime/share/strings.json")" "keys only in vi"
+}
+
+test_progress_table_in_vietnamese() {
+  local table
+  table="$(progress_of "$(cat "$FIXTURES/issues-sprint1.json")" 2014-09-24 | jqt progress-table -r --argjson cfg "$(defaults)" --argjson strings "$(strings vi)")"
+  assert_contains "$table" "Sprint 1  (2014-09-22 đến 2014-09-26, còn 3 ngày làm việc)"
+  assert_contains "$table" "Người nhận"
+  assert_contains "$table" "In progress"
+  assert_contains "$table" "Đã xong: 71% số điểm (10/14)."
+}
+
+test_digest_in_vietnamese_with_attention() {
+  local body; body="$(digest_body '[]' 2014-09-24 vi '["#3 is blocked by #2"]')"
+  assert_contains "$body" "## Digest Sprint 1, 2014-09-24"
+  assert_contains "$body" "**Còn lại:** 4/14 điểm. Còn 3 ngày làm việc (kết thúc 2014-09-26)."
+  assert_contains "$body" "### Cần chú ý"
+  assert_contains "$body" "- #3 is blocked by #2"
+  assert_contains "$body" "### Xong từ đầu sprint"
 }
