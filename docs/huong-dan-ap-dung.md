@@ -63,12 +63,14 @@ stateDiagram-v2
 ## 2. Bảng lệnh
 
 Trong Claude Code, mỗi lệnh gõ dạng `/scrum-github:<tên>`, có thể kèm mô tả bằng lời. Không dùng
-Claude Code thì gọi script `scrum` (cột thứ ba). Sau khi thiết lập, repo dự án có sẵn script tại
-`.github/scrum/bin/scrum`.
+Claude Code thì gọi script `scrum` (cột thứ ba). Trong Claude Code, khi plugin đang bật, `scrum`
+có sẵn trên PATH. Sau khi thiết lập, repo dự án có sẵn script tại `.github/scrum/bin/scrum`.
 
 | Lệnh Claude Code | Ai, khi nào | Script tương ứng | Ví dụ |
 |---|---|---|---|
-| `scrum-init` | SM, một lần cho mỗi repo; chạy lại sau khi sửa cấu hình | `scrum init [--dry-run] [--force-file PATH]` | `/scrum-github:scrum-init` |
+| `init` | SM, một lần cho mỗi repo; chạy lại sau khi sửa cấu hình hoặc nâng plugin | `scrum init [--dry-run] [--force-file PATH]` | `/scrum-github:init` |
+| `doctor` | Bất kỳ ai, khi cài xong hoặc khi một lệnh báo lỗi | `scrum doctor [--json]` | `/scrum-github:doctor` |
+| `next` | Bất kỳ ai, khi không biết làm gì tiếp | `scrum next [--json]` | `/scrum-github:next` |
 | `sprint-new` | SM, đầu sprint | `scrum sprint new [--start DATE] [--length DAYS] [--goal TEXT]` | `/scrum-github:sprint-new bắt đầu thứ 2 tới, mục tiêu "Đăng ký, đăng nhập"` |
 | `project-scan` | Tech lead, một lần cho dự án có mã sẵn; làm mới khi mã đổi nhiều | `scrum context status` | `/scrum-github:project-scan` |
 | `discover` | PO, khi yêu cầu còn mơ hồ | (không có) | `/scrum-github:discover cho người dùng bình luận dưới bài viết` |
@@ -80,6 +82,7 @@ Claude Code thì gọi script `scrum` (cột thứ ba). Sau khi thiết lập, r
 | `sprint-report` | SM, review hoặc gửi stakeholder | `scrum report [SPRINT] [--out FILE]` | `/scrum-github:sprint-report` |
 | `sprint-close` | SM, cuối sprint | `scrum sprint close [SPRINT] [--yes] [--create-next]` | `/scrum-github:sprint-close` |
 | `project-setup` | SM, một lần: bật board kanban (tuỳ chọn) | `bash wizards/project-board.sh`, `scrum project init` | `/scrum-github:project-setup` |
+| (không có) | SM, khi thôi dùng plugin trong repo | `scrum uninstall [--dry-run] [--yes]` | `scrum uninstall`, xem rồi thêm `--yes` |
 
 Lệnh nào ghi lên GitHub thì đều cho xem trước và hỏi bạn trước khi ghi.
 
@@ -120,7 +123,7 @@ Thường là Scrum Master hoặc tech lead, làm trong một bản clone của 
 **Bước 1. Khởi tạo.** Mở Claude Code ở thư mục gốc của repo dự án:
 
 ```
-/scrum-github:scrum-init
+/scrum-github:init
 ```
 
 Lệnh cho xem trước rồi mới ghi. Kết quả:
@@ -132,7 +135,7 @@ Lệnh cho xem trước rồi mới ghi. Kết quả:
 | `.github/ISSUE_TEMPLATE/task.yml` | Form tạo task trên GitHub, có ô Points |
 | `.github/pull_request_template.md` | Có sẵn dòng `Closes #` và các mục Evidence, Merge Danger |
 | Workflow `scrum-status-sync`, `scrum-pr-link-check`, `scrum-daily-digest` | Tự đổi trạng thái, kiểm tra PR có gắn task, gửi digest |
-| `.github/scrum/` | Bản runtime mà workflow gọi tới. Không sửa tay |
+| `.github/scrum/` | Bản runtime mà workflow gọi tới, và `files.json` ghi lại các file `init` đã sinh. Không sửa tay |
 
 **Bước 2. Sửa cấu hình** `.github/scrum.yml`. Khoá nào không ghi thì dùng giá trị mặc định. Cấu
 hình gợi ý cho team ở Việt Nam:
@@ -150,13 +153,9 @@ planning:
   hours_per_point: 4              # tuỳ chọn: plan.md hiện thêm số giờ (1 điểm = 4 giờ)
 ```
 
-Kiểm tra cấu hình mà không gọi mạng: `scrum config`. Sửa xong thì chạy lại `/scrum-github:scrum-init`
-để đồng bộ label. Hai khoá cần thêm một bước:
-
-| Đổi khoá | Chạy thêm |
-|---|---|
-| `points.scale` | `scrum init --force-file .github/ISSUE_TEMPLATE/task.yml` |
-| `digest.cron` | `scrum init --force-file .github/workflows/scrum-daily-digest.yml` |
+Kiểm tra cấu hình mà không gọi mạng: `scrum config`. Sửa xong thì chạy lại `/scrum-github:init`:
+lệnh đồng bộ label và tự cập nhật các file sinh ra theo cấu hình mới (Issue Form khi đổi
+`points.scale`, workflow digest khi đổi `digest.cron`), rồi commit và push.
 
 **Bước 3. Commit và push `.github/` lên nhánh mặc định.** Chưa push thì workflow chưa chạy.
 
@@ -168,8 +167,19 @@ git add .github && git commit -m "Set up scrum-github" && git push
 Như vậy không ai merge được PR không gắn task. Phần *Settings → Actions → Workflow permissions*
 để mặc định.
 
-Chạy lại `scrum-init` lúc nào cũng an toàn: file không đổi báo `unchanged`; file template bạn đã sửa
-báo `conflict` và được giữ nguyên. Muốn lấy bản mới thì dùng `--force-file <path>`.
+**Bước 5. Kiểm tra cả bộ** bằng `/scrum-github:doctor`: công cụ, đăng nhập, cấu hình, label, workflow
+đã lên nhánh mặc định chưa. Mỗi lỗi kèm cách sửa. Sau đó `/scrum-github:next` cho biết việc kế tiếp.
+
+Chạy lại `init` lúc nào cũng an toàn: file không đổi báo `unchanged`; file bạn chưa sửa mà cũ so
+với cấu hình hoặc plugin báo `updated` và được cập nhật; file bạn đã sửa tay báo `conflict` và được
+giữ nguyên. Muốn lấy bản mới cho file đó thì dùng `--force-file <path>`.
+
+**Nâng từ 0.4 trở về trước:** lệnh `scrum-init` nay là `/scrum-github:init` (tên cũ vẫn chạy ở 0.5.x).
+Lần chạy đầu sau khi nâng, repo chưa có bản ghi file nên mọi file khác bản mới đều báo `conflict`;
+từ lần sau thì file chưa sửa tự cập nhật.
+
+**Gỡ khỏi repo:** `scrum uninstall` cho xem những gì sẽ xoá và giữ; thêm `--yes` để xoá. Lệnh giữ
+`.github/scrum.yml`, file bạn đã sửa, và mọi thứ trên GitHub (label, milestone, issue).
 
 ---
 
@@ -502,8 +512,9 @@ tra cấu hình, cài workflow đồng bộ, chạy thử `scrum project init --
      number: <số trong URL .../projects/N>
      poll_cron: "*/15 1-11 * * 1-5"   # khoảng 8h–19h giờ Việt Nam, thứ 2–6, tiết kiệm phút Actions
    ```
-5. `scrum init --force-file .github/workflows/scrum-status-sync.yml`: cài workflow `scrum-project-sync`
-   và thêm token vào workflow trạng thái.
+5. `scrum init`: cài workflow `scrum-project-sync`. Repo cài từ trước 0.2.0 mà chưa cập nhật có thể
+   báo `scrum-status-sync.yml` là `conflict`: thêm `--force-file .github/workflows/scrum-status-sync.yml`
+   để lấy bản có token.
 6. Trên máy mình: `gh auth refresh -s project`, rồi `scrum project init --dry-run`, rồi
    `scrum project init`. Lệnh tạo field *Synced status* và *Points*, và thêm các task của sprint đang mở.
 
@@ -525,6 +536,10 @@ không bị ảnh hưởng.
 
 ## 8. Xử lý sự cố
 
+Chạy `/scrum-github:doctor` trước: lệnh kiểm tra một lượt công cụ, đăng nhập và scope của `gh`,
+cấu hình, label, workflow trên nhánh mặc định, phiên bản runtime và secret của board, rồi nêu cách
+sửa từng lỗi. Bảng dưới cho những trường hợp `doctor` không thấy được.
+
 | Triệu chứng | Nguyên nhân | Cách xử lý |
 |---|---|---|
 | Merge PR mà task không đóng | PR viết `Solve #n` thay vì `Closes #n` | Sửa mô tả PR thành `Closes #n` |
@@ -533,11 +548,13 @@ không bị ảnh hưởng.
 | Workflow không chạy | Chưa push `.github/` lên nhánh mặc định | Push rồi thử lại |
 | `task-pr` báo cần push | Branch chưa có trên remote | `git push -u origin <branch>` rồi chạy lại |
 | `scrum: yq ... is not mikefarah/yq` | Cài nhầm bản yq của Python | `pip uninstall yq && brew install yq` |
-| `gh` báo token invalid trong Claude Code dù đã login | Sandbox của Claude Code chặn đọc keychain macOS | Chạy lệnh ngoài sandbox (Claude Code sẽ hỏi), hoặc chỉnh bằng `/sandbox` |
+| `gh` báo token invalid trong Claude Code dù đã login | Sandbox của Claude Code chặn đọc keychain macOS và chặn mạng | Chạy lệnh ngoài sandbox (Claude Code sẽ hỏi), hoặc chỉnh bằng `/sandbox`. `doctor` nhận ra trường hợp này |
+| `scrum --version` không in phiên bản plugin | Một lệnh `scrum` khác đứng trước trên PATH | Dùng `bash "${CLAUDE_PLUGIN_ROOT}/runtime/bin/scrum"` hoặc đổi tên lệnh kia |
 | `points 5 not in the scale` | Giá trị không có trong `points.scale` | Dùng giá trị trong thang, hoặc sửa cấu hình |
-| Đổi giờ digest mà không có tác dụng | Giờ chạy được ghi cứng vào file workflow | `scrum init --force-file .github/workflows/scrum-daily-digest.yml`, rồi commit |
+| Đổi giờ digest mà không có tác dụng | Giờ chạy được ghi cứng vào file workflow | Chạy lại `/scrum-github:init`, rồi commit và push. Nếu file báo `conflict` vì bạn đã sửa tay, thêm `--force-file .github/workflows/scrum-daily-digest.yml` |
 | Task có hai label status | Ai đó sửa label bằng tay | Lần đổi trạng thái kế tiếp tự chuẩn hoá. Muốn sửa ngay thì gỡ label thừa |
-| `init` báo `conflict` | Bạn đã sửa một file template | Giữ bản của bạn, hoặc `--force-file <path>` để lấy bản mới |
+| `init` báo `conflict` | Bạn đã sửa tay file đó, hoặc repo cài từ trước 0.5.0 nên chưa có bản ghi | Giữ bản của bạn, hoặc `--force-file <path>` để lấy bản mới; từ đó file tự cập nhật |
+| Xung đột merge ở `.github/scrum/files.json` | Hai người chạy `init` trên hai nhánh | Giữ một bên, merge xong chạy lại `/scrum-github:init` để ghi lại cho đúng |
 | `plan apply` báo `no sprint named "…"` hoặc `… is closed` | Plan ghi tên sprint không tồn tại hoặc đã đóng | Sửa `sprint` trong plan. Chưa có gì được tạo |
 | `plan apply` dừng giữa chừng | Lỗi mạng hoặc GitHub | Chạy lại đúng lệnh đó: chỉ phần chưa có số issue được tạo |
 | Issue có checklist hoặc mục "Blocked by" trong nội dung | Repo không cho dùng sub-issue hoặc quan hệ phụ thuộc | Không cần làm gì; quan hệ được ghi ngay trong nội dung issue |
@@ -564,10 +581,11 @@ không bị ảnh hưởng.
 - [ ] Người dùng Claude Code đã cài plugin
 
 **Thiết lập repo**
-- [ ] Chạy `scrum-init`, xem kỹ phần xem trước
+- [ ] Chạy `/scrum-github:init`, xem kỹ phần xem trước
 - [ ] Sửa `.github/scrum.yml`: timezone, `length_days`, thang điểm, giờ digest
 - [ ] Commit và push `.github/` lên nhánh mặc định
 - [ ] Bật branch protection, bắt buộc check `scrum-pr-link-check`
+- [ ] `/scrum-github:doctor` không còn lỗi
 - [ ] (Tuỳ chọn) `project-setup` để bật board
 
 **Thống nhất với team**

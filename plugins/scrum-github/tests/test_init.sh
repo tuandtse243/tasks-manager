@@ -241,7 +241,7 @@ test_pr_template_has_four_sections() {
 
 test_version_matches_plugin_json() {
   run_scrum --version
-  assert_eq "0.4.0" "$OUT"
+  assert_eq "0.5.0" "$OUT"
   assert_eq "$(jq -r .version "$PLUGIN_DIR/.claude-plugin/plugin.json")" "$OUT"
 }
 

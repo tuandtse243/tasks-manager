@@ -4,6 +4,32 @@ All notable changes to the `scrum-github` plugin. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the plugin uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-11-19
+
+### Added
+
+- `/scrum-github:doctor` and `scrum doctor [--json]`: one read-only pass over the tools (jq,
+  mikefarah yq, gh login and scopes), the repository (remote, `.github/scrum.yml`, labels), what
+  `init` installed (workflows on the default branch, runtime version, generated files) and the
+  board secret, each problem with its fix. Recognizes a `gh` failure caused by the Claude Code
+  sandbox.
+- `/scrum-github:next` and `scrum next [--json]`: the one thing to do next, with its command.
+- `scrum uninstall [--dry-run] [--yes]`: removes what `init` installed from the working tree,
+  keeps `.github/scrum.yml`, files edited by hand and everything on GitHub.
+- `scrum` is on the PATH in Claude Code (the plugin's `bin/`), so skills run `scrum …`.
+
+### Changed
+
+- `init` records the files it writes in `.github/scrum/files.json` and updates the ones nobody
+  edited when the configuration (`points.scale`, `digest.cron`, `project.poll_cron`) or the
+  plugin changes; only hand-edited files are conflicts. No more `--force-file` after a
+  configuration change. A repository set up before 0.5.0 has no record yet, so the first run
+  still reports differing files as conflicts.
+- **Breaking:** `/scrum-github:scrum-init` is renamed `/scrum-github:init`. The old name still
+  works in 0.5.x and says so; it goes away in 0.6.0.
+- A `gh` login failure inside the Claude Code sandbox says so and points to
+  `/scrum-github:doctor`; skills point there instead of repeating the warning.
+
 ## [0.4.0] - 2026-11-19
 
 ### Added
@@ -83,6 +109,7 @@ All notable changes to the `scrum-github` plugin. The format follows
   each pull request links a task, and a daily digest.
 - A task issue form with a points dropdown and a pull request template with `Closes #`.
 
+[0.5.0]: https://github.com/tuandtse243/tasks-manager/tree/main/plugins/scrum-github
 [0.4.0]: https://github.com/tuandtse243/tasks-manager/commit/83dd11b
 [0.3.0]: https://github.com/tuandtse243/tasks-manager/commit/cffe202
 [0.2.0]: https://github.com/tuandtse243/tasks-manager/tree/main/openspec/changes/archive/2026-11-18-projects-v2-board-sync

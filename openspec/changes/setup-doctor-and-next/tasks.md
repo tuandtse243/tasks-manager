@@ -38,13 +38,13 @@
 
 ## 7. Phiên bản và tài liệu
 
-- [ ] 7.1 Nâng phiên bản lên 0.5.0 ở `runtime/VERSION` và `.claude-plugin/plugin.json`; thêm mục 0.5.0 vào `CHANGELOG.md` (Added: doctor, next, uninstall, `scrum` trên PATH, cập nhật file tự động; Changed: **Breaking** đổi tên `scrum-init` thành `init`). Kiểm tra: `bash tests/run.sh manifest` xanh
-- [ ] 7.2 README plugin: bảng lệnh có `doctor`, `next`, `uninstall`, `init`; mục cài đặt nói chạy `/scrum-github:doctor` sau khi cài; bỏ hướng dẫn `--force-file` cho đổi cấu hình; mục sandbox dẫn tới `doctor`; dòng về nâng cấp từ 0.4 (lần `init` đầu vẫn báo `conflict` với file khác bản mới). Kiểm tra: `grep -n 'scrum-init' README.md` chỉ còn câu về tên cũ; mọi lệnh trong bảng có trong `scrum --help`
-- [ ] 7.3 `docs/huong-dan-ap-dung.md` (gốc repo) và `README.md` gốc: bảng lệnh, mục cài đặt và mục xử lý sự cố dùng `/scrum-github:init`, `/scrum-github:doctor`, `/scrum-github:next`; mục xử lý sự cố mở đầu bằng "chạy `/scrum-github:doctor`". Kiểm tra: `grep -rn 'scrum-init' README.md docs/huong-dan-ap-dung.md` không in gì ngoài câu về tên cũ
+- [x] 7.1 Nâng phiên bản lên 0.5.0 ở `runtime/VERSION` và `.claude-plugin/plugin.json`; thêm mục 0.5.0 vào `CHANGELOG.md` (Added: doctor, next, uninstall, `scrum` trên PATH, cập nhật file tự động; Changed: **Breaking** đổi tên `scrum-init` thành `init`). Kiểm tra: `bash tests/run.sh manifest` xanh
+- [x] 7.2 README plugin: bảng lệnh có `doctor`, `next`, `uninstall`, `init`; mục cài đặt nói chạy `/scrum-github:doctor` sau khi cài; bỏ hướng dẫn `--force-file` cho đổi cấu hình; mục sandbox dẫn tới `doctor`; dòng về nâng cấp từ 0.4 (lần `init` đầu vẫn báo `conflict` với file khác bản mới). Kiểm tra: `grep -n 'scrum-init' README.md` chỉ còn câu về tên cũ; mọi lệnh trong bảng có trong `scrum --help`
+- [x] 7.3 `docs/huong-dan-ap-dung.md` (gốc repo) và `README.md` gốc: bảng lệnh, mục cài đặt và mục xử lý sự cố dùng `/scrum-github:init`, `/scrum-github:doctor`, `/scrum-github:next`; mục xử lý sự cố mở đầu bằng "chạy `/scrum-github:doctor`". Kiểm tra: `grep -rn 'scrum-init' README.md docs/huong-dan-ap-dung.md` không in gì ngoài câu về tên cũ
 
 ## 8. Kiểm tra tích hợp
 
-- [ ] 8.1 Chạy toàn bộ `bash tests/run.sh`, lệnh `shellcheck` của README, `openspec validate setup-doctor-and-next --strict` và `claude plugin validate .`. Kiểm tra: tất cả đạt
+- [x] 8.1 Chạy toàn bộ `bash tests/run.sh`, lệnh `shellcheck` của README, `openspec validate setup-doctor-and-next --strict` và `claude plugin validate .`. Kiểm tra: tất cả đạt
 - [ ] 8.2 Trong một phiên Claude Code có plugin này (cài từ thư mục local), chạy `scrum --version` bằng Bash tool để xác nhận `bin/` nằm trên PATH, rồi `/scrum-github:doctor` và `/scrum-github:next` trên một repo đã cài. Kiểm tra: `scrum --version` in 0.5.0; ghi kết quả vào mô tả PR
 - [ ] 8.3 Mở pull request. Kiểm tra: CI (`test (ubuntu-latest)`, `lint`) xanh
 
