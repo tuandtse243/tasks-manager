@@ -201,7 +201,14 @@ Từ đó PR nháp giữ task ở In progress, PR sẵn sàng review đưa task 
 hoặc đóng không merge đưa task về In progress, merge thì Done. Bảng tiến độ, digest và báo cáo có
 thêm cột In review; mục "Cần chú ý" nêu task chờ review quá `attention.review_days` ngày làm việc.
 Bật giữa sprint thì task đang có chỉ đổi ở sự kiện PR kế tiếp. Có dùng board thì thêm cột
-`In Review` rồi chạy `scrum project init`. Bỏ khoá này là tắt; label cũ được giữ.
+`In Review` (một lựa chọn mới của trường Status, đặt giữa In Progress và Done) rồi chạy
+`scrum project init`; thiếu cột này lệnh sẽ dừng và báo. Bỏ khoá này là tắt; label cũ được giữ.
+Luồng này đã được chạy thử trên repo và board thật: PR nháp, sẵn sàng review, về nháp, đóng không
+merge, mở lại và merge đều đổi đúng cả label lẫn cột trên board.
+
+Repo thiết lập từ trước 0.5.0 khi chạy lại `init` sẽ thấy các workflow có bản mẫu mới bị báo
+`conflict`, dù không ai sửa: phiên bản cũ chưa ghi lại file nào do `init` viết. So với bản mẫu,
+file nào không tự sửa thì thêm `--force-file <đường dẫn>` để lấy bản mới.
 
 **Gỡ khỏi repo:** `scrum uninstall` cho xem những gì sẽ xoá và giữ; thêm `--yes` để xoá. Lệnh giữ
 `.github/scrum.yml`, file bạn đã sửa, và mọi thứ trên GitHub (label, milestone, issue).

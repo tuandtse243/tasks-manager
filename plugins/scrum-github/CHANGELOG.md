@@ -4,6 +4,20 @@ All notable changes to the `scrum-github` plugin. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the plugin uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.2] - 2026-11-20
+
+### Fixed
+
+- `init` asked to add the secret `SCRUM_PROJECT_TOKEN` even when the repository had it; it now
+  checks the repository's secrets first.
+
+### Changed
+
+- The In review status was run end to end on a real repository and board (draft, ready, back to
+  draft, closed without merge, reopened, merged, and a card dragged on the board); the README
+  says so and explains how to add the In Review column. The README and guide explain why a
+  repository set up before 0.5.0 sees `conflict` for workflows nobody edited.
+
 ## [0.8.1] - 2026-11-20
 
 ### Added

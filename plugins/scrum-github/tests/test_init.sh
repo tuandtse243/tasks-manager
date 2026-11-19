@@ -203,6 +203,18 @@ test_init_project_on_installs_workflow_with_cron() {
   assert_contains "$(cat "$wf")" 'SCRUM_PROJECT_TOKEN: ${{ secrets.SCRUM_PROJECT_TOKEN }}'
   assert_contains "$(cat "$wf")" 'group: scrum-project-sync'
   assert_contains "$OUT" "scrum project init"
+  assert_contains "$OUT" "add the repository secret SCRUM_PROJECT_TOKEN"
+}
+
+test_init_project_on_with_secret_does_not_ask_for_it() {
+  init_env
+  printf 'project:\n  enabled: true\n  owner: acme\n  number: 2\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  cp "$FIXTURES/actions-secrets.json" "$FAKE_GH_DIR/secrets.json"
+  route 'api repos/acme/blog/actions/secrets' "secrets.json"
+  run_scrum init
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "the secret SCRUM_PROJECT_TOKEN is set"
+  assert_not_contains "$OUT" "add the repository secret"
 }
 
 test_init_old_status_sync_is_a_conflict() {
@@ -242,7 +254,7 @@ test_pr_template_has_four_sections() {
 
 test_version_matches_plugin_json() {
   run_scrum --version
-  assert_eq "0.8.1" "$OUT"
+  assert_eq "0.8.2" "$OUT"
   assert_eq "$(jq -r .version "$PLUGIN_DIR/.claude-plugin/plugin.json")" "$OUT"
 }
 

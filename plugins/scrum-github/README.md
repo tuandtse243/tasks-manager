@@ -111,7 +111,9 @@ What changed in each version: [CHANGELOG.md](CHANGELOG.md).
 
 `init` records what it writes in `.github/scrum/files.json`. When the configuration or the
 plugin changes, it updates every file nobody edited since; a file edited by hand is reported as a
-`conflict` and kept, and `--force-file PATH` replaces it.
+`conflict` and kept, and `--force-file PATH` replaces it. A repository set up before 0.5.0 has no
+record yet, so every file whose template changed since is reported as a `conflict`, edited or not;
+compare it with the template and use `--force-file` for the ones you never edited.
 
 Workflows installed in the target repo call `scrum event`, `scrum pr-check` and `scrum digest`
 (and `scrum project sync` when the project board is on, see below).
@@ -389,9 +391,15 @@ progress → In review → Done, and pull requests move tasks between them:
 Done is never moved back. Turning the status on mid-sprint changes no task until its next pull
 request event. Run `/scrum-github:init` after setting it: it creates the `status: In review`
 label and updates the status workflow (it also listens to `converted_to_draft`). With the
-project board on, add an `In Review` column (or set `project.status_options.in_review`) and run
-`scrum project init`. The status table, digest and report then have an In review column or
+project board on, add an `In Review` option to the board's Status field (a column, between In
+Progress and Done), or set `project.status_options.in_review` to the name of an existing one, and
+run `scrum project init`; it stops if the option is missing. The status table, digest and report then have an In review column or
 section, and Needs attention lists tasks waiting for review longer than `attention.review_days`.
+
+Checked on a real repository and a user-owned board with 0.8.1: a draft PR kept the task In
+progress; ready for review moved label and card to In review; back to draft, and closing without
+merging, moved both back to In progress; reopening moved both to In review; the merge gave Done and
+closed the issue. A card dragged to In Review set the label at the next sync.
 
 A merge into **any** branch closes the task, not only a merge into the default branch. The
 workflow uses `pull_request_target`, so it runs the workflow file of the PR's base branch: that
