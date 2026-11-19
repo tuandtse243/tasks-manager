@@ -5,7 +5,7 @@ Trả lời câu "giờ tôi làm gì tiếp": từ trạng thái của repo, sp
 ## ADDED Requirements
 
 ### Requirement: Một bước kế tiếp theo thứ tự ưu tiên
-Lệnh `scrum next` (và skill `/scrum-github:next`) SHALL nêu đúng một bước, là điều kiện đầu tiên đúng theo thứ tự: chưa khởi tạo; `.github/` chưa có trên nhánh mặc định của remote; không có sprint mở; sprint hiện tại đã quá ngày kết thúc; người dùng có task In progress trong sprint; sprint có task chưa có điểm hoặc chưa giao; còn task New để nhận; không còn gì để nhận. Mỗi bước MUST kèm một lệnh.
+Lệnh `scrum next` (và skill `/scrum-github:next`) SHALL nêu đúng một bước, là điều kiện đầu tiên đúng theo thứ tự: chưa khởi tạo; `.github/` chưa có trên nhánh mặc định của remote; không có sprint mở; sprint hiện tại đã quá ngày kết thúc; người dùng có task In progress trong sprint; sprint có task chưa xong mà chưa có điểm, hoặc task In progress chưa giao ai; còn task New để nhận; không còn gì để nhận. Mỗi bước MUST kèm một lệnh.
 
 #### Scenario: Chưa khởi tạo
 - **WHEN** repo chưa có `.github/scrum.yml`
@@ -31,8 +31,12 @@ Lệnh `scrum next` (và skill `/scrum-github:next`) SHALL nêu đúng một bư
 - **WHEN** người dùng không có task In progress và sprint có task #15 không có label điểm
 - **THEN** bước kế tiếp nêu #15 cần ước lượng, kèm lệnh gắn label điểm
 
+#### Scenario: Task In progress không ai giữ
+- **WHEN** người dùng không có task In progress, mọi task chưa xong đã có điểm, và task #16 đang In progress mà không giao cho ai
+- **THEN** bước kế tiếp nêu #16 cần người nhận, kèm lệnh giao task
+
 #### Scenario: Nhận task mới
-- **WHEN** mọi task trong sprint đã có điểm và người giao, người dùng không có task In progress, và có task New #20 giao cho người dùng
+- **WHEN** mọi task chưa xong trong sprint đã có điểm, người dùng không có task In progress, và có task New #20 giao cho người dùng
 - **THEN** bước kế tiếp là bắt đầu #20 bằng `/scrum-github:task-start 20`
 
 #### Scenario: Hết việc

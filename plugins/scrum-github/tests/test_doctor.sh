@@ -220,3 +220,19 @@ test_doctor_board_off_skips_board() {
   assert_eq "skip" "$(status_of board)"
   assert_not_contains "$(gh_calls)" "actions/secrets"
 }
+
+test_doctor_nothing_pushed_yet() {
+  doctor_env
+  route_first 'api repos/acme/blog/contents/.github/workflows' '!404'
+  doctor_json
+  assert_eq "error" "$(status_of workflows)"
+  assert_contains "$(check_of workflows)" "not on the default branch"
+}
+
+test_doctor_workflows_not_readable() {
+  doctor_env
+  route_first 'api repos/acme/blog/contents/.github/workflows' '!fail'
+  doctor_json
+  assert_eq "warn" "$(status_of workflows)"
+  assert_contains "$(check_of workflows)" "cannot read"
+}

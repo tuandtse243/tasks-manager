@@ -81,9 +81,15 @@ repo_slug() {
 
 # remote_workflows REPO  Names of the files in .github/workflows on the default branch of the
 # GitHub repository, one per line; nothing when the folder does not exist there (404).
+# Returns 1 when GitHub could not be read for another reason.
 remote_workflows() {
-  local json
-  json="$(ghx api "repos/$1/contents/.github/workflows" 2>/dev/null)" || return 0
+  local json err
+  err="$(mktemp "${TMPDIR:-/tmp}/scrum-gh.XXXXXX")"
+  if ! json="$(ghx api "repos/$1/contents/.github/workflows" 2>"$err")"; then
+    if grep -q '404' "$err"; then rm -f "$err"; return 0; fi
+    rm -f "$err"; return 1
+  fi
+  rm -f "$err"
   printf '%s' "$json" | jq -r 'if type == "array" then .[].name else empty end' 2>/dev/null || true
 }
 

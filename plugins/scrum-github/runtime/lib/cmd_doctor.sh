@@ -167,7 +167,10 @@ EOF
     check install workflows skip "needs a gh login and a GitHub remote"
     return 0
   fi
-  remote="$(remote_workflows "$REPO")"
+  if ! remote="$(remote_workflows "$REPO")"; then
+    check install workflows warn "cannot read .github/workflows on the default branch of $REPO" "Check that gh can read the repository: gh repo view $REPO"
+    return 0
+  fi
   local missing=""
   while IFS="$(printf '\t')" read -r src rel; do
     case "$rel" in
@@ -222,7 +225,10 @@ doctor_board() {
   else
     check board secret error "the repository secret SCRUM_PROJECT_TOKEN is missing, so the board sync workflow cannot reach the board" "/scrum-github:project-setup"
   fi
-  if remote_workflows "$REPO" | grep -qx scrum-project-sync.yml; then
+  local remote
+  if ! remote="$(remote_workflows "$REPO")"; then
+    check board workflow warn "cannot read .github/workflows on the default branch of $REPO" "Check that gh can read the repository: gh repo view $REPO"
+  elif printf '%s\n' "$remote" | grep -qx scrum-project-sync.yml; then
     check board workflow ok "scrum-project-sync.yml is on the default branch"
   elif [ -f "$DIR/.github/workflows/scrum-project-sync.yml" ]; then
     check board workflow error "scrum-project-sync.yml is not on the default branch yet (it exists only in this working tree)" "git add .github && git commit -m \"Turn on the project board\" && git push"

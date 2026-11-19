@@ -27,9 +27,9 @@
 
 ## 5. `scrum next` (design mục 6; spec next-step-guidance)
 
-- [ ] 5.1 Tạo `runtime/lib/jq/next-step.jq` và test jq thuần trong `tests/test_next.sh` cho từng bậc ưu tiên và quy tắc chọn task New. Kiểm tra: `bash tests/run.sh next` xanh
-- [ ] 5.2 Tạo `runtime/lib/cmd_next.sh` và lệnh `scrum next [--json]` trong dispatcher và `usage`: dừng sớm khi chưa khởi tạo (không gọi GitHub), còn lại thu trạng thái rồi gọi `next-step.jq`. Thêm test lệnh với `fake-gh` cho chưa khởi tạo, chưa push, `--json`, và không có lời gọi ghi. Kiểm tra: `bash tests/run.sh next` xanh
-- [ ] 5.3 Tạo `skills/next/SKILL.md`: chạy `scrum next`, nói bước kế tiếp, đề nghị chạy lệnh đó. Kiểm tra: `claude plugin validate .` đạt
+- [x] 5.1 Tạo `runtime/lib/jq/next-step.jq` và test jq thuần trong `tests/test_next.sh` cho từng bậc ưu tiên và quy tắc chọn task New. Kiểm tra: `bash tests/run.sh next` xanh
+- [x] 5.2 Tạo `runtime/lib/cmd_next.sh` và lệnh `scrum next [--json]` trong dispatcher và `usage`: dừng sớm khi chưa khởi tạo (không gọi GitHub), còn lại thu trạng thái rồi gọi `next-step.jq`. Thêm test lệnh với `fake-gh` cho chưa khởi tạo, chưa push, `--json`, và không có lời gọi ghi. Kiểm tra: `bash tests/run.sh next` xanh
+- [x] 5.3 Tạo `skills/next/SKILL.md`: chạy `scrum next`, nói bước kế tiếp, đề nghị chạy lệnh đó. Kiểm tra: `claude plugin validate .` đạt
 
 ## 6. Skill dùng `scrum`, đổi tên `init` (design mục 1, 8, 9; spec repo-bootstrap "Tên lệnh khởi tạo")
 
