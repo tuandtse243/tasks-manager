@@ -77,7 +77,7 @@ test_missing_yq_is_reported_before_github() {
   local d f
   for d in /usr/bin /bin; do
     for f in "$d"/*; do
-      [ "${f##*/}" = yq ] || [ -e "$T/sys/${f##*/}" ] || ln -s "$f" "$T/sys/${f##*/}"
+      [ "${f##*/}" = yq ] || [ -e "$T/sys/${f##*/}" ] || [ -L "$T/sys/${f##*/}" ] || ln -s "$f" "$T/sys/${f##*/}"
     done
   done
   set +e
