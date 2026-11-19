@@ -344,3 +344,8 @@ test_digest_workflow_passes_the_webhook_secret() {
   run_scrum init
   assert_contains "$(cat "$SCRUM_REPO_DIR/.github/workflows/scrum-daily-digest.yml")" 'SCRUM_DIGEST_WEBHOOK: ${{ secrets.SCRUM_DIGEST_WEBHOOK }}'
 }
+
+# delta repo-bootstrap "Label In review": the status workflow hears converted_to_draft.
+test_status_workflow_hears_converted_to_draft() {
+  assert_contains "$(yq -o=json '.on.pull_request_target.types' "$PLUGIN_DIR/templates/github/workflows/scrum-status-sync.yml" | jq -c .)" '"converted_to_draft"'
+}

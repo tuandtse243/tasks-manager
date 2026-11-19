@@ -152,3 +152,75 @@ test_pr_check_no_task_label() {
   assert_status 0 "$STATUS" "$ERR"
   assert_eq "" "$(gh_calls)" "pr-check needs no GitHub calls"
 }
+
+# ---------- with statuses.in_review set (delta pr-task-linking "Vòng đời PR khi bật In review") ----------
+
+review_cfg() { defaults | jq -c '.statuses.in_review = "In review"'; }
+rdecide() { # rdecide KIND ISSUE DRAFT
+  jqt event-decide -n --argjson cfg "$(review_cfg)" --arg kind "$1" --argjson issue "$2" --argjson draft "${3:-false}" \
+    | jq -c '{skip, labels: (.labels | if . then sort else . end), close}'
+}
+iss() { jq -nc --arg s "$1" '{number: 1, state: "open", labels: [{name: "status: \($s)"}]}'; }
+
+test_review_draft_pr_opened_moves_new_to_in_progress() {
+  assert_eq '["status: In progress"]' "$(rdecide pr_open "$(iss New)" true | jq -c .labels)"
+}
+test_review_ready_pr_moves_to_in_review() {
+  assert_eq '["status: In review"]' "$(rdecide pr_open "$(iss 'In progress')" false | jq -c .labels)"
+  assert_eq '["status: In review"]' "$(rdecide pr_open "$(iss New)" false | jq -c .labels)" "non-draft PR opened on a New task"
+}
+test_review_converted_to_draft_moves_back() {
+  assert_eq '["status: In progress"]' "$(rdecide pr_draft "$(iss 'In review')" | jq -c .labels)"
+}
+test_review_closed_unmerged_moves_back_from_review_only() {
+  assert_eq '["status: In progress"]' "$(rdecide pr_closed "$(iss 'In review')" | jq -c .labels)"
+  assert_eq '"not in review"' "$(rdecide pr_closed "$(iss New)" | jq -c .skip)"
+}
+test_review_merge_sets_done() {
+  assert_eq '{"skip":null,"labels":["status: Done"],"close":true}' "$(rdecide pr_merged "$(iss 'In review')")"
+}
+test_review_never_moves_done_back() {
+  assert_eq '"already done"' "$(rdecide pr_open "$(iss Done)" false | jq -c .skip)"
+  assert_eq '"already done"' "$(rdecide pr_draft "$(iss Done)" | jq -c .skip)"
+}
+
+test_off_mode_ignores_draft_and_unmerged_close() {
+  assert_eq '["status: In progress"]' "$(decide pr_open "$(iss New)" | jq -c .labels)" "draft or not, as before"
+  assert_eq '"no In review status"' "$(decide pr_draft "$(iss 'In progress')" | jq -c .skip)"
+  assert_eq '"no In review status"' "$(decide pr_closed "$(iss 'In progress')" | jq -c .skip)"
+}
+
+test_cmd_event_review_ready_for_review() {
+  event_env pull_request_target '{"action":"ready_for_review","pull_request":{"number":20,"draft":false,"body":"Closes #1","merged":false}}'
+  printf 'version: 1\nstatuses:\n  in_review: In review\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  route_json 'api repos/acme/blog/issues/1' '{"number":1,"state":"open","labels":[{"name":"status: In progress"}]}'
+  run_scrum event
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$(gh_calls)" 'STDIN {"labels":["status: In review"]}'
+}
+
+test_cmd_event_review_converted_to_draft() {
+  event_env pull_request_target '{"action":"converted_to_draft","pull_request":{"number":20,"draft":true,"body":"Closes #1","merged":false}}'
+  printf 'version: 1\nstatuses:\n  in_review: In review\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  route_json 'api repos/acme/blog/issues/1' '{"number":1,"state":"open","labels":[{"name":"status: In review"}]}'
+  run_scrum event
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$(gh_calls)" 'STDIN {"labels":["status: In progress"]}'
+}
+
+test_cmd_event_review_closed_unmerged() {
+  event_env pull_request_target '{"action":"closed","pull_request":{"number":20,"draft":false,"body":"Closes #1","merged":false}}'
+  printf 'version: 1\nstatuses:\n  in_review: In review\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  route_json 'api repos/acme/blog/issues/1' '{"number":1,"state":"open","labels":[{"name":"status: In review"}]}'
+  run_scrum event
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$(gh_calls)" 'STDIN {"labels":["status: In progress"]}'
+}
+
+test_cmd_event_off_converted_to_draft_writes_nothing() {
+  event_env pull_request_target '{"action":"converted_to_draft","pull_request":{"number":20,"draft":true,"body":"Closes #1","merged":false}}'
+  route_json 'api repos/acme/blog/issues/1' '{"number":1,"state":"open","labels":[{"name":"status: In progress"}]}'
+  run_scrum event
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "" "$(gh_writes)"
+}

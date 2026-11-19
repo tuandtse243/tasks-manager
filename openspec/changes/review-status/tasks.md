@@ -8,7 +8,7 @@
 
 ## 2. Sự kiện PR (design mục 2; spec pr-task-linking)
 
-- [ ] 2.1 `event-decide.jq` và `cmd_event.sh` với `draft`, `pr_draft`, `pr_closed`; `converted_to_draft` trong template status-sync; test mọi scenario của spec ở chế độ bật và test chế độ tắt giữ hành vi cũ. Kiểm tra: `bash tests/run.sh test_event` và `test_init` xanh
+- [x] 2.1 `event-decide.jq` và `cmd_event.sh` với `draft`, `pr_draft`, `pr_closed`; `converted_to_draft` trong template status-sync; test mọi scenario của spec ở chế độ bật và test chế độ tắt giữ hành vi cũ. Kiểm tra: `bash tests/run.sh test_event` và `test_init` xanh
 
 ## 3. Label và lệnh task (design mục 5; spec repo-bootstrap, task-management)
 
