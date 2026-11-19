@@ -12,7 +12,7 @@
 
 ## 3. Label và lệnh task (design mục 5; spec repo-bootstrap, task-management)
 
-- [ ] 3.1 `label-plan.jq` theo `roles($cfg)`; `task list --status in_review`; test bật, tắt lại (lỗi thời), và từ chối khi tắt. Kiểm tra: `bash tests/run.sh test_init` và `test_task` xanh
+- [x] 3.1 `label-plan.jq` theo `roles($cfg)`; `task list --status in_review`; test bật, tắt lại (lỗi thời), và từ chối khi tắt. Kiểm tra: `bash tests/run.sh test_init` và `test_task` xanh
 
 ## 4. Báo cáo (design mục 1, 4; spec sprint-reporting)
 

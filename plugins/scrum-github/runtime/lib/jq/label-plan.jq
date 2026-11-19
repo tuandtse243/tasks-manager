@@ -3,10 +3,11 @@
 include "scrum";
 def norm: ascii_downcase;
 def col: ltrimstr("#") | ascii_downcase;
-[ (["new", "in_progress", "done"] | to_entries[]
-    | {name: status_label($cfg; .value),
-       color: (["d4c5f9", "fbca04", "0e8a16"][.key]),
-       description: (["Task not started", "Task being worked on", "Task finished"][.key])}),
+{ new: {color: "d4c5f9", description: "Task not started"},
+  in_progress: {color: "fbca04", description: "Task being worked on"},
+  in_review: {color: "1d76db", description: "Task waiting for review"},
+  done: {color: "0e8a16", description: "Task finished"} } as $look
+| [ (roles($cfg)[] as $r | {name: status_label($cfg; $r)} + $look[$r]),
   ($cfg.points.scale[] | {name: points_label($cfg; .), color: "bfdadc", description: "Story points: \(.)"}),
   {name: $cfg.labels.bug, color: "d73a4a", description: "Something isn't working", keep_existing: true},
   {name: $cfg.labels.feature, color: "a2eeef", description: "Feature broken down into sprint tasks"},

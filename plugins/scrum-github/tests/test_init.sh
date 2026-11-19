@@ -349,3 +349,18 @@ test_digest_workflow_passes_the_webhook_secret() {
 test_status_workflow_hears_converted_to_draft() {
   assert_contains "$(yq -o=json '.on.pull_request_target.types' "$PLUGIN_DIR/templates/github/workflows/scrum-status-sync.yml" | jq -c .)" '"converted_to_draft"'
 }
+
+test_label_plan_in_review_on_creates_the_label() {
+  local plan
+  plan="$(label_plan "$(defaults | jq '.statuses.in_review = "In review"')" "$(cat "$FIXTURES/labels-after-init.json")")"
+  assert_json_eq '[{"name":"status: In review","color":"1d76db","description":"Task waiting for review"}]' \
+    "$(printf '%s' "$plan" | jq -c '.create')"
+}
+
+test_label_plan_in_review_turned_off_is_obsolete() {
+  local plan existing
+  existing="$(jq '. + [{"name":"status: In review","color":"1d76db","description":"Task waiting for review"}]' "$FIXTURES/labels-after-init.json")"
+  plan="$(label_plan "$(defaults)" "$existing")"
+  assert_eq '["status: In review"]' "$(printf '%s' "$plan" | jq -c '.obsolete')"
+  assert_eq '[]' "$(printf '%s' "$plan" | jq -c '.create')"
+}

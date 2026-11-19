@@ -290,3 +290,22 @@ test_cmd_task_drop_closed_task_refused() {
   assert_contains "$ERR" "#13 is closed"
   assert_eq "" "$(gh_writes)"
 }
+
+# delta task-management "Lệnh task với In review"
+test_cmd_task_list_in_review() {
+  ops_env
+  printf 'version: 1\nstatuses:\n  in_review: In review\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  ops_issue 14 'In review' 3 alice 4 > "$FAKE_GH_DIR/i14.json"
+  jq -s . "$FAKE_GH_DIR/i12.json" "$FAKE_GH_DIR/i14.json" > "$FAKE_GH_DIR/sprint.json"
+  run_scrum task list --status in_review
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "#14  In review  3 pt  @alice  Task 14"
+  assert_not_contains "$OUT" "#12"
+}
+
+test_cmd_task_list_in_review_refused_when_off() {
+  ops_env
+  run_scrum task list --status in_review
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "statuses.in_review"
+}
