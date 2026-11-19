@@ -4,7 +4,7 @@
 
 ## 1. Cấu hình và danh sách trạng thái (design mục 1; spec scrum-config)
 
-- [ ] 1.1 `statuses.in_review` (null), `attention.review_days` (2), `project.status_options.in_review` (`In Review`) trong `defaults.json`, `templates/scrum.yml` (có chú thích) và `validate-config.jq`; `roles($cfg)`, `review_on($cfg)`; `status_labels`, `task_role` dùng chúng; test kiểm tra hợp lệ và vai trò của task ở hai chế độ. Kiểm tra: `bash tests/run.sh test_config` và `test_task` xanh
+- [x] 1.1 `statuses.in_review` (null), `attention.review_days` (2), `project.status_options.in_review` (`In Review`) trong `defaults.json`, `templates/scrum.yml` (có chú thích) và `validate-config.jq`; `roles($cfg)`, `review_on($cfg)`; `status_labels`, `task_role` dùng chúng; test kiểm tra hợp lệ và vai trò của task ở hai chế độ. Kiểm tra: `bash tests/run.sh test_config` và `test_task` xanh
 
 ## 2. Sự kiện PR (design mục 2; spec pr-task-linking)
 

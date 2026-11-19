@@ -275,3 +275,35 @@ test_template_matches_defaults_for_new_keys() {
   assert_eq "$(jq -c '{language, w: .sprint.working_days, attention, f: .digest.webhook_format}' "$PLUGIN_DIR/runtime/share/defaults.json")" \
     "$(yq -o=json '.' "$PLUGIN_DIR/templates/scrum.yml" | jq -c '{language, w: .sprint.working_days, attention, f: .digest.webhook_format}')"
 }
+
+# ---------- optional In review status (delta scrum-config) ----------
+
+jqs_cfg() { jq -n -L "$PLUGIN_DIR/runtime/lib/jq" --argjson cfg "$1" "include \"scrum\"; $2"; }
+review_cfg() { defaults_json | jq '.statuses.in_review = "In review"'; }
+defaults_json() { cat "$PLUGIN_DIR/runtime/share/defaults.json"; }
+
+test_in_review_off_by_default() {
+  assert_eq "null" "$(jq -r .statuses.in_review "$PLUGIN_DIR/runtime/share/defaults.json")"
+  assert_eq '["new","in_progress","done"]' "$(jqs_cfg "$(defaults_json)" 'roles($cfg)' | jq -c .)"
+  assert_eq '["status: New","status: In progress","status: Done"]' "$(jqs_cfg "$(defaults_json)" 'status_labels($cfg)' | jq -c .)"
+}
+
+test_in_review_on_adds_a_fourth_role() {
+  assert_eq '["new","in_progress","in_review","done"]' "$(jqs_cfg "$(review_cfg)" 'roles($cfg)' | jq -c .)"
+  assert_eq '"in_review"' "$(jqs_cfg "$(review_cfg)" '{labels: [{name: "status: In review"}], state: "open"} | task_role($cfg)')"
+  assert_eq '"new"' "$(jqs_cfg "$(defaults_json)" '{labels: [{name: "status: In review"}], state: "open"} | task_role($cfg)')" "off: an In review label means nothing"
+}
+
+test_in_review_validation() {
+  assert_contains "$(errors_with '.statuses.in_review = "Done"')" "statuses: new, in_progress, in_review and done must be different"
+  assert_contains "$(errors_with '.statuses.in_review = ""')" "statuses.in_review: must be a non-empty text"
+  assert_contains "$(errors_with '.attention.review_days = "x"')" "attention.review_days: must be a whole number"
+  assert_eq "" "$(errors_with '.statuses.in_review = "In review"')"
+}
+
+test_in_review_board_option_validation() {
+  local base='.project.enabled = true | .project.owner = "acme" | .project.number = 1'
+  assert_contains "$(errors_with "$base | .statuses.in_review = \"In review\" | .project.status_options.in_review = \"Done\"")" \
+    "project.status_options: the options of the statuses in use must be different"
+  assert_eq "" "$(errors_with "$base | .project.status_options.in_review = \"Done\"")" "off: the in_review option is not used"
+}

@@ -27,8 +27,11 @@ def nonempty_string: type == "string" and length > 0;
     (["new", "in_progress", "done"][] as $k
      | if ($c.statuses[$k] | nonempty_string) then empty
        else "statuses.\($k): must be a non-empty text" end),
-    (if ([$c.statuses.new, $c.statuses.in_progress, $c.statuses.done] | map(ascii_downcase? // .) | unique | length) < 3
-       then "statuses: new, in_progress and done must be different" else empty end),
+    (if $c.statuses.in_review == null or ($c.statuses.in_review | nonempty_string) then empty
+     else "statuses.in_review: must be a non-empty text, or left out to turn it off" end),
+    ([$c.statuses.new, $c.statuses.in_progress, $c.statuses.done] + (if $c.statuses.in_review == null then [] else [$c.statuses.in_review] end)) as $names
+    | (if ($names | map(ascii_downcase? // .) | unique | length) < ($names | length)
+       then "statuses: new, in_progress\(if $c.statuses.in_review == null then "" else ", in_review" end) and done must be different" else empty end),
     (if ($c.statuses.label_prefix | type) == "string" then empty
      else "statuses.label_prefix: must be text" end),
 
@@ -70,7 +73,7 @@ def nonempty_string: type == "string" and length > 0;
      else "language: must be en or vi (got \($c.language | tojson))" end),
 
     # attention
-    (["stale_days", "behind_percent"][] as $k
+    (["stale_days", "behind_percent", "review_days"][] as $k
      | if ($c.attention[$k] | is_int) and $c.attention[$k] >= 0 then empty
        else "attention.\($k): must be a whole number, 0 or more (got \($c.attention[$k] | tojson))" end),
 
@@ -108,8 +111,12 @@ def nonempty_string: type == "string" and length > 0;
             (["new", "in_progress", "done"][] as $k
              | if ($p.status_options[$k] | nonempty_string) then empty
                else "project.status_options.\($k): must be a non-empty text" end),
-            (if ([$p.status_options.new, $p.status_options.in_progress, $p.status_options.done] | unique | length) < 3
-               then "project.status_options: new, in_progress and done must be different options" else empty end)
+            ([$p.status_options.new, $p.status_options.in_progress, $p.status_options.done]
+             + (if $c.statuses.in_review == null then [] else [$p.status_options.in_review] end)) as $opts
+            | (if $c.statuses.in_review != null and ($p.status_options.in_review | nonempty_string | not)
+               then "project.status_options.in_review: must be a non-empty text when statuses.in_review is set" else empty end),
+              (if ($opts | unique | length) < ($opts | length)
+               then "project.status_options: the options of the statuses in use must be different" else empty end)
           end),
          (if ($p.poll_cron | type) == "string" and ($p.poll_cron | split(" ") | map(select(. != "")) | length) == 5 then empty
           else "project.poll_cron: must be a 5-field cron expression" end)
