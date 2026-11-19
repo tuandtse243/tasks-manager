@@ -11,36 +11,43 @@ Claude Code**. Hiện marketplace có một plugin là [`scrum-github`](plugins/
 | Task | Issue có label `status: …` và `points: N` |
 | Trạng thái | Tự đổi khi mở hoặc merge PR có `Closes #n` |
 | Lập kế hoạch | Claude chia yêu cầu thành epic → feature → task, bạn duyệt rồi mới tạo issue |
-| Theo dõi | Bảng tiến độ, báo cáo HTML có burndown, digest hằng ngày |
+| Theo dõi | Bảng tiến độ có mục "Cần chú ý", báo cáo HTML có burndown, digest mỗi sáng (cả trên Slack/Telegram nếu muốn) |
 
-## Bắt đầu nhanh
+## Cài trong ba bước
 
-1. Cài công cụ: `brew install gh jq yq`, rồi `gh auth login -h github.com -s repo,workflow`.
-2. Cài plugin trong Claude Code:
+1. Công cụ: `brew install gh jq yq`, rồi `gh auth login -h github.com -s repo,workflow`.
+2. Plugin, trong Claude Code:
    ```
    /plugin marketplace add tuandtse243/tasks-manager
    /plugin install scrum-github@tasks-manager
    ```
-   Nếu đã clone repo này về máy, có thể chạy `/plugin marketplace add ./` ở thư mục gốc của nó.
-3. Mở Claude Code trong repo dự án của bạn, chạy `/scrum-github:init`, rồi commit và push
-   thư mục `.github/` lên nhánh mặc định. Kiểm tra cả bộ bằng `/scrum-github:doctor`; không biết
-   làm gì tiếp thì hỏi `/scrum-github:next`.
-4. Tạo sprint đầu tiên bằng `/scrum-github:sprint-new`, rồi thêm task bằng `/scrum-github:plan`
-   hoặc `/scrum-github:task-new`.
-5. Dev nhận task bằng `/scrum-github:task-start <số>`, mở PR bằng `/scrum-github:task-pr`. Merge PR
-   là task tự chuyển Done.
+3. Trong repo dự án: `/scrum-github:init`, commit và push `.github/` lên nhánh mặc định, rồi
+   `/scrum-github:doctor` để kiểm tra cả bộ.
+
+## Một task từ đầu tới cuối
+
+```
+/scrum-github:sprint-new bắt đầu thứ 2 tới          # SM: tạo Sprint 1
+/scrum-github:task-new Đăng nhập bằng email, 3 điểm  # PO: tạo task #12 trong sprint
+/scrum-github:task-start 12                          # Dev: nhận task, sang In progress, tạo branch
+git push -u origin feat/12-dang-nhap-bang-email      # Dev: code xong thì push
+/scrum-github:task-pr                                # Dev: mô tả PR có "Closes #12", mở PR
+                                                     # Merge PR: #12 tự sang Done và đóng
+/scrum-github:sprint-status                          # Cả team: tiến độ và mục "Cần chú ý"
+```
+
+Không biết làm gì tiếp thì hỏi `/scrum-github:next`.
 
 ![Một sprint với scrum-github](docs/diagrams/sprint-flow.png)
 
-Từng bước cụ thể của mỗi vai trò, kèm ví dụ lệnh: [Hướng dẫn áp dụng → Các flow sử dụng](docs/huong-dan-ap-dung.md#5-các-flow-sử-dụng).
-Tra nhanh mọi lệnh: [Bảng lệnh](docs/huong-dan-ap-dung.md#2-bảng-lệnh).
-
-## Đọc gì tiếp
+## Bạn là ai thì đọc gì
 
 | Bạn là | Đọc |
 |---|---|
-| Thành viên team (PO, Scrum Master, Dev) | [Hướng dẫn áp dụng](docs/huong-dan-ap-dung.md): bảng lệnh, cài đặt, flow từng vai trò, quy ước, xử lý sự cố |
-| Người dùng cần tra lệnh và cấu hình | [README của plugin](plugins/scrum-github/README.md) (tiếng Anh) |
+| Product Owner | [Cheat sheet PO](docs/cheat-sheet-po.md) |
+| Scrum Master | [Cheat sheet SM](docs/cheat-sheet-sm.md), rồi [Hướng dẫn áp dụng](docs/huong-dan-ap-dung.md) để thiết lập repo và quy ước team |
+| Dev | [Cheat sheet Dev](docs/cheat-sheet-dev.md) |
+| Cần tra mọi lệnh, tuỳ chọn, khoá cấu hình | [README của plugin](plugins/scrum-github/README.md) (tiếng Anh) |
 | Người phát triển plugin | [Bối cảnh dự án](docs/project-context.md), [kiểm thử end-to-end](plugins/scrum-github/docs/e2e-testing.md), spec trong `openspec/specs/` |
 
 ## Cấu trúc repo
@@ -53,7 +60,7 @@ plugins/scrum-github/             mã nguồn plugin
   runtime/                        CLI `scrum` (bash + jq), được chép vào repo dự án khi init
   templates/                      workflow, issue form, PR template cài vào repo dự án
   tests/                          test offline với `gh` giả
-docs/                             tài liệu tiếng Việt và bối cảnh dự án
+docs/                             hướng dẫn áp dụng, cheat sheet theo vai trò, bối cảnh dự án
   diagrams/                       sơ đồ flow (nguồn archify .json, bản .html tương tác, ảnh .png)
 openspec/                         spec (specs/) và lịch sử thay đổi (changes/archive/)
 ```

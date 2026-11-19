@@ -533,31 +533,11 @@ Wizard mở từng trang cần làm, nói rõ bấm gì, nhận token mà không
 khối `project:` vào `.github/scrum.yml` sau khi hỏi. Xong wizard, quay lại Claude Code; Claude kiểm
 tra cấu hình, cài workflow đồng bộ, chạy thử `scrum project init --dry-run` và chỉ chạy thật khi bạn đồng ý.
 
-**Cách làm tay** (các bước wizard làm hộ):
-
-1. Tạo Project từ template **Board** và liên kết với repo.
-2. Trong Project → **Workflows**, **tắt**: *Item added to project*, *Item closed*, *Item reopened*,
-   *Pull request linked to issue*, *Pull request merged*. Các automation này tự đổi cột mà plugin
-   không biết. *Auto-add to project* và *Auto-close issue* để bật được.
-3. Tạo token và lưu vào secret `SCRUM_PROJECT_TOKEN` (*Settings → Secrets and variables → Actions*,
-   hoặc `gh secret set SCRUM_PROJECT_TOKEN` trong terminal riêng).
-   - Đã chạy thử thành công với **classic token** có scope `repo` và `project`.
-   - Fine-grained token (chỉ cấp cho repo này, quyền **Issues** và **Projects** read/write, có hạn
-     dùng) về lý thuyết cũng được nhưng chưa thử.
-   - Token mặc định của Actions không truy cập được Projects, nên phải có secret này.
-4. Thêm vào `.github/scrum.yml`:
-   ```yaml
-   project:
-     enabled: true
-     owner: <org-hoặc-user>
-     number: <số trong URL .../projects/N>
-     poll_cron: "*/15 1-11 * * 1-5"   # khoảng 8h–19h giờ Việt Nam, thứ 2–6, tiết kiệm phút Actions
-   ```
-5. `scrum init`: cài workflow `scrum-project-sync`. Repo cài từ trước 0.2.0 mà chưa cập nhật có thể
-   báo `scrum-status-sync.yml` là `conflict`: thêm `--force-file .github/workflows/scrum-status-sync.yml`
-   để lấy bản có token.
-6. Trên máy mình: `gh auth refresh -s project`, rồi `scrum project init --dry-run`, rồi
-   `scrum project init`. Lệnh tạo field *Synced status* và *Points*, và thêm các task của sprint đang mở.
+**Cách làm tay:** các bước wizard làm hộ (tạo Project, tắt các automation tự đổi cột, tạo token và
+secret `SCRUM_PROJECT_TOKEN`, thêm khối `project:`, `scrum init`, `scrum project init`) được ghi đầy đủ,
+kèm loại token và quyền cần cấp, ở [README của plugin → Project board](../plugins/scrum-github/README.md#turn-it-on).
+Gợi ý cho team ở Việt Nam: đặt `project.poll_cron: "*/15 1-11 * * 1-5"` (khoảng 8h–19h, thứ 2–6) để
+tiết kiệm phút Actions.
 
 **Sau cả hai cách:** **ẩn field *Synced status*** trong mọi view (sửa tay sẽ làm đồng bộ sai), rồi
 commit và push `.github/`.
@@ -586,11 +566,8 @@ sửa từng lỗi. Bảng dưới cho những trường hợp `doctor` không t
 | Merge PR mà task không đóng | PR viết `Solve #n` thay vì `Closes #n` | Sửa mô tả PR thành `Closes #n` |
 | Merge PR vào một nhánh khác mà task không đóng | Nhánh đích chưa có `.github/` (workflow chạy theo file trên nhánh đích của PR) | Đưa `.github/` vào nhánh đó, hoặc đóng task tay với lý do completed |
 | Check `scrum-pr-link-check` đỏ | Mô tả PR không có `Closes #n` | Thêm dòng đó, hoặc gắn label `no-task` |
-| Workflow không chạy | Chưa push `.github/` lên nhánh mặc định | Push rồi thử lại |
 | `task-pr` báo cần push | Branch chưa có trên remote | `git push -u origin <branch>` rồi chạy lại |
-| `scrum: yq ... is not mikefarah/yq` | Cài nhầm bản yq của Python | `pip uninstall yq && brew install yq` |
-| `gh` báo token invalid trong Claude Code dù đã login | Sandbox của Claude Code chặn đọc keychain macOS và chặn mạng | Chạy lệnh ngoài sandbox (Claude Code sẽ hỏi), hoặc chỉnh bằng `/sandbox`. `doctor` nhận ra trường hợp này |
-| `scrum --version` không in phiên bản plugin | Một lệnh `scrum` khác đứng trước trên PATH | Dùng `bash "${CLAUDE_PLUGIN_ROOT}/runtime/bin/scrum"` hoặc đổi tên lệnh kia |
+| `scrum: command not found` trong Claude Code, hoặc `scrum --version` không in phiên bản plugin | Plugin cài ở scope local thì `bin/` không lên PATH, hoặc một lệnh `scrum` khác đứng trước | Skill tự dùng đường dẫn đầy đủ nên vẫn chạy. Muốn gõ `scrum` thì cài plugin ở scope user, hoặc dùng `bash "${CLAUDE_PLUGIN_ROOT}/runtime/bin/scrum"` |
 | `points 5 not in the scale` | Giá trị không có trong `points.scale` | Dùng giá trị trong thang, hoặc sửa cấu hình |
 | Đổi giờ digest mà không có tác dụng | Giờ chạy được ghi cứng vào file workflow | Chạy lại `/scrum-github:init`, rồi commit và push. Nếu file báo `conflict` vì bạn đã sửa tay, thêm `--force-file .github/workflows/scrum-daily-digest.yml` |
 | Task có hai label status | Ai đó sửa label bằng tay | Lần đổi trạng thái kế tiếp tự chuẩn hoá. Muốn sửa ngay thì gỡ label thừa |
@@ -608,6 +585,13 @@ sửa từng lỗi. Bảng dưới cho những trường hợp `doctor` không t
 
 - Không hỗ trợ GitHub Enterprise Server. Trên Windows chỉ chạy qua WSL.
 - Kéo thẻ trên board chỉ đến label ở lần đồng bộ định kỳ kế tiếp.
+- Burndown đọc lịch sử của tối đa 100 task trong sprint và 30 task có thể đã rời sprint; quá giới hạn
+  thì phần còn lại dùng trạng thái hiện tại và báo cáo ghi rõ điều đó.
+- "Cần chú ý" đọc quan hệ "bị chặn bởi" cho tối đa 50 task chưa xong; backlog cũng vậy.
+- Không có ngày nghỉ lễ: chỉ các thứ trong `sprint.working_days` được coi là ngày làm việc.
+- Bật In review giữa sprint không đổi task đang có; chúng chỉ đổi ở sự kiện PR kế tiếp.
+- `scrum` chỉ có sẵn trên PATH của Claude Code khi plugin cài ở scope user (quan sát ở Claude Code
+  2.1.328); skill vẫn chạy với mọi cách cài.
 
 ---
 

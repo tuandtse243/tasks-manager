@@ -60,8 +60,8 @@
       "lane": "sm",
       "col": 0,
       "type": "cloud",
-      "label": "scrum-init",
-      "sublabel": "một lần / repo"
+      "label": "init",
+      "sublabel": "rồi doctor"
     },
     {
       "id": "sprint",
@@ -76,8 +76,8 @@
       "lane": "sm",
       "col": 2,
       "type": "frontend",
-      "label": "plan",
-      "sublabel": "duyệt → tạo issue"
+      "label": "sprint-fill",
+      "sublabel": "backlog → sprint"
     },
     {
       "id": "close",
@@ -85,7 +85,7 @@
       "col": 5,
       "type": "frontend",
       "label": "sprint-close",
-      "sublabel": "velocity + chuyển task"
+      "sublabel": "velocity + tổng kết"
     },
     {
       "id": "start",
@@ -117,7 +117,7 @@
       "col": 3,
       "type": "messagebus",
       "label": "In progress",
-      "sublabel": "scrum-status-sync"
+      "sublabel": "(In review nếu bật)"
     },
     {
       "id": "done",
@@ -188,8 +188,8 @@
       "dot": "emerald",
       "title": "Đường chính",
       "items": [
-        "Không gì lên GitHub trước khi bạn duyệt plan",
-        "Trạng thái đi theo PR, không sửa label tay",
+        "plan đưa task vào backlog; sprint-fill chọn task vừa sức chứa",
+        "Trạng thái đi theo PR; sửa task bằng lệnh task, không sửa label tay",
         "Merge PR có Closes #N là task Done"
       ]
     },
@@ -198,15 +198,15 @@
       "title": "Khi bị chặn",
       "items": [
         "PR không gắn task thì check scrum-pr-link-check đỏ",
-        "Sửa mô tả thành Closes #N, hoặc gắn label no-task"
+        "Lệnh báo lỗi: doctor; không biết làm gì tiếp: next"
       ]
     },
     {
       "dot": "cyan",
       "title": "Cuối sprint",
       "items": [
-        "sprint-report xuất HTML burndown",
-        "sprint-close ghi velocity, chuyển task còn mở sang sprint sau"
+        "sprint-report: burndown dựng từ lịch sử task",
+        "sprint-close ghi velocity, chuyển task dở, đăng tổng kết"
       ]
     }
   ]
