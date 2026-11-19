@@ -26,12 +26,19 @@ Claude Code**. Hiện marketplace có một plugin là [`scrum-github`](plugins/
    thư mục `.github/` lên nhánh mặc định.
 4. Tạo sprint đầu tiên bằng `/scrum-github:sprint-new`, rồi thêm task bằng `/scrum-github:plan`
    hoặc `/scrum-github:task-new`.
+5. Dev nhận task bằng `/scrum-github:task-start <số>`, mở PR bằng `/scrum-github:task-pr`. Merge PR
+   là task tự chuyển Done.
+
+![Một sprint với scrum-github](docs/diagrams/sprint-flow.png)
+
+Từng bước cụ thể của mỗi vai trò, kèm ví dụ lệnh: [Hướng dẫn áp dụng → Các flow sử dụng](docs/huong-dan-ap-dung.md#5-các-flow-sử-dụng).
+Tra nhanh mọi lệnh: [Bảng lệnh](docs/huong-dan-ap-dung.md#2-bảng-lệnh).
 
 ## Đọc gì tiếp
 
 | Bạn là | Đọc |
 |---|---|
-| Thành viên team (PO, Scrum Master, Dev) | [Hướng dẫn áp dụng](docs/huong-dan-ap-dung.md): cài đặt, quy trình một sprint, quy ước, xử lý sự cố |
+| Thành viên team (PO, Scrum Master, Dev) | [Hướng dẫn áp dụng](docs/huong-dan-ap-dung.md): bảng lệnh, cài đặt, flow từng vai trò, quy ước, xử lý sự cố |
 | Người dùng cần tra lệnh và cấu hình | [README của plugin](plugins/scrum-github/README.md) (tiếng Anh) |
 | Người phát triển plugin | [Bối cảnh dự án](docs/project-context.md), [kiểm thử end-to-end](plugins/scrum-github/docs/e2e-testing.md), spec trong `openspec/specs/` |
 
@@ -46,6 +53,7 @@ plugins/scrum-github/             mã nguồn plugin
   templates/                      workflow, issue form, PR template cài vào repo dự án
   tests/                          test offline với `gh` giả
 docs/                             tài liệu tiếng Việt và bối cảnh dự án
+  diagrams/                       sơ đồ flow (nguồn archify .json, bản .html tương tác, ảnh .png)
 openspec/                         spec (specs/) và lịch sử thay đổi (changes/archive/)
 ```
 

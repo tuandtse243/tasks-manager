@@ -1,0 +1,213 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Một sprint với scrum-github",
+    "quality_profile": "showcase",
+    "legend": {
+      "mode": "hidden"
+    }
+  },
+  "lanes": [
+    {
+      "id": "sm",
+      "label": "PO / Scrum Master"
+    },
+    {
+      "id": "dev",
+      "label": "Dev"
+    },
+    {
+      "id": "auto",
+      "label": "GitHub Actions (tự động)"
+    }
+  ],
+  "phases": [
+    {
+      "id": "setup",
+      "label": "Chuẩn bị",
+      "fromCol": 0,
+      "toCol": 1
+    },
+    {
+      "id": "work",
+      "label": "Trong sprint",
+      "fromCol": 2,
+      "toCol": 4,
+      "variant": "emphasis"
+    },
+    {
+      "id": "end",
+      "label": "Cuối sprint",
+      "fromCol": 5,
+      "toCol": 5,
+      "variant": "dashed"
+    }
+  ],
+  "mainPath": [
+    "init",
+    "sprint",
+    "plan",
+    "start",
+    "pr",
+    "merge",
+    "done",
+    "close"
+  ],
+  "nodes": [
+    {
+      "id": "init",
+      "lane": "sm",
+      "col": 0,
+      "type": "cloud",
+      "label": "scrum-init",
+      "sublabel": "một lần / repo"
+    },
+    {
+      "id": "sprint",
+      "lane": "sm",
+      "col": 1,
+      "type": "frontend",
+      "label": "sprint-new",
+      "sublabel": "milestone Sprint N"
+    },
+    {
+      "id": "plan",
+      "lane": "sm",
+      "col": 2,
+      "type": "frontend",
+      "label": "plan",
+      "sublabel": "duyệt → tạo issue"
+    },
+    {
+      "id": "close",
+      "lane": "sm",
+      "col": 5,
+      "type": "frontend",
+      "label": "sprint-close",
+      "sublabel": "velocity + chuyển task"
+    },
+    {
+      "id": "start",
+      "lane": "dev",
+      "col": 2,
+      "type": "backend",
+      "label": "task-start",
+      "sublabel": "branch feat/N-slug"
+    },
+    {
+      "id": "pr",
+      "lane": "dev",
+      "col": 3,
+      "type": "backend",
+      "label": "task-pr",
+      "sublabel": "PR có Closes #N"
+    },
+    {
+      "id": "merge",
+      "lane": "dev",
+      "col": 4,
+      "type": "backend",
+      "label": "Merge PR",
+      "sublabel": "sau review"
+    },
+    {
+      "id": "inprog",
+      "lane": "auto",
+      "col": 3,
+      "type": "messagebus",
+      "label": "In progress",
+      "sublabel": "scrum-status-sync"
+    },
+    {
+      "id": "done",
+      "lane": "auto",
+      "col": 4,
+      "type": "messagebus",
+      "label": "Done",
+      "sublabel": "issue tự đóng"
+    },
+    {
+      "id": "report",
+      "lane": "auto",
+      "col": 5,
+      "type": "database",
+      "label": "Theo dõi",
+      "sublabel": "status, report, digest"
+    }
+  ],
+  "edges": [
+    {
+      "from": "init",
+      "to": "sprint"
+    },
+    {
+      "from": "sprint",
+      "to": "plan"
+    },
+    {
+      "from": "plan",
+      "to": "start",
+      "variant": "emphasis",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "from": "start",
+      "to": "pr"
+    },
+    {
+      "from": "pr",
+      "to": "merge"
+    },
+    {
+      "from": "pr",
+      "to": "inprog",
+      "label": "mở PR",
+      "role": "async",
+      "variant": "dashed"
+    },
+    {
+      "from": "merge",
+      "to": "done",
+      "variant": "emphasis"
+    },
+    {
+      "from": "done",
+      "to": "report",
+      "role": "async",
+      "variant": "dashed"
+    },
+    {
+      "from": "done",
+      "to": "close"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Đường chính",
+      "items": [
+        "Không gì lên GitHub trước khi bạn duyệt plan",
+        "Trạng thái đi theo PR, không sửa label tay",
+        "Merge PR có Closes #N là task Done"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Khi bị chặn",
+      "items": [
+        "PR không gắn task thì check scrum-pr-link-check đỏ",
+        "Sửa mô tả thành Closes #N, hoặc gắn label no-task"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "Cuối sprint",
+      "items": [
+        "sprint-report xuất HTML burndown",
+        "sprint-close ghi velocity, chuyển task còn mở sang sprint sau"
+      ]
+    }
+  ]
+}
