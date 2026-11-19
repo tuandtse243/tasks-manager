@@ -36,6 +36,9 @@ svg text { fill: var(--muted); font: 11px var(--font); }
 .legend { display: flex; gap: 16px; font-size: 0.82rem; color: var(--muted); margin-top: 6px; flex-wrap: wrap; }
 .legend span::before { content: ""; display: inline-block; width: 18px; height: 3px; vertical-align: middle; margin-right: 6px; background: var(--actual); }
 .legend .ideal::before { background: repeating-linear-gradient(90deg, var(--ideal) 0 5px, transparent 5px 9px); }
+.legend .scope::before { background: var(--prog); height: 2px; }
+.attention ul { margin: 0; padding-left: 20px; }
+.attention li { margin: 4px 0; }
 .tbl { overflow-x: auto; }
 table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; font-size: 0.9rem; }
 th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
@@ -52,7 +55,14 @@ tr.total td { font-weight: 700; border-bottom: 0; }
 <script>
 (function () {
   var d = JSON.parse(document.getElementById("scrum-data").textContent);
-  var p = d.progress, b = d.burndown, st = d.statuses;
+  var p = d.progress, b = d.burndown, st = d.statuses, S = d.strings || {};
+  // Text in the configured language: {name} is replaced by args.name; "<key>_one" for 1 if present.
+  function t(key, args, n) {
+    var k = (n === 1 && S[key + "_one"] != null) ? key + "_one" : key;
+    var s = S[k] != null ? S[k] : key;
+    args = args || {}; if (n != null) args.n = n;
+    return s.replace(/\{(\w+)\}/g, function (m, a) { return args[a] != null ? String(args[a]) : m; });
+  }
   var app = document.getElementById("app");
   var NS = "http://www.w3.org/2000/svg";
 
@@ -68,27 +78,28 @@ tr.total td { font-weight: 700; border-bottom: 0; }
     if (text != null) e.textContent = text;
     return e;
   }
-  function pts(n) { return n + " pt" + (n === 1 ? "" : "s"); }
-  function cell(x) { return x.count + " (" + pts(x.points) + ")"; }
+  function pts(n) { return t("pts", null, n); }
+  function cell(x) { return t("cell", { count: x.count, pts: pts(x.points) }); }
 
-  document.title = p.sprint.title + " report";
+  document.documentElement.lang = d.language || "en";
+  document.title = t("report_title", { title: p.sprint.title });
 
   // Header
   var head = el("header");
   head.appendChild(el("h1", null, p.sprint.title));
-  head.appendChild(el("p", { "class": "meta" }, d.repo + " · " + p.sprint.start + " to " + p.sprint.end +
-    " · generated " + d.generated_at.replace("T", " ").replace("Z", " UTC")));
-  if (d.goal) head.appendChild(el("p", { "class": "goal" }, "Goal: " + d.goal));
+  head.appendChild(el("p", { "class": "meta" }, t("report_meta", { repo: d.repo, start: p.sprint.start, end: p.sprint.end,
+    at: d.generated_at.replace("T", " ").replace("Z", " UTC") })));
+  if (d.goal) head.appendChild(el("p", { "class": "goal" }, t("report_goal", { goal: d.goal })));
   app.appendChild(head);
 
   // Key numbers
   var remaining = p.total.total.points - p.total.done.points;
   var kpis = el("div", { "class": "kpis" });
-  [[p.pct_done == null ? "n/a" : p.pct_done + "%", "points done"],
-   [remaining + " / " + p.total.total.points, "points remaining"],
-   [p.days_left == null ? "n/a" : String(p.days_left), "days left"],
-   [String(p.total.total.count), "tasks"],
-   [String(p.unestimated), "unestimated tasks"]].forEach(function (k) {
+  [[p.pct_done == null ? t("na") : p.pct_done + "%", t("report_points_done")],
+   [remaining + " / " + p.total.total.points, t("report_points_remaining")],
+   [p.days_left == null ? t("na") : String(p.days_left), t("report_days_left")],
+   [String(p.total.total.count), t("report_tasks")],
+   [String(p.unestimated), t("report_unestimated")]].forEach(function (k) {
     var box = el("div", { "class": "kpi" });
     box.appendChild(el("div", { "class": "v" }, k[0]));
     box.appendChild(el("div", { "class": "l" }, k[1]));
@@ -96,15 +107,23 @@ tr.total td { font-weight: 700; border-bottom: 0; }
   });
   app.appendChild(kpis);
 
+  // Needs attention (left out when empty)
+  if (d.attention && d.attention.length) {
+    var at = el("section", { "class": "attention" }); at.appendChild(el("h2", null, t("attention_title")));
+    var ul = el("ul"); d.attention.forEach(function (line) { ul.appendChild(el("li", null, line)); });
+    at.appendChild(ul); app.appendChild(at);
+  }
+
   // Burndown
   (function () {
-    var sec = el("section"); sec.appendChild(el("h2", null, "Burndown"));
+    var sec = el("section"); sec.appendChild(el("h2", null, t("report_burndown")));
     var W = 860, H = 300, L = 44, R = 16, T = 12, B = 40;
-    var n = b.days.length, max = Math.max(b.total, 1);
+    var n = b.days.length;
+    var max = Math.max.apply(null, [b.total, 1].concat(b.days.map(function (day) { return day.scope || 0; })));
     var x = function (i) { return L + (n === 1 ? (W - L - R) / 2 : i * (W - L - R) / (n - 1)); };
     var y = function (v) { return T + (H - T - B) * (1 - v / max); };
     var s = svg("svg", { viewBox: "0 0 " + W + " " + H, width: W, height: H, role: "img",
-      "aria-label": "Burndown: remaining points per day" });
+      "aria-label": t("report_burndown") });
     var step = max <= 10 ? 1 : max <= 40 ? 5 : max <= 100 ? 10 : Math.ceil(max / 10 / 10) * 10;
     for (var v = 0; v <= max; v += step) {
       s.appendChild(svg("line", { x1: L, x2: W - R, y1: y(v), y2: y(v), stroke: "var(--line)", "stroke-width": 1 }));
@@ -118,36 +137,43 @@ tr.total td { font-weight: 700; border-bottom: 0; }
     var ideal = b.days.map(function (day, i) { return x(i) + "," + y(day.ideal); }).join(" ");
     s.appendChild(svg("polyline", { points: ideal, fill: "none", stroke: "var(--ideal)", "stroke-width": 2, "stroke-dasharray": "6 5" }));
     var real = b.days.filter(function (day) { return day.remaining !== null; });
+    var scoped = b.days.filter(function (day) { return day.scope != null; });
+    if (scoped.length)
+      s.appendChild(svg("polyline", { points: scoped.map(function (day) { return x(b.days.indexOf(day)) + "," + y(day.scope); }).join(" "),
+        fill: "none", stroke: "var(--prog)", "stroke-width": 1.5 }));
     if (real.length) {
       s.appendChild(svg("polyline", { points: real.map(function (day) { return x(b.days.indexOf(day)) + "," + y(day.remaining); }).join(" "),
         fill: "none", stroke: "var(--actual)", "stroke-width": 2.5 }));
       real.forEach(function (day) {
         var c = svg("circle", { cx: x(b.days.indexOf(day)), cy: y(day.remaining), r: 3.5, fill: "var(--actual)" });
-        c.appendChild(svg("title", null, day.date + ": " + pts(day.remaining) + " remaining"));
+        c.appendChild(svg("title", null, t("report_remaining_tip", { date: day.date, pts: pts(day.remaining) })));
         s.appendChild(c);
       });
     }
     var wrap = el("div", { "class": "chart" }); wrap.appendChild(s); sec.appendChild(wrap);
     var lg = el("div", { "class": "legend" });
-    lg.appendChild(el("span", null, "Remaining points")); lg.appendChild(el("span", { "class": "ideal" }, "Ideal"));
+    lg.appendChild(el("span", null, t("report_remaining"))); lg.appendChild(el("span", { "class": "ideal" }, t("report_ideal")));
+    lg.appendChild(el("span", { "class": "scope" }, t("report_scope")));
     sec.appendChild(lg);
+    if (b.added || b.removed)
+      sec.appendChild(el("p", { "class": "notes" }, t("report_scope_change", { added: b.added || 0, removed: b.removed || 0 })));
     app.appendChild(sec);
   })();
 
   // By person
   (function () {
-    var sec = el("section"); sec.appendChild(el("h2", null, "By person"));
+    var sec = el("section"); sec.appendChild(el("h2", null, t("report_by_person")));
     var wrap = el("div", { "class": "tbl" }), t = el("table");
     var hr = el("tr");
-    [["Assignee"], [st.new, "--new"], [st.in_progress, "--prog"], [st.done, "--done"], ["Total"]].forEach(function (h) {
+    [[t("assignee")], [st.new, "--new"], [st.in_progress, "--prog"], [st.done, "--done"], [t("total")]].forEach(function (h) {
       var th = el("th"); if (h[1]) th.appendChild(el("span", { "class": "dot", style: "background:var(" + h[1] + ")" }));
       th.appendChild(document.createTextNode(h[0])); hr.appendChild(th);
     });
     var thead = el("thead"); thead.appendChild(hr); t.appendChild(thead);
     var tb = el("tbody");
-    p.rows.concat([Object.assign({ assignee: "Total", _total: true }, p.total)]).forEach(function (r) {
+    p.rows.concat([Object.assign({ assignee: t("total"), _total: true }, p.total)]).forEach(function (r) {
       var tr = el("tr", r._total ? { "class": "total" } : null);
-      [r.assignee, cell(r.new), cell(r.in_progress), cell(r.done), cell(r.total)].forEach(function (c) { tr.appendChild(el("td", null, c)); });
+      [r.assignee === "Unassigned" && !r._total ? t("unassigned") : r.assignee, cell(r.new), cell(r.in_progress), cell(r.done), cell(r.total)].forEach(function (c) { tr.appendChild(el("td", null, c)); });
       tb.appendChild(tr);
     });
     t.appendChild(tb); wrap.appendChild(t); sec.appendChild(wrap);
@@ -156,26 +182,25 @@ tr.total td { font-weight: 700; border-bottom: 0; }
 
   // Velocity
   (function () {
-    var sec = el("section"); sec.appendChild(el("h2", null, "Velocity of closed sprints"));
+    var sec = el("section"); sec.appendChild(el("h2", null, t("report_velocity")));
     var v = d.velocity;
-    if (!v.length) { sec.appendChild(el("p", { "class": "empty" }, "No closed sprints yet.")); app.appendChild(sec); return; }
+    if (!v.length) { sec.appendChild(el("p", { "class": "empty" }, t("report_no_closed"))); app.appendChild(sec); return; }
     var W = 860, H = 220, L = 44, B = 36, T = 20, bw = Math.min(80, (W - L) / v.length - 24);
     var max = Math.max.apply(null, v.map(function (s) { return s.velocity || 0; }).concat([1]));
-    var s = svg("svg", { viewBox: "0 0 " + W + " " + H, width: W, height: H, role: "img", "aria-label": "Velocity per sprint" });
+    var s = svg("svg", { viewBox: "0 0 " + W + " " + H, width: W, height: H, role: "img", "aria-label": t("report_velocity") });
     s.appendChild(svg("line", { x1: L, x2: W, y1: H - B, y2: H - B, stroke: "var(--line)" }));
     v.forEach(function (sp, i) {
       var cx = L + (i + 0.5) * (W - L) / v.length, val = sp.velocity, h = (H - B - T) * ((val || 0) / max);
       if (val != null) s.appendChild(svg("rect", { x: cx - bw / 2, y: H - B - h, width: bw, height: h, rx: 3, fill: "var(--done)" }));
-      s.appendChild(svg("text", { x: cx, y: H - B - h - 6, "text-anchor": "middle" }, val == null ? "n/a" : String(val)));
+      s.appendChild(svg("text", { x: cx, y: H - B - h - 6, "text-anchor": "middle" }, val == null ? t("na") : String(val)));
       s.appendChild(svg("text", { x: cx, y: H - B + 18, "text-anchor": "middle" }, sp.title));
     });
     var wrap = el("div", { "class": "chart" }); wrap.appendChild(s); sec.appendChild(wrap);
     app.appendChild(sec);
   })();
 
-  app.appendChild(el("p", { "class": "notes" },
-    "Points come from each task's current points label. Tasks added during the sprint are counted from the first day. " +
-    "Pull requests, feature issues, digest issues and tasks closed as not planned are not counted."));
+  app.appendChild(el("p", { "class": "notes" }, t("report_notes")));
+  if (d.history_limited) app.appendChild(el("p", { "class": "notes" }, t("report_history_limited")));
 })();
 </script>
 </body>

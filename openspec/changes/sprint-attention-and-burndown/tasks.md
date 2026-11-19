@@ -21,8 +21,8 @@
 
 ## 5. Burndown theo lịch sử (design mục 2; spec sprint-reporting "Đường burndown", "Báo cáo HTML")
 
-- [ ] 5.1 `history.jq` dựng trạng thái cuối ngày từ events; burndown trả `scope`, `added`, `removed`; test thêm task giữa sprint, bỏ task, đổi điểm, mở lại. Kiểm tra: `bash tests/run.sh test_report` xanh
-- [ ] 5.2 `scrum report` đọc events (tối đa 100 task, 30 ứng viên rời sprint) và truyền vào báo cáo; `report.html` vẽ đường phạm vi, ghi điểm thêm/bỏ, mục cần chú ý, và dùng `d.strings`; test lệnh và test số lời gọi. Kiểm tra: `bash tests/run.sh test_report` xanh
+- [x] 5.1 `history.jq` dựng trạng thái cuối ngày từ events; burndown trả `scope`, `added`, `removed`; test thêm task giữa sprint, bỏ task, đổi điểm, mở lại. Kiểm tra: `bash tests/run.sh test_report` xanh
+- [x] 5.2 `scrum report` đọc events (tối đa 100 task, 30 ứng viên rời sprint) và truyền vào báo cáo; `report.html` vẽ đường phạm vi, ghi điểm thêm/bỏ, mục cần chú ý, và dùng `d.strings`; test lệnh và test số lời gọi. Kiểm tra: `bash tests/run.sh test_report` xanh
 
 ## 6. Webhook (design mục 5; spec sprint-reporting "Digest hằng ngày", repo-bootstrap)
 

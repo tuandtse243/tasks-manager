@@ -335,3 +335,93 @@ test_cmd_digest_includes_needs_attention() {
   assert_contains "$(gh_calls)" '### Needs attention'
   assert_contains "$(gh_calls)" '- #4 Add a comment is blocked by #3.'
 }
+
+# ---------- burndown from issue history (delta sprint-reporting "Đường burndown") ----------
+
+# h_issue NUMBER POINTS STATE [IN_NOW] [EVENTS_JSON]
+h_issue() {
+  jq -nc --argjson n "$1" --arg p "$2" --arg st "$3" --argjson in "${4:-true}" --argjson ev "${5:-[]}" '{
+    number: $n, title: "T\($n)", state: $st, state_reason: (if $st == "closed" then "completed" else null end),
+    created_at: "2014-09-01T00:00:00Z", _in_now: $in, _events: $ev,
+    labels: [{name: "status: New"}, {name: "points: \($p)"}], assignees: [] }'
+}
+ev() { jq -nc --arg e "$1" --arg at "$2" --arg x "${3:-}" '{event: $e, created_at: $at}
+  + (if $e == "labeled" or $e == "unlabeled" then {label: {name: $x}} elif $e == "milestoned" or $e == "demilestoned" then {milestone: {title: $x}} else {} end)'; }
+hburn() { jqt burndown -n --argjson cfg "$(defaults)" --argjson sprint "$(sprint1)" --argjson issues "$1" --arg today 2014-09-26 --argjson off 0; }
+
+test_history_task_added_mid_sprint() {
+  local issues b
+  issues="$( { h_issue 1 7 open; h_issue 2 3 open true "[$(ev milestoned 2014-09-24T08:00:00Z 'Sprint 1')]"; } | jq -sc .)"
+  b="$(hburn "$issues")"
+  assert_eq '[7,7,10,10,10]' "$(jq -c '[.days[].scope]' <<<"$b")"
+  assert_eq '[7,7,10,10,10]' "$(jq -c '[.days[].remaining]' <<<"$b")"
+  assert_eq "3 0 7" "$(jq -r '"\(.added) \(.removed) \(.total)"' <<<"$b")"
+}
+
+test_history_task_removed_from_sprint() {
+  local issues b
+  issues="$( { h_issue 1 7 open; h_issue 3 3 open false "[$(ev demilestoned 2014-09-23T08:00:00Z 'Sprint 1')]"; } | jq -sc .)"
+  b="$(hburn "$issues")"
+  assert_eq '[10,7,7,7,7]' "$(jq -c '[.days[].scope]' <<<"$b")"
+  assert_eq "0 3" "$(jq -r '"\(.added) \(.removed)"' <<<"$b")"
+}
+
+test_history_points_changed_mid_sprint() {
+  local issues b
+  issues="$(h_issue 4 7 open true "[$(ev unlabeled 2014-09-24T08:00:00Z 'points: 3'),$(ev labeled 2014-09-24T08:00:01Z 'points: 7')]" | jq -sc .)"
+  b="$(hburn "$issues")"
+  assert_eq '[3,3,7,7,7]' "$(jq -c '[.days[].remaining]' <<<"$b")"
+}
+
+test_history_reopened_task() {
+  local issues b
+  issues="$(h_issue 5 3 open true "[$(ev closed 2014-09-23T08:00:00Z),$(ev reopened 2014-09-25T08:00:00Z)]" | jq -sc .)"
+  b="$(hburn "$issues")"
+  assert_eq '[3,0,0,3,3]' "$(jq -c '[.days[].remaining]' <<<"$b")"
+}
+
+test_history_task_created_mid_sprint_is_not_counted_before() {
+  local issues b
+  issues="$( { h_issue 1 7 open; h_issue 6 1 open | jq -c '.created_at = "2014-09-24T10:00:00Z"'; } | jq -sc .)"
+  b="$(hburn "$issues")"
+  assert_eq '[7,7,8,8,8]' "$(jq -c '[.days[].scope]' <<<"$b")"
+}
+
+report_data() { sed -n 's/^<script id="scrum-data" type="application\/json">\(.*\)<\/script>$/\1/p' "$T/scrum-reports/sprint-1.html"; }
+
+test_cmd_report_uses_history_and_finds_removed_tasks() {
+  report_env
+  export SCRUM_TODAY=2014-09-26
+  # #4 joined Sprint 1 on the 24th; #20 left it on the 23rd (now in the backlog).
+  route_json 'api --paginate repos/acme/blog/issues/4/events*' "[$(ev milestoned 2014-09-24T08:00:00Z 'Sprint 1')]"
+  route_json 'api -X GET search/issues*' '{"items":[{"number":20,"title":"Old","state":"open","milestone":null,"created_at":"2014-09-01T00:00:00Z","labels":[{"name":"status: New"},{"name":"points: 7"}],"assignees":[]},{"number":21,"title":"Other","state":"open","milestone":null,"labels":[],"assignees":[]}]}'
+  route_json 'api --paginate repos/acme/blog/issues/20/events*' "[$(ev demilestoned 2014-09-23T08:00:00Z 'Sprint 1')]"
+  route_json 'api --paginate repos/acme/blog/issues/21/events*' '[]'
+  run_scrum report
+  assert_status 0 "$STATUS" "$ERR"
+  local data; data="$(report_data)"
+  assert_eq '[18,11,14,14,14]' "$(jq -c '[.burndown.days[].scope]' <<<"$data")"
+  assert_eq "3 7" "$(jq -r '"\(.burndown.added) \(.burndown.removed)"' <<<"$data")"
+  assert_eq "false" "$(jq -r .history_limited <<<"$data")"
+  assert_contains "$(gh_calls)" 'search/issues -f q=repo:acme/blog is:issue updated:>=2014-09-22 -milestone:"Sprint 1"'
+  assert_eq "" "$(gh_writes)" "report never writes"
+}
+
+test_cmd_report_reads_history_of_100_tasks_at_most() {
+  report_env
+  jq -n '[range(1; 106) | {number: ., title: "T\(.)", state: "open", labels: [{name: "status: New"}], assignees: []}]' > "$FAKE_GH_DIR/issues.json"
+  run_scrum report
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "100" "$(gh_calls | grep -c '/events')"
+  assert_eq "true" "$(jq -r .history_limited <<<"$(report_data)")"
+}
+
+test_cmd_report_in_vietnamese() {
+  report_env
+  printf 'version: 1\nlanguage: vi\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  run_scrum report
+  assert_status 0 "$STATUS" "$ERR"
+  local data; data="$(report_data)"
+  assert_eq "vi" "$(jq -r .language <<<"$data")"
+  assert_eq "Theo người" "$(jq -r .strings.report_by_person <<<"$data")"
+}

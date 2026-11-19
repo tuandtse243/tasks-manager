@@ -178,18 +178,63 @@ def progress($cfg; $sprint; $issues; $today):
       days_left: days_left($cfg; $s; $today) };
 
 # ---------- burndown ----------
+# Issues may carry `_events` (GitHub issue events, oldest first). The state of an issue at the
+# end of day $d is rebuilt by undoing, from its current state, the events after $d: labeled X
+# removes X, unlabeled X adds it back, milestoned into the sprint means it was not in yet,
+# demilestoned from the sprint means it still was, closed/reopened flip the state. Without
+# events an issue is in the sprint from the first day and closes at its closed_at.
+# `_in_now: false` marks an issue that is not in the sprint any more (it may have left it).
+
+# day_state($cfg; $title; $d; $off) on one issue -> {in, pts, done}
+def day_state($cfg; $title; $d; $off):
+  . as $i
+  | ([$i._events // [] | .[] | select((.created_at | local_date($off)) > $d)] | reverse) as $after
+  | ([$i._events // [] | .[] | select(.event == "closed" or .event == "reopened")] | length > 0) as $tracked
+  | reduce $after[] as $e (
+      { labels: [$i.labels[]? | if type == "object" then .name else . end],
+        in: (if $i | has("_in_now") then $i._in_now else true end),   # not `//`: false is a value
+        closed: ($i.state == "closed") };
+      if $e.event == "labeled" then .labels -= [$e.label.name]
+      elif $e.event == "unlabeled" then .labels += [$e.label.name]
+      elif $e.event == "milestoned" and $e.milestone.title == $title then .in = false
+      elif $e.event == "demilestoned" and $e.milestone.title == $title then .in = true
+      elif $e.event == "closed" then .closed = false
+      elif $e.event == "reopened" then .closed = true
+      else . end )
+  | ( [$i._events // [] | .[] | select(.event == "closed" and (.created_at | local_date($off)) <= $d)] | .[-1] ) as $last_close
+  | (if $tracked then .closed
+     else ($i.state == "closed" and $i.closed_at != null and (($i.closed_at | local_date($off)) <= $d)) end) as $closed
+  | (($last_close.state_reason // $i.state_reason // "completed") | if . == null then "completed" else . end) as $reason
+  | (if $i.created_at != null and (($i.created_at | local_date($off)) > $d) then false else .in end) as $in
+  | { in: ($in and (($closed and $reason == "not_planned") | not)),
+      pts: ({labels: (.labels | map({name: .}))} | task_points($cfg)),
+      done: ($closed and $reason != "not_planned") };
+
 def burndown($cfg; $sprint; $issues; $today; $off):
   ($sprint | sprint_info) as $s
-  | ($issues | report_tasks($cfg)) as $t
-  | ([$t[]._pts // 0] | add // 0) as $total
+  # A task closed as not planned counts nowhere, not even before it was dropped (spec
+  # sprint-reporting "Phạm vi số liệu").
+  | [$issues[] | select(is_task($cfg)) | select(is_not_planned | not)] as $t
   | (days_between($s.start; $s.end) + 1) as $n
+  | [range(0; $n) | . as $k | $s.start | add_days($k)] as $dates
+  | [$dates[] as $d | [$t[] | day_state($cfg; $s.title; $d; $off) + {number}]] as $states
+  | [$states[] | [.[] | select(.in) | .pts // 0] | add // 0] as $scope
+  | ($scope[0]) as $total
+  | [range(1; $n) as $k | select($dates[$k] <= $today)
+     | ($states[$k - 1] | map({key: (.number | tostring), value: .}) | from_entries) as $prev
+     | $states[$k][] | . as $now | ($prev[.number | tostring]) as $was
+     | if $now.in and ($was.in | not) then {added: ($now.pts // 0)}
+       elif ($now.in | not) and $was.in then {removed: ($was.pts // 0)}
+       else empty end ] as $moves
   | { start: $s.start, end: $s.end, total: $total,
-      days: [range(0; $n) | . as $i | ($s.start | add_days($i)) as $d
+      added: ([$moves[].added // 0] | add // 0),
+      removed: ([$moves[].removed // 0] | add // 0),
+      days: [range(0; $n) as $k | $dates[$k] as $d
         | { date: $d,
             ideal: ideal_at($cfg; $s; $total; $d),
+            scope: (if $d > $today then null else $scope[$k] end),
             remaining: (if $d > $today then null
-                        else $total - ([$t[] | select(is_completed and ((.closed_at | local_date($off)) <= $d)) | ._pts // 0] | add // 0)
-                        end) }] };
+                        else [$states[$k][] | select(.in and (.done | not)) | .pts // 0] | add // 0 end) }] };
 
 # ---------- project board (GitHub Projects v2) ----------
 # Kept in this file, not in a project.jq that includes it: jq 1.8.2 aborts at compile time
