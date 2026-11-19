@@ -78,6 +78,21 @@ run_scrum() { # run_scrum args...  -> sets OUT, ERR, STATUS
   set -e
 }
 
+# path_without_yq  Prints a PATH with jq and git, and the system directories without yq (some
+# runners install yq in /usr/bin).
+path_without_yq() {
+  local d f
+  mkdir -p "$T/noyq/bin" "$T/noyq/sys"
+  ln -sf "$(command -v jq)" "$T/noyq/bin/jq"
+  ln -sf "$(command -v git)" "$T/noyq/bin/git"
+  for d in /usr/bin /bin; do
+    for f in "$d"/*; do
+      [ "${f##*/}" = yq ] || [ -e "$T/noyq/sys/${f##*/}" ] || [ -L "$T/noyq/sys/${f##*/}" ] || ln -s "$f" "$T/noyq/sys/${f##*/}"
+    done
+  done
+  printf '%s' "$T/noyq/bin:$T/noyq/sys"
+}
+
 # jq program from runtime/lib/jq
 jqt() { local prog="$1"; shift; jq -L "$PLUGIN_DIR/runtime/lib/jq" "$@" -f "$PLUGIN_DIR/runtime/lib/jq/$prog.jq"; }
 

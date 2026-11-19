@@ -21,9 +21,9 @@
 
 ## 4. `scrum doctor` (design mục 4, 5; spec setup-diagnostics)
 
-- [ ] 4.1 Tạo `runtime/lib/cmd_doctor.sh` và `runtime/lib/jq/doctor-report.jq`; lệnh `scrum doctor [--json]` trong dispatcher và `usage`; các nhóm công cụ, repo và cấu hình, cài đặt, board như spec, mã thoát 1 khi có lỗi. Kiểm tra: `scrum doctor` chạy trên repo test với `fake-gh` in đủ bốn nhóm
-- [ ] 4.2 Thêm `tests/test_doctor.sh`, một test cho mỗi scenario của spec setup-diagnostics (gồm sandbox có và không có `SANDBOX_RUNTIME`, board bật và tắt, secret 403), và một test rằng không có lời gọi ghi nào tới `gh`. Kiểm tra: `bash tests/run.sh doctor` xanh
-- [ ] 4.3 Tạo `skills/doctor/SKILL.md`: chạy `scrum doctor`, giải thích từng mục không đạt và đề nghị chạy lệnh sửa (chỉ chạy khi người dùng đồng ý). Kiểm tra: `claude plugin validate .` đạt và skill có trong danh sách
+- [x] 4.1 Tạo `runtime/lib/cmd_doctor.sh` và `runtime/lib/jq/doctor-report.jq`; lệnh `scrum doctor [--json]` trong dispatcher và `usage`; các nhóm công cụ, repo và cấu hình, cài đặt, board như spec, mã thoát 1 khi có lỗi. Kiểm tra: `scrum doctor` chạy trên repo test với `fake-gh` in đủ bốn nhóm
+- [x] 4.2 Thêm `tests/test_doctor.sh`, một test cho mỗi scenario của spec setup-diagnostics (gồm sandbox có và không có `SANDBOX_RUNTIME`, board bật và tắt, secret 403), và một test rằng không có lời gọi ghi nào tới `gh`. Kiểm tra: `bash tests/run.sh doctor` xanh
+- [x] 4.3 Tạo `skills/doctor/SKILL.md`: chạy `scrum doctor`, giải thích từng mục không đạt và đề nghị chạy lệnh sửa (chỉ chạy khi người dùng đồng ý). Kiểm tra: `claude plugin validate .` đạt và skill có trong danh sách
 
 ## 5. `scrum next` (design mục 6; spec next-step-guidance)
 

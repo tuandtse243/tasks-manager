@@ -79,6 +79,14 @@ repo_slug() {
   printf '%s' "$slug"
 }
 
+# remote_workflows REPO  Names of the files in .github/workflows on the default branch of the
+# GitHub repository, one per line; nothing when the folder does not exist there (404).
+remote_workflows() {
+  local json
+  json="$(ghx api "repos/$1/contents/.github/workflows" 2>/dev/null)" || return 0
+  printf '%s' "$json" | jq -r 'if type == "array" then .[].name else empty end' 2>/dev/null || true
+}
+
 # Root of the target repository working tree.
 repo_dir() {
   if [ -n "${SCRUM_REPO_DIR:-}" ]; then printf '%s' "$SCRUM_REPO_DIR"; return; fi

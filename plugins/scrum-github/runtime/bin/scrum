@@ -17,6 +17,7 @@ Setup
   init [--dry-run] [--force] [--force-file PATH]   Prepare this repo: config, labels, templates, workflows
   config                                          Print the merged configuration as JSON
   uninstall [--dry-run] [--yes]                   Remove what init installed (keeps scrum.yml and edited files)
+  doctor [--json]                                 Check tools, login, configuration and what is installed; read-only
 
 Sprints
   sprint new [--title T] [--start YYYY-MM-DD] [--length DAYS] [--goal TEXT]
@@ -72,6 +73,9 @@ case "$cmd" in
     ;;
   init)
     . "$SCRUM_ROOT/lib/cmd_init.sh"; cmd_init "$@"
+    ;;
+  doctor)
+    . "$SCRUM_ROOT/lib/cmd_doctor.sh"; cmd_doctor "$@"
     ;;
   uninstall)
     . "$SCRUM_ROOT/lib/cmd_uninstall.sh"; cmd_uninstall "$@"

@@ -70,18 +70,8 @@ sprint: ]'
 test_missing_yq_is_reported_before_github() {
   setup_fake_gh
   setup_repo 'version: 1'
-  mkdir -p "$T/bin" "$T/sys"
-  ln -s "$(command -v jq)" "$T/bin/jq"
-  ln -s "$(command -v git)" "$T/bin/git"
-  # The system directories without yq: some runners install it in /usr/bin.
-  local d f
-  for d in /usr/bin /bin; do
-    for f in "$d"/*; do
-      [ "${f##*/}" = yq ] || [ -e "$T/sys/${f##*/}" ] || [ -L "$T/sys/${f##*/}" ] || ln -s "$f" "$T/sys/${f##*/}"
-    done
-  done
   set +e
-  ERR="$(PATH="$T/bin:$T/sys" "$BASH" "$SCRUM" sprint new 2>&1 >/dev/null)"; STATUS=$?
+  ERR="$(PATH="$(path_without_yq)" "$BASH" "$SCRUM" sprint new 2>&1 >/dev/null)"; STATUS=$?
   set -e
   assert_status 1 "$STATUS"
   assert_contains "$ERR" "yq is required (mikefarah v4)"
