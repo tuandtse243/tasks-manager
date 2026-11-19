@@ -37,7 +37,7 @@ Lệnh khởi tạo SHALL đảm bảo repo có đúng một label cho mỗi tr�
 - **THEN** label `points: 7` không bị xoá và lệnh báo nó là label lỗi thời
 
 ### Requirement: Cài template vào repo
-Lệnh khởi tạo SHALL ghi vào working tree của repo đích: Issue Form cho task (dropdown điểm lấy từ thang điểm), PR template có dòng `Closes #`, và các workflow đồng bộ trạng thái, kiểm tra liên kết PR, digest. Lệnh MUST NOT tự commit hoặc push, và MUST NOT ghi đè file đã khác nội dung template trừ khi người dùng yêu cầu ghi đè.
+Lệnh khởi tạo SHALL ghi vào working tree của repo đích: Issue Form cho task (dropdown điểm lấy từ thang điểm), PR template có các mục tóm tắt, bằng chứng, mức nguy hiểm khi merge và dòng `Closes #`, và các workflow đồng bộ trạng thái, kiểm tra liên kết PR, digest. Lệnh MUST NOT tự commit hoặc push, và MUST NOT ghi đè file đã khác nội dung template trừ khi người dùng yêu cầu ghi đè.
 
 #### Scenario: Cài lần đầu
 - **WHEN** repo chưa có các file template
@@ -50,6 +50,14 @@ Lệnh khởi tạo SHALL ghi vào working tree của repo đích: Issue Form ch
 #### Scenario: Thang điểm đổi sau khi cài
 - **WHEN** người dùng đổi thang điểm rồi chạy lại `/scrum-init` với tuỳ chọn ghi đè Issue Form
 - **THEN** dropdown điểm trong Issue Form khớp thang điểm mới
+
+#### Scenario: PR template mới
+- **WHEN** lệnh khởi tạo chạy trong repo chưa có PR template
+- **THEN** PR template được tạo có các mục tóm tắt, bằng chứng, mức nguy hiểm khi merge, và mục task với dòng `Closes #`
+
+#### Scenario: Repo đã cài bản cũ
+- **WHEN** repo có PR template của phiên bản trước và người dùng chạy lại lệnh khởi tạo không có tuỳ chọn ghi đè
+- **THEN** PR template cũ giữ nguyên và lệnh báo cách ghi đè để nhận các mục mới
 
 ### Requirement: Chế độ xem trước
 Lệnh khởi tạo SHALL có chế độ xem trước liệt kê mọi thay đổi sẽ làm mà không ghi lên GitHub hay ổ đĩa.

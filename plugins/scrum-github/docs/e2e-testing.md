@@ -149,3 +149,64 @@ were driven in headless Claude Code sessions with the plugin loaded):
   `--update` set the milestone, kept the status label and added the card. A second `apply` said
   "Nothing to do" and left `plan.md` identical.
 - `scrum status` counted 13 tasks (25 points) in Sprint 2; features #9 and #14 were not counted.
+
+## Vendored skills, pull request description, questionnaire (0.4.0)
+
+```bash
+# Maintainer side, in this repository
+scripts/vendor-sync.sh                                 # clones upstream; `git diff vendor/` must be empty when up to date
+
+# In the sandbox clone
+bash "$SCRUM" init                                     # runtime 0.4.0; the old PR template is reported as a conflict
+bash "$SCRUM" init --force-file .github/pull_request_template.md    # commit and push .github
+bash "$SCRUM" task new --title "..." --body "..." --points 1
+bash "$SCRUM" task start <n>                           # commit a change on the branch, push it
+/scrum-github:task-pr                                  # description in four sections with "Closes #<n>"; approve; PR opened
+#    the check scrum-pr-link-check passes; merge       -> task Done and closed
+/scrum-github:discover <idea using a word the glossary avoids, with a decision someone else owns> --quick
+#    -> a question about the term; an offer to write a questionnaire; brief stays "Status: draft"
+/scrum-github:plan docs/plans/<slug>/brief.md          # lists the open questions; continue -> assumptions
+#    write the answers under the questions in questionnaire-<who>.md
+/scrum-github:discover docs/plans/<slug> --quick       # answers move to "Decisions"; "Open questions" is gone
+bash <plugin>/wizards/project-board.sh                 # in a terminal you type into
+```
+
+Result of the last run (2026-11-19, `tuandtse243/scrum-sandbox`; the skills were driven in
+headless Claude Code sessions with the plugin loaded from this repository):
+- `vendor-sync.sh` without a path cloned upstream at `5863806` and produced a tree identical to
+  `vendor/pocock/`.
+- `scrum init` installed runtime 0.4.0 and kept the 0.3.0 pull request template as a conflict;
+  `--force-file` replaced it. Nothing under `vendor/` and no wizard reached the sandbox.
+- `/scrum-github:task-pr` on `feat/27-count-the-posts-in-the-store`: Summary as a small diff
+  sketch, Evidence with the failing and passing test run, Merge Danger, and "Closes #27". It said
+  which acceptance criteria the evidence covered, and waited for approval. The headless session
+  could not call `gh` (its sandbox), so it stated what it had not read, took the issue pasted in,
+  and handed over the `gh pr create` command; run by hand, that opened PR #28. `linked-task`
+  passed, the task went to In progress, and merging closed #27 as Done.
+- `/scrum-github:discover --quick` with "owner của bài viết" and a limit "do product owner
+  quyết": the first question quoted the glossary ("Avoid: user id, owner") and proposed
+  **Author**; the second offered `questionnaire-chi-lan.md`. The brief was written with
+  `Status: draft` and an "Open questions" section, passed `doc check`, and the `/scrum-github:plan`
+  step was not printed.
+- `/scrum-github:plan` on that draft listed the two open questions and asked whether to wait or
+  continue. Continuing wrote them as assumptions. The four task bodies describe behaviour, cite no
+  file path, and each ends with "Out of scope: ...". The critic's findings included a criterion
+  that tested an internal mechanism, which was rewritten as behaviour.
+- After the answers were written into the questionnaire, `/scrum-github:discover` on the folder
+  moved them to "Decisions", recorded them as round 2, removed "Open questions", and warned that
+  the existing `plan.json` still held the assumed limit.
+- The wizard, run on the sandbox's own `.github/scrum.yml` with typed answers on stdin and no
+  token entered: all five stages, the secret reported as still to do, and the config byte for
+  byte unchanged (the block already held these values). An earlier build rewrote the file with
+  `yq -i` and lost every blank line; the wizard now edits only the three lines.
+
+Not run yet, needs a person:
+- **The wizard in a real terminal**: the browser pages it opens, the names of the things to click
+  on GitHub, and `gh secret set` with a real token. The offline tests cover its logic with a
+  stand-in `gh`.
+- **`/scrum-github:task-pr` creating the pull request itself**: in a session where `gh` works,
+  the skill runs `gh pr create` after approval instead of handing over the command.
+
+One thing to know when driving skills headless from a very long working directory: one session
+wrote the brief under a mistyped copy of the path. Asking for paths relative to the current
+directory avoided it.

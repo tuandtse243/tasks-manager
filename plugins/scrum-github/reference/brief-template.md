@@ -2,8 +2,9 @@
 
 <!-- Written by /scrum-github:discover. Keep the "## " headings exactly as they are: `scrum doc check`
      reads them (runtime/share/doc-sections.json). Write the content in the user's language.
-     Optional sections: "Size" (always write it), "Project fit" (only in a repository with code),
-     "Sources" (only when web research was used). Delete an optional section you do not use. -->
+     Optional sections: "Open questions" (only while a questionnaire is waiting for answers),
+     "Size" (always write it), "Project fit" (only in a repository with code), "Sources" (only
+     when web research was used). Delete an optional section you do not use. -->
 
 Status: draft | confirmed on <YYYY-MM-DD>
 
@@ -32,6 +33,7 @@ The outcome the user wants, in a few sentences, from the user's point of view. W
 ## Decisions
 
 - **<decision>**: the choice the user made, and the option(s) not taken.
+- **<term>**: the one meaning it has in this requirement (a term settled during the interview).
 
 ## Assumptions
 
@@ -41,6 +43,13 @@ The outcome the user wants, in a few sentences, from the user's point of view. W
 ## Risks
 
 - **<risk>**: what could go wrong, how likely, and what would reduce it.
+
+## Open questions
+
+- <question>: waiting for <who answers it>, see `questionnaire-<recipient>.md` in this folder.
+
+Only while a questionnaire is out. The status stays `draft` as long as this section has items;
+an answered question moves to "Decisions" and leaves this list.
 
 ## Size
 
