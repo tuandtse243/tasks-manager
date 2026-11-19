@@ -432,7 +432,6 @@ test_apply_backlog_without_open_sprint() {
   assert_status 0 "$STATUS" "$ERR"
   assert_eq "4" "$(creates)"
   assert_not_contains "$(grep '^STDIN' "$FAKE_GH_LOG")" '"milestone"'
-  assert_not_contains "$(gh_calls)" 'milestones' "no sprint named: milestones are not read"
 }
 
 test_apply_current_sprint() {
@@ -709,4 +708,15 @@ test_recorded_duplicate_answers_are_422() {
     assert_eq "422" "$(jq -r .status "$FIXTURES/$f.json")" "$f"
   done
   assert_eq "11" "$(jq -r .number "$FIXTURES/github-blocked-by-created.json")"
+}
+
+test_apply_view_keeps_velocity() {
+  apply_env
+  jq 'map(if .number == 3 then .description += "\n<!-- scrum:velocity=10 -->" | .closed_at = "2014-09-19T10:00:00Z" else . end)' \
+    "$FAKE_GH_DIR/ms.json" > "$FAKE_GH_DIR/ms2.json" && mv "$FAKE_GH_DIR/ms2.json" "$FAKE_GH_DIR/ms.json"
+  plan3 > "$T/plan.json"
+  run_scrum plan apply "$T/plan.json"
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$(cat "$T/plan.md")" "Velocity: 10 points per sprint"
+  assert_contains "$(cat "$T/plan.md")" "#11"
 }

@@ -276,9 +276,11 @@ cmd_plan_apply() {
   fi
 
   # From here on the view is rendered again on every exit, so plan.md follows plan.json.
+  # Milestones are read once now, so the view keeps its velocity estimate like `plan render`.
   local view
   view="$(plan_view_path "$file")"
-  trap 'plan_load_quiet "'"$file"'" && plan_render_to "'"$file"'" "'"$view"'" "[]" >/dev/null 2>&1 || true' EXIT
+  APPLY_FILE="$file"; APPLY_VIEW="$view"; APPLY_MS="$(plan_try_milestones)"
+  trap plan_apply_render_view EXIT
 
   local failed=0 acts a op ref created number id parent pnum touched=""
   acts="$(mktemp "${TMPDIR:-/tmp}/scrum-plan.XXXXXX")"
@@ -399,6 +401,11 @@ $list"; then
     info "Done. Issue numbers are recorded in $file; view: $view"
   fi
   [ "$failed" = 0 ] || exit 1
+}
+
+# EXIT trap of apply: render the view from the plan file as it is now (numbers included).
+plan_apply_render_view() {
+  plan_load_quiet "$APPLY_FILE" && plan_render_to "$APPLY_FILE" "$APPLY_VIEW" "${APPLY_MS:-[]}" >/dev/null 2>&1 || true
 }
 
 # Reload the plan file without exiting on problems (used by the EXIT trap of apply).

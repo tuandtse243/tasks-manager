@@ -389,9 +389,36 @@ bash "$SCRUM" status                                   # epic and feature not co
 /scrum-github:plan docs/plans/<slug>/brief.md
 ```
 
-Not run on a sandbox repository yet for 0.3.0: the offline tests (`tests/test_plan.sh`,
-`test_doc.sh`, `test_context.sh`) cover the logic with a fake `gh`, and the request and answer
-shapes of `sub_issues` and `dependencies/blocked_by` follow GitHub's REST documentation.
+Result of the last run (2026-11-19, `tuandtse243/scrum-sandbox`, a small Node blog API; the skills
+were driven in headless Claude Code sessions with the plugin loaded):
+- `scrum init` on the 0.2.0 install created only `type: epic` and updated the runtime.
+- The API answers were recorded in `tests/fixtures/github-*.json`. An existing "blocked by" or
+  sub-issue link answers 422, the same as a refusal, which is why `apply` reads the links first.
+- `/scrum-github:plan` with a clear feature: the critic's two findings were fixed in the draft, a
+  task's points were changed, and after approval it created feature #14 with #15 and #16 as
+  sub-issues, #16 blocked by #15, both in Sprint 2 and on the board. Adding a task and applying
+  again created only #17. "làm cho app nhanh hơn" got the missing parts named and `discover`
+  suggested.
+- `/scrum-github:project-scan` wrote the context with a stamp. After a commit to `tests/` the next
+  scan re-read only that folder. A `--full` scan kept the "Team notes" byte for byte.
+- `/scrum-github:discover`:
+  - `--quick` used no agent and asked one round. Without a project context it suggested
+    `project-scan` and read only the code involved.
+  - Standard depth asked two rounds of numbered questions with suggestions, then wrote a brief
+    that passed `doc check`.
+  - Cancelling saved nothing.
+  - The fit check gave "fits", "fits with changes", and, for an in-memory list of online users in
+    the stateless API, "conflicts" with three options before any brief.
+  - The context warning said "81 commits old" after 81 commits, and "cannot tell" for a stamp
+    whose commit is not in the history.
+- `/scrum-github:plan docs/plans/binh-luan-bai-viet/brief.md` copied the brief's assumptions and
+  out-of-scope items. Apply created epic #18 with features #19 (Sprint 2) and #20 (backlog), and
+  tasks #21-#26 with four "blocked by" links. The backlog tasks had no milestone and were not
+  added to the board.
+- `plan apply --dry-run --update` listed one update (T4 #25: sprint backlog -> Sprint 2);
+  `--update` set the milestone, kept the status label and added the card. A second `apply` said
+  "Nothing to do" and left `plan.md` identical.
+- `scrum status` counted 13 tasks (25 points) in Sprint 2; features #9 and #14 were not counted.
 
 #### Project board (0.2.0)
 
