@@ -22,10 +22,15 @@ cmd_status() {
   require_tools
   load_config
   load_sprint_data "$name"
-  local p
+  local p attention strings
   p="$(jqlib progress -n --argjson cfg "$CONFIG_JSON" --argjson sprint "$SPRINT" --argjson issues "$ISSUES" --arg today "$(today)")"
-  if [ "$json" = 1 ]; then printf '%s\n' "$p"; return 0; fi
-  printf '%s' "$p" | jqlib progress-table -r --argjson cfg "$CONFIG_JSON" --argjson strings "$(strings_json)"
+  . "$SCRUM_ROOT/lib/attention.sh"
+  attention="$(attention_json "$REPO" "$SPRINT" "$ISSUES")"
+  if [ "$json" = 1 ]; then printf '%s' "$p" | jq --argjson a "$attention" '. + {attention: $a.items}'; return 0; fi
+  strings="$(strings_json)"
+  printf '%s' "$p" | jqlib progress-table -r --argjson cfg "$CONFIG_JSON" --argjson strings "$strings"
+  printf '%s' "$attention" | jq -r --argjson s "$strings" \
+    'if (.lines | length) > 0 then "", ($s.attention_title + ":"), (.lines[] | "  - " + .) else empty end'
 }
 
 cmd_report() {

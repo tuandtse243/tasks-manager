@@ -16,8 +16,8 @@
 
 ## 4. Cần chú ý (design mục 3; spec sprint-reporting "Mục cần chú ý" và bốn yêu cầu con)
 
-- [ ] 4.1 `attention.jq` và test cho task bị chặn, không động (có và không có PR mới), thiếu người nhận, thiếu điểm, chậm, và không có gì. Kiểm tra: `bash tests/run.sh test_report` xanh
-- [ ] 4.2 `scrum status` và `scrum digest` đọc PR mở và quan hệ chặn rồi in mục cần chú ý; test lệnh với `fake-gh`. Kiểm tra: `bash tests/run.sh test_report` và `test_event` xanh
+- [x] 4.1 `attention.jq` và test cho task bị chặn, không động (có và không có PR mới), thiếu người nhận, thiếu điểm, chậm, và không có gì. Kiểm tra: `bash tests/run.sh test_report` xanh
+- [x] 4.2 `scrum status` và `scrum digest` đọc PR mở và quan hệ chặn rồi in mục cần chú ý; test lệnh với `fake-gh`. Kiểm tra: `bash tests/run.sh test_report` và `test_event` xanh
 
 ## 5. Burndown theo lịch sử (design mục 2; spec sprint-reporting "Đường burndown", "Báo cáo HTML")
 

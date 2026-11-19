@@ -35,6 +35,8 @@ cmd_digest() {
   fi
   n="$(printf '%s' "$digest_issue" | jq -r .number)"
 
+  . "$SCRUM_ROOT/lib/attention.sh"
+  ATTENTION_LINES="$(attention_json "$repo" "$sprint" "$issues" | jq -c .lines)"
   body="$(jqlib digest -n --argjson cfg "$CONFIG_JSON" --argjson sprint "$sprint" --argjson issues "$issues" \
     --argjson comments "$comments" --arg today "$(today)" --argjson off "$(tz_offset)" \
     --argjson strings "$(strings_json)" --argjson attention "${ATTENTION_LINES:-[]}")"

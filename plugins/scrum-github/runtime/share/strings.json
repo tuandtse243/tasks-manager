@@ -25,7 +25,13 @@
     "digest_not_started_line": "{n} tasks, {pts}",
     "digest_not_started_line_one": "{n} task, {pts}",
     "digest_unassigned": "unassigned",
-    "attention_title": "Needs attention"
+    "attention_title": "Needs attention",
+    "attention_behind": "The sprint is {n} points behind the ideal line ({rem} left, ideal {ideal}).",
+    "attention_blocked": "{ref} is blocked by {by}.",
+    "attention_stale": "{ref} is {status} with no activity for {n} working days.",
+    "attention_stale_one": "{ref} is {status} with no activity for {n} working day.",
+    "attention_unassigned": "{ref} has no assignee.",
+    "attention_unestimated": "{ref} has no points."
   },
   "vi": {
     "assignee": "Người nhận",
@@ -49,6 +55,11 @@
     "digest_not_started": "Chưa bắt đầu",
     "digest_not_started_line": "{n} task, {pts}",
     "digest_unassigned": "chưa giao",
-    "attention_title": "Cần chú ý"
+    "attention_title": "Cần chú ý",
+    "attention_behind": "Sprint chậm {n} điểm so với đường lý tưởng (còn {rem}, lý tưởng {ideal}).",
+    "attention_blocked": "{ref} bị chặn bởi {by}.",
+    "attention_stale": "{ref} đang {status} nhưng không có hoạt động {n} ngày làm việc.",
+    "attention_unassigned": "{ref} chưa có người nhận.",
+    "attention_unestimated": "{ref} chưa có điểm."
   }
 }

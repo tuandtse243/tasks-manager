@@ -244,3 +244,94 @@ test_digest_in_vietnamese_with_attention() {
   assert_contains "$body" "- #3 is blocked by #2"
   assert_contains "$body" "### Xong từ đầu sprint"
 }
+
+# ---------- needs attention (delta sprint-reporting) ----------
+
+# at_issue NUMBER STATUS POINTS ASSIGNEE UPDATED_AT
+at_issue() {
+  jq -nc --argjson n "$1" --arg s "$2" --arg p "$3" --arg a "$4" --arg u "$5" '{
+    number: $n, title: "Task \($n)", state: (if $s == "Done" then "closed" else "open" end),
+    state_reason: (if $s == "Done" then "completed" else null end), closed_at: (if $s == "Done" then $u else null end),
+    updated_at: $u,
+    labels: ([{name: "status: \($s)"}] + (if $p == "" then [] else [{name: "points: \($p)"}] end)),
+    assignees: (if $a == "" then [] else [{login: $a}] end) }'
+}
+AT_SPRINT='{"number":4,"title":"Sprint 4","state":"open","description":"<!-- scrum:start=2026-11-20 end=2026-11-27 -->"}'
+attention_of() { # ISSUES BLOCKED PRS TODAY [SPRINT] [LANG]
+  jqt attention -n --argjson cfg "$(defaults)" --argjson sprint "${5:-$AT_SPRINT}" --argjson issues "$1" \
+    --argjson blocked "$2" --argjson prs "$3" --arg today "$4" --argjson off 0 --arg repo acme/blog \
+    --argjson strings "$(strings "${6:-en}")"
+}
+
+test_attention_blocked() {
+  local a; a="$(attention_of "$(at_issue 12 New 3 alice 2026-11-20T08:00:00Z | jq -sc .)" '{"12":[10]}' '[]' 2026-11-20)"
+  assert_eq '["#12 Task 12 is blocked by #10."]' "$(jq -c .lines <<<"$a")"
+}
+
+test_attention_stale_in_progress() {
+  local a; a="$(attention_of "$(at_issue 14 'In progress' 3 alice 2026-11-16T10:00:00Z | jq -sc .)" '{}' '[]' 2026-11-20)"
+  assert_eq '["#14 Task 14 is In progress with no activity for 4 working days."]' "$(jq -c .lines <<<"$a")"
+}
+
+test_attention_recent_pr_activity_is_not_stale() {
+  local prs='[{"number":40,"body":"Work on it\n\nCloses #14","updated_at":"2026-11-19T15:00:00Z"}]'
+  local a; a="$(attention_of "$(at_issue 14 'In progress' 3 alice 2026-11-16T10:00:00Z | jq -sc .)" '{}' "$prs" 2026-11-20)"
+  assert_eq '[]' "$(jq -c .lines <<<"$a")"
+}
+
+test_attention_unassigned_and_unestimated() {
+  local a; a="$(attention_of "$( { at_issue 15 New '' '' 2026-11-20T08:00:00Z; at_issue 9 Done '' '' 2026-11-17T08:00:00Z; } | jq -sc .)" '{}' '[]' 2026-11-20)"
+  assert_eq '["#15 Task 15 has no assignee.","#15 Task 15 has no points."]' "$(jq -c .lines <<<"$a")"
+}
+
+test_attention_behind_the_ideal_line() {
+  # Monday 16 to Friday 20; on Wednesday 18 the ideal is 10 of 20; 14 left is 20% behind.
+  local s='{"number":5,"title":"Sprint 5","state":"open","description":"<!-- scrum:start=2026-11-16 end=2026-11-20 -->"}'
+  local issues; issues="$( { at_issue 1 Done 6 alice 2026-11-17T08:00:00Z; at_issue 2 'In progress' 7 alice 2026-11-18T08:00:00Z; at_issue 3 New 7 bob 2026-11-18T08:00:00Z; } | jq -sc .)"
+  local a; a="$(attention_of "$issues" '{}' '[]' 2026-11-18 "$s")"
+  assert_eq '["The sprint is 4 points behind the ideal line (14 left, ideal 10)."]' "$(jq -c .lines <<<"$a")"
+}
+
+test_attention_nothing() {
+  local a; a="$(attention_of "$(at_issue 12 'In progress' 3 alice 2026-11-20T08:00:00Z | jq -sc .)" '{"12":[]}' '[]' 2026-11-20)"
+  assert_eq '[]' "$(jq -c .items <<<"$a")"
+}
+
+test_attention_in_vietnamese() {
+  local a; a="$(attention_of "$(at_issue 15 New 3 '' 2026-11-20T08:00:00Z | jq -sc .)" '{}' '[]' 2026-11-20 "$AT_SPRINT" vi)"
+  assert_eq '["#15 Task 15 chưa có người nhận."]' "$(jq -c .lines <<<"$a")"
+}
+
+test_cmd_status_shows_needs_attention() {
+  report_env
+  route_json 'api --paginate repos/acme/blog/issues/4/dependencies/blocked_by*' '[{"number":3,"state":"open"}]'
+  run_scrum status
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "Needs attention:"
+  assert_contains "$OUT" "  - #4 Add a comment is blocked by #3."
+  assert_eq "" "$(gh_writes)" "status never writes"
+}
+
+test_cmd_status_json_has_attention() {
+  report_env
+  run_scrum status --json
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "array" "$(printf '%s' "$OUT" | jq -r '.attention | type')"
+}
+
+test_cmd_status_without_attention_has_no_section() {
+  report_env
+  run_scrum status
+  assert_not_contains "$OUT" "Needs attention"
+}
+
+test_cmd_digest_includes_needs_attention() {
+  digest_env
+  route_json 'api --paginate repos/acme/blog/issues/4/dependencies/blocked_by*' '[{"number":3,"state":"open"}]'
+  route_json 'api -X POST repos/acme/blog/issues/8/comments*' '{}'
+  route_json 'api --paginate repos/acme/blog/issues/8/comments*' '[]'
+  run_scrum digest
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$(gh_calls)" '### Needs attention'
+  assert_contains "$(gh_calls)" '- #4 Add a comment is blocked by #3.'
+}

@@ -35,6 +35,15 @@ def tr($s; $key): tr($s; $key; {});
 def trn($s; $key; $n; $args):
   tr($s; (if $n == 1 and $s[$key + "_one"] != null then $key + "_one" else $key end); $args + {n: $n});
 
+# ---------- pull request links ----------
+# Input: a pull request body. Issue numbers it closes in $repo (close/fix/resolve keywords).
+# HTML comments are ignored, like GitHub does. References to other repositories are ignored.
+def closing_refs($repo):
+  gsub("<!--[\\s\\S]*?-->"; "") as $b
+  | ($repo | ascii_downcase) as $r
+  | [ $b | capture("(?<![A-Za-z0-9_])(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?):?\\s+(?:(?<repo>[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+))?#(?<num>[0-9]+)(?![0-9])"; "gi")
+      | select(.repo == null or (.repo | ascii_downcase) == $r) | .num | tonumber ] | unique;
+
 # ---------- labels and tasks ----------
 def label_names: [.labels[]? | if type == "object" then .name else . end];
 def has_label($n): label_names | any(.[]; . == $n);
