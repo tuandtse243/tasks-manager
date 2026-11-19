@@ -3,7 +3,7 @@
 # Stops as early as the priority order allows, so a repo that is not set up needs no gh call.
 
 cmd_next() {
-  local json=0 init=true pushed=true sprint=null issues='[]' me="" remote result ms
+  local json=0 init=true pushed=true sprint=null issues='[]' me="" remote result ms waiting=0
   while [ $# -gt 0 ]; do
     case "$1" in
       --json) json=1 ;;
@@ -29,11 +29,16 @@ cmd_next() {
     if [ "$sprint" != null ]; then
       issues="$(fetch_milestone_issues "$REPO" "$(printf '%s' "$sprint" | jq -r .number)")"
       me="$(ghx api user | jq -r '.login // ""')"
+      if [ "$(printf '%s' "$issues" | jq -L "$JQ_LIB" --argjson cfg "$CONFIG_JSON" 'include "scrum"; report_tasks($cfg) | length')" = 0 ]; then
+        . "$SCRUM_ROOT/lib/cmd_backlog.sh"
+        waiting="$(backlog_count "$REPO" 2>/dev/null)" || waiting=0
+      fi
     fi
   fi
 
   result="$(jqlib next-step -n --argjson init "$init" --argjson pushed "$pushed" --argjson sprint "$sprint" \
-    --argjson issues "$issues" --arg me "$me" --arg today "$(today)" --argjson cfg "$CONFIG_JSON")"
+    --argjson issues "$issues" --arg me "$me" --arg today "$(today)" --argjson cfg "$CONFIG_JSON" \
+    --argjson backlog_count "${waiting:-0}")"
   if [ "$json" = 1 ]; then
     printf '%s\n' "$result"
   else

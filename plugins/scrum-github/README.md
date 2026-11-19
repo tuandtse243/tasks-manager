@@ -8,7 +8,7 @@ This plugin automates the six steps of the guide "Quản lý dự án theo Scrum
 
 | Step in the guide | Done manually in the guide | What the plugin does |
 |---|---|---|
-| 1. Create a sprint | Create a milestone | `sprint-new` creates `Sprint {n}` with start/end dates |
+| 1. Create a sprint | Create a milestone | `sprint-new` creates `Sprint {n}` with start/end dates; `sprint-fill` chooses its tasks from the backlog against the capacity |
 | 2. Task states | Create labels by hand | `init` syncs status, points and helper labels |
 | 3. Create a task | New issue, add labels | `task-new`, `plan` (AI breakdown into a plan file), task issue form |
 | 4. Link a PR | Write `Solve #1` | `task-pr` writes the description with `Closes #`; PR template; a check that fails without a link |
@@ -55,7 +55,7 @@ ask what to do next:
 ```
 
 **Updating from 0.4 or earlier:** `/scrum-github:scrum-init` is now `/scrum-github:init` (the old
-name still works in 0.5.x). Run it once after updating: it starts recording the files it writes,
+name was removed in 0.6.0). Run it once after updating: it starts recording the files it writes,
 so this first run still reports every file that differs from the new template as a `conflict`.
 From then on, files nobody edited are updated on their own.
 
@@ -74,11 +74,14 @@ the full path). Elsewhere run `runtime/bin/scrum <command>` (or `bin/scrum`).
 | `/scrum-github:next` | `scrum next [--json]` | The one thing to do next, with its command. Read-only |
 | – | `scrum uninstall [--dry-run] [--yes]` | Remove what `init` installed from the working tree; keeps `.github/scrum.yml`, files you edited, and everything on GitHub |
 | `/scrum-github:sprint-new` | `scrum sprint new [--title T] [--start DATE] [--length DAYS] [--goal TEXT]` | Create the next sprint |
+| `/scrum-github:backlog` | `scrum backlog [--json]` | Open tasks without a sprint: points, assignees, parent, blockers, totals |
+| `/scrum-github:sprint-fill` | `scrum sprint fill [SPRINT] [--capacity N] [--add N,N,…] [--yes]` | Capacity from recent velocity, what is planned, and moving tasks from the backlog into the sprint |
 | `/scrum-github:project-scan` | `scrum context inventory`, `scrum context status`, `scrum context stamp` | Describe an existing codebase in `docs/project-context.md` (with a commit stamp) |
 | `/scrum-github:discover` | `scrum plan init`, `scrum doc check FILE` | Clarify a vague idea through research and an interview; writes `docs/plans/<slug>/brief.md` |
 | `/scrum-github:plan` | `scrum plan init`, `scrum plan check FILE`, `scrum plan apply FILE` | Break a requirement into an epic, features and tasks in a plan file; after approval create the issues |
 | `/scrum-github:task-new` | `scrum task new --title T [--points N] [--assignee LOGIN] [--bug]` | Create a task in the current sprint |
 | `/scrum-github:task-start` | `scrum task start N` | Assign yourself, set In progress, create branch `feat/N-slug` |
+| `/scrum-github:task` | `scrum task list [--mine] [--sprint S \| --backlog] [--status ROLE]`, `scrum task move N… --sprint S \| --backlog`, `scrum task estimate N P`, `scrum task assign N LOGIN… [--unassign]`, `scrum task drop N [--reason T]` | See tasks; move, re-estimate, assign or drop them without editing labels by hand |
 | `/scrum-github:task-pr` | `gh pr create` / `gh pr edit`, after you approve | Write the pull request description for the task of the current branch |
 | `/scrum-github:sprint-status` | `scrum status [SPRINT]` | Table by person and status with points |
 | `/scrum-github:sprint-report` | `scrum report [SPRINT] [--out FILE]` | Self-contained HTML burndown and velocity |

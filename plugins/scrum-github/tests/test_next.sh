@@ -17,7 +17,7 @@ issues() { jq -sc . ; }
 next_of() {
   STEP="$(jqt next-step -n --argjson init "${1:-true}" --argjson pushed "${2:-true}" \
     --argjson sprint "${3:-$SPRINT}" --argjson issues "${4:-[]}" --arg me alice \
-    --arg today "${5:-2026-11-19}" --argjson cfg "$(defaults)")"
+    --arg today "${5:-2026-11-19}" --argjson cfg "$(defaults)" --argjson backlog_count "${6:-0}")"
 }
 step_id() { printf '%s' "$STEP" | jq -r .step; }
 
@@ -146,4 +146,32 @@ test_cmd_next_workflows_not_readable_fails() {
   run_scrum next
   assert_status 1 "$STATUS"
   assert_contains "$ERR" "/scrum-github:doctor"
+}
+
+# delta next-step-guidance "Sprint rỗng, backlog có task"
+test_next_empty_sprint_with_backlog() {
+  next_of true true "$SPRINT" '[]' 2026-11-19 4
+  assert_eq "fill" "$(step_id)"
+  assert_eq "/scrum-github:sprint-fill" "$(printf '%s' "$STEP" | jq -r .command)"
+  assert_contains "$(printf '%s' "$STEP" | jq -r .message)" "4 tasks wait in the backlog"
+}
+
+test_next_empty_sprint_and_empty_backlog() {
+  next_of true true "$SPRINT" '[]' 2026-11-19 0
+  assert_eq "done" "$(step_id)"
+}
+
+test_cmd_next_empty_sprint_counts_backlog() {
+  next_env
+  printf '[]' > "$FAKE_GH_DIR/issues.json"
+  route_json 'api --paginate repos/acme/blog/issues?milestone=none*' '[{"number":30,"state":"open","milestone":null,"labels":[],"assignees":[]}]'
+  run_scrum next --json
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "fill" "$(printf '%s' "$OUT" | jq -r .step)"
+}
+
+test_cmd_next_skips_backlog_when_sprint_has_tasks() {
+  next_env
+  run_scrum next
+  assert_not_contains "$(gh_calls)" "milestone=none"
 }

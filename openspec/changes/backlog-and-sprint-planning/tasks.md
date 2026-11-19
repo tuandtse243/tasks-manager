@@ -27,17 +27,17 @@
 
 ## 4. `next` (design mục 6; spec next-step-guidance)
 
-- [ ] 4.1 `next-step.jq` thêm bước "fill"; `cmd_next.sh` đếm backlog khi sprint rỗng; test jq và test lệnh. Kiểm tra: `bash tests/run.sh next` xanh
+- [x] 4.1 `next-step.jq` thêm bước "fill"; `cmd_next.sh` đếm backlog khi sprint rỗng; test jq và test lệnh. Kiểm tra: `bash tests/run.sh next` xanh
 
 ## 5. Phiên bản, dọn dẹp và tài liệu
 
-- [ ] 5.1 Xoá `skills/scrum-init/` (design mục 7) và sửa test tên cũ. Kiểm tra: `bash tests/run.sh cli` xanh; `claude plugin validate .` không còn `scrum-init`
-- [ ] 5.2 Phiên bản 0.6.0 (`runtime/VERSION`, `plugin.json`, test phiên bản trong `test_init.sh`), mục 0.6.0 trong `CHANGELOG.md`. Kiểm tra: `bash tests/run.sh manifest` và `init` xanh
-- [ ] 5.3 README plugin (bảng lệnh: backlog, sprint-fill, task; lệnh task mới) và `docs/huong-dan-ap-dung.md` gốc repo (bảng lệnh, Flow A mở sprint dùng `sprint-fill`, quy ước "không sửa label bằng tay" dẫn tới `/scrum-github:task`). Kiểm tra: mọi lệnh trong bảng có trong `scrum --help`
+- [x] 5.1 Xoá `skills/scrum-init/` (design mục 7) và sửa test tên cũ. Kiểm tra: `bash tests/run.sh cli` xanh; `claude plugin validate .` không còn `scrum-init`
+- [x] 5.2 Phiên bản 0.6.0 (`runtime/VERSION`, `plugin.json`, test phiên bản trong `test_init.sh`), mục 0.6.0 trong `CHANGELOG.md`. Kiểm tra: `bash tests/run.sh manifest` và `init` xanh
+- [x] 5.3 README plugin (bảng lệnh: backlog, sprint-fill, task; lệnh task mới) và `docs/huong-dan-ap-dung.md` gốc repo (bảng lệnh, Flow A mở sprint dùng `sprint-fill`, quy ước "không sửa label bằng tay" dẫn tới `/scrum-github:task`). Kiểm tra: mọi lệnh trong bảng có trong `scrum --help`
 
 ## 6. Kiểm tra tích hợp
 
-- [ ] 6.1 Toàn bộ `bash tests/run.sh` (jq 1.8.1 và 1.8.2), `shellcheck`, `openspec validate backlog-and-sprint-planning --strict`, `claude plugin validate .`. Kiểm tra: tất cả đạt
+- [x] 6.1 Toàn bộ `bash tests/run.sh` (jq 1.8.1 và 1.8.2), `shellcheck`, `openspec validate backlog-and-sprint-planning --strict`, `claude plugin validate .`. Kiểm tra: tất cả đạt
 - [ ] 6.2 Mở pull request, CI xanh, merge. Kiểm tra: CI trên `main` (gồm macOS) xanh
 
 ## Workflow follow-up
