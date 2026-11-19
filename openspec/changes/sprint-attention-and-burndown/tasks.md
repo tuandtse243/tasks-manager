@@ -38,7 +38,7 @@
 
 ## 9. Kiểm tra tích hợp
 
-- [ ] 9.1 Toàn bộ test (jq 1.8.1 và 1.8.2), `shellcheck`, `openspec validate sprint-attention-and-burndown --strict`, `claude plugin validate .`. Kiểm tra: tất cả đạt
+- [x] 9.1 Toàn bộ test (jq 1.8.1 và 1.8.2), `shellcheck`, `openspec validate sprint-attention-and-burndown --strict`, `claude plugin validate .`. Kiểm tra: tất cả đạt
 - [ ] 9.2 Mở pull request, CI xanh, merge, CI trên `main` xanh
 
 ## Workflow follow-up
