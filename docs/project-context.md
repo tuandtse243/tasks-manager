@@ -1,4 +1,4 @@
-# Project context: task-manageer (scrum-github plugin)
+# Project context: tasks-manager (scrum-github plugin)
 
 <!-- scrum:context sha=cffe2020fff3 date=2026-11-19 -->
 
@@ -21,7 +21,7 @@ commands, a `scrum` Bash CLI and GitHub Actions workflows installed into the tar
 project, clarify a requirement into a brief, split it into a reviewed plan, then create the
 issues (openspec/changes/requirement-planning/proposal.md, plugins/scrum-github/.claude-plugin/plugin.json).
 
-The repo is distributed as a local Claude Code marketplace named `task-manageer`
+The repo is distributed as a local Claude Code marketplace named `tasks-manager`
 (.claude-plugin/marketplace.json). Who uses it in practice beyond a sandbox repo: unknown.
 
 ## Technology
@@ -54,7 +54,7 @@ The repo is distributed as a local Claude Code marketplace named `task-manageer`
 
 | Folder | What it holds |
 |---|---|
-| `.claude-plugin/` | Marketplace manifest `task-manageer` pointing to `./plugins/scrum-github` (.claude-plugin/marketplace.json) |
+| `.claude-plugin/` | Marketplace manifest `tasks-manager` pointing to `./plugins/scrum-github` (.claude-plugin/marketplace.json) |
 | `plugins/scrum-github/.claude-plugin/` | Plugin manifest: name, version 0.3.0, description, keywords (plugin.json) |
 | `plugins/scrum-github/runtime/bin/` | `scrum`, the single CLI entry point; dispatches to `lib/cmd_*.sh` (runtime/bin/scrum) |
 | `plugins/scrum-github/runtime/lib/` | Shell libraries: `common.sh` (gh wrappers, helpers), `config.sh` (load/merge/validate), `project.sh` (board sync), one `cmd_*.sh` per command group |
@@ -213,7 +213,7 @@ The repo is distributed as a local Claude Code marketplace named `task-manageer`
 
 ## Running and testing
 
-- **Install** (in Claude Code): `/plugin marketplace add ./`, `/plugin install scrum-github@task-manageer`,
+- **Install** (in Claude Code): `/plugin marketplace add ./`, `/plugin install scrum-github@tasks-manager`,
   then `/scrum-github:scrum-init` in the target repo (plugins/scrum-github/README.md).
 - **Tests**: `bash tests/run.sh` from `plugins/scrum-github/`, or `bash tests/run.sh <pattern>`;
   offline. Hand-written runner: finds `test_*` functions, runs each in a subshell with a temp

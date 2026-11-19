@@ -45,7 +45,7 @@ Cài plugin trong Claude Code, chạy từ thư mục gốc của repo này:
 
 ```
 /plugin marketplace add ./
-/plugin install scrum-github@task-manageer
+/plugin install scrum-github@tasks-manager
 ```
 
 Không dùng Claude Code thì gọi thẳng script: `bash <đường-dẫn>/plugins/scrum-github/runtime/bin/scrum <lệnh>`.

@@ -35,7 +35,7 @@ From the root of this repository, in Claude Code:
 
 ```
 /plugin marketplace add ./
-/plugin install scrum-github@task-manageer
+/plugin install scrum-github@tasks-manager
 ```
 
 Then, inside a clone of the repository you want to manage:
