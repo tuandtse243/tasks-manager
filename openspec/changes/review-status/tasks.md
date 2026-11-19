@@ -28,7 +28,7 @@
 
 ## 7. Kiểm tra tích hợp
 
-- [ ] 7.1 Toàn bộ test (jq 1.8.1 và 1.8.2), `shellcheck`, `openspec validate review-status --strict`, `claude plugin validate .`. Kiểm tra: tất cả đạt
+- [x] 7.1 Toàn bộ test (jq 1.8.1 và 1.8.2), `shellcheck`, `openspec validate review-status --strict`, `claude plugin validate .`. Kiểm tra: tất cả đạt
 - [ ] 7.2 Mở pull request, CI xanh, merge, CI trên `main` xanh
 
 ## Workflow follow-up
