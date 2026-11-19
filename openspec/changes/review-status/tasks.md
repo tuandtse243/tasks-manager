@@ -24,7 +24,7 @@
 
 ## 6. Phiên bản và tài liệu
 
-- [ ] 6.1 Phiên bản 0.8.0, CHANGELOG; README plugin (khoá cấu hình, quy tắc đổi trạng thái có bảng cho chế độ bật, board) và `docs/huong-dan-ap-dung.md` gốc repo (cách bật, ghi chú bật giữa sprint). Kiểm tra: `bash tests/run.sh manifest` xanh
+- [x] 6.1 Phiên bản 0.8.0, CHANGELOG; README plugin (khoá cấu hình, quy tắc đổi trạng thái có bảng cho chế độ bật, board) và `docs/huong-dan-ap-dung.md` gốc repo (cách bật, ghi chú bật giữa sprint). Kiểm tra: `bash tests/run.sh manifest` xanh
 
 ## 7. Kiểm tra tích hợp
 
