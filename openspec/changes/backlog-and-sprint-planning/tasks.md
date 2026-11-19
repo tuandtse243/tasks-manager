@@ -11,12 +11,12 @@
 
 ## 2. Lệnh task (design mục 2, 5; spec task-management, project-board-sync)
 
-- [ ] 2.1 `scrum task list [--mine] [--sprint S | --backlog] [--status ROLE] [--json]`, có test. Kiểm tra: `bash tests/run.sh task` xanh
-- [ ] 2.2 `scrum task move N… --sprint S | --backlog` (kiểm tra cả danh sách trước khi ghi, comment, `project_touch`), có test cho đưa về backlog, sprint đã đóng, feature bị từ chối. Kiểm tra: `bash tests/run.sh task` xanh
-- [ ] 2.3 `scrum task estimate N POINTS` với `points-labels.jq`, có test đổi điểm và ngoài thang. Kiểm tra: `bash tests/run.sh task` xanh
-- [ ] 2.4 `scrum task assign N LOGIN… [--unassign]` và `scrum task drop N [--reason TEXT]`, có test. Kiểm tra: `bash tests/run.sh task` xanh
-- [ ] 2.5 Test board: với project bật, `estimate`, `move` và `drop` gọi cập nhật board (route GraphQL của `fake-gh`). Kiểm tra: `bash tests/run.sh task` xanh
-- [ ] 2.6 Tạo `skills/task/SKILL.md` (nói lại thay đổi và chờ đồng ý trước lệnh ghi). Kiểm tra: `claude plugin validate .` đạt
+- [x] 2.1 `scrum task list [--mine] [--sprint S | --backlog] [--status ROLE] [--json]`, có test. Kiểm tra: `bash tests/run.sh task` xanh
+- [x] 2.2 `scrum task move N… --sprint S | --backlog` (kiểm tra cả danh sách trước khi ghi, comment, `project_touch`), có test cho đưa về backlog, sprint đã đóng, feature bị từ chối. Kiểm tra: `bash tests/run.sh task` xanh
+- [x] 2.3 `scrum task estimate N POINTS` với `points-labels.jq`, có test đổi điểm và ngoài thang. Kiểm tra: `bash tests/run.sh task` xanh
+- [x] 2.4 `scrum task assign N LOGIN… [--unassign]` và `scrum task drop N [--reason TEXT]`, có test. Kiểm tra: `bash tests/run.sh task` xanh
+- [x] 2.5 Test board: với project bật, `estimate`, `move` và `drop` gọi cập nhật board (route GraphQL của `fake-gh`). Kiểm tra: `bash tests/run.sh task` xanh
+- [x] 2.6 Tạo `skills/task/SKILL.md` (nói lại thay đổi và chờ đồng ý trước lệnh ghi). Kiểm tra: `claude plugin validate .` đạt
 
 ## 3. Lập kế hoạch sprint (design mục 1, 4; spec sprint-lifecycle)
 

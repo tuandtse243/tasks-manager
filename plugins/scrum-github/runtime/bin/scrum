@@ -28,6 +28,11 @@ Backlog and sprints
 Tasks
   task new --title T [--body B] [--points N] [--assignee LOGIN]... [--sprint S] [--bug]
   task start NUMBER
+  task list [--mine] [--sprint S | --backlog] [--status new|in_progress|done] [--json]
+  task move N... --sprint S | --backlog           Move tasks between sprints and the backlog (with a comment)
+  task estimate N POINTS                          Replace the points label (checked against the scale)
+  task assign N LOGIN... [--unassign]             Add or remove assignees
+  task drop N [--reason TEXT]                     Close as not planned: counts nowhere
 
 Plans (a plan file per requirement: <planning.dir>/<slug>/plan.json, see share/plan.schema.json)
   plan init "<title>" [--slug SLUG]               Create the plan folder; print its paths as JSON (offline)
@@ -105,7 +110,12 @@ case "$cmd" in
     case "$sub" in
       new) cmd_task_new "$@" ;;
       start) cmd_task_start "$@" ;;
-      *) die "unknown task command '${sub}'. Use: scrum task new | scrum task start" ;;
+      list) cmd_task_list "$@" ;;
+      move) cmd_task_move "$@" ;;
+      estimate) cmd_task_estimate "$@" ;;
+      assign) cmd_task_assign "$@" ;;
+      drop) cmd_task_drop "$@" ;;
+      *) die "unknown task command '${sub}'. Use: scrum task new | start | list | move | estimate | assign | drop" ;;
     esac
     ;;
   plan)

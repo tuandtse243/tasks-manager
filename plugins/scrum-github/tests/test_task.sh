@@ -165,3 +165,128 @@ Part of #5' "$(payload '{"title":"x","body":"Do it","acceptance":["one"],"subtas
 test_payload_backlog_has_no_milestone() {
   assert_eq "false" "$(jqt task-payload -n --argjson cfg "$(defaults)" --argjson task '{"title":"x"}' --argjson milestone null | jq 'has("milestone")')"
 }
+
+# ---------- task list, move, estimate, assign, drop ----------
+
+# ops_issue NUMBER STATUS POINTS ASSIGNEE MILESTONE [EXTRA_LABEL] [STATE]
+ops_issue() {
+  jq -nc --argjson n "$1" --arg s "$2" --arg p "$3" --arg a "$4" --arg m "$5" --arg x "${6:-}" --arg st "${7:-open}" '{
+    number: $n, title: "Task \($n)", state: $st, body: "",
+    milestone: (if $m == "" then null else {number: ($m | tonumber), title: "Sprint \($m)"} end),
+    labels: ([{name: "status: \($s)"}] + (if $p == "" then [] else [{name: "points: \($p)"}] end)
+             + (if $x == "" then [] else [{name: $x}] end)),
+    assignees: (if $a == "" then [] else [{login: $a}] end) }'
+}
+
+ops_env() {
+  setup_fake_gh
+  setup_repo 'version: 1'
+  export SCRUM_TODAY=2026-11-19
+  printf '[{"number":4,"title":"Sprint 4","state":"open","description":"<!-- scrum:start=2026-11-16 end=2026-11-27 -->"},{"number":2,"title":"Sprint 2","state":"closed","description":"<!-- scrum:start=2026-10-19 end=2026-10-30 -->"}]' > "$FAKE_GH_DIR/ms.json"
+  route 'api --paginate repos/acme/blog/milestones*' ms.json
+  ops_issue 12 'In progress' 3 alice 4 > "$FAKE_GH_DIR/i12.json"
+  ops_issue 14 New '' '' 4 > "$FAKE_GH_DIR/i14.json"
+  ops_issue 30 New 1 '' '' > "$FAKE_GH_DIR/i30.json"
+  ops_issue 31 New '' '' '' 'type: feature' > "$FAKE_GH_DIR/i31.json"
+  ops_issue 13 Done 1 bob 4 '' closed > "$FAKE_GH_DIR/i13.json"
+  local n; for n in 12 14 30 31 13; do route "api repos/acme/blog/issues/$n" "i$n.json"; done
+  jq -s . "$FAKE_GH_DIR/i12.json" "$FAKE_GH_DIR/i14.json" "$FAKE_GH_DIR/i13.json" > "$FAKE_GH_DIR/sprint.json"
+  jq -s . "$FAKE_GH_DIR/i30.json" "$FAKE_GH_DIR/i31.json" > "$FAKE_GH_DIR/backlog.json"
+  route 'api --paginate repos/acme/blog/issues?milestone=4*' sprint.json
+  route 'api --paginate repos/acme/blog/issues?milestone=none*' backlog.json
+  route_json 'api user' '{"login":"alice"}'
+}
+
+test_cmd_task_list_mine_in_progress() {
+  ops_env
+  run_scrum task list --mine --status in_progress
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "#12  In progress  3 pt  @alice  Task 12"
+  assert_not_contains "$OUT" "#14"
+}
+
+test_cmd_task_list_backlog_json() {
+  ops_env
+  run_scrum task list --backlog --json
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "[30]" "$(printf '%s' "$OUT" | jq -c '[.[].number]')"
+  assert_eq "" "$(gh_writes)"
+}
+
+test_cmd_task_move_to_backlog() {
+  ops_env
+  run_scrum task move 12 --backlog
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$(gh_calls)" 'STDIN {"milestone":null}'
+  assert_contains "$(gh_calls)" 'Moved from Sprint 4 to the backlog.'
+  assert_contains "$OUT" "Moved #12 from Sprint 4 to the backlog."
+}
+
+test_cmd_task_move_into_open_sprint() {
+  ops_env
+  run_scrum task move '#30' --sprint "Sprint 4"
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$(gh_calls)" 'STDIN {"milestone":4}'
+  assert_contains "$(gh_calls)" 'Moved from the backlog to Sprint 4.'
+}
+
+test_cmd_task_move_to_closed_sprint_writes_nothing() {
+  ops_env
+  run_scrum task move 30 --sprint "Sprint 2"
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "Sprint 2 is closed"
+  assert_eq "" "$(gh_writes)"
+}
+
+test_cmd_task_move_checks_every_task_first() {
+  ops_env
+  run_scrum task move 30,31 --sprint "Sprint 4"
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "#31 is not a task"
+  assert_eq "" "$(gh_writes)" "#30 not moved either"
+}
+
+test_cmd_task_estimate_replaces_points() {
+  ops_env
+  run_scrum task estimate 12 7
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$(gh_calls)" 'PUT repos/acme/blog/issues/12/labels'
+  assert_contains "$(gh_calls)" 'STDIN {"labels":["status: In progress","points: 7"]}'
+}
+
+test_cmd_task_estimate_outside_scale_calls_nothing() {
+  ops_env
+  run_scrum task estimate 12 5
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "5 is not in the point scale (0, 1, 3, 7)"
+  assert_eq "" "$(gh_writes)" "no GitHub writes"
+  assert_not_contains "$(gh_calls)" "issues/12" "checked before reading the issue"
+}
+
+test_cmd_task_assign_and_unassign() {
+  ops_env
+  run_scrum task assign 14 @alice bob
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$(gh_calls)" '-X POST repos/acme/blog/issues/14/assignees'
+  assert_contains "$(gh_calls)" 'STDIN {"assignees":["alice","bob"]}'
+  : > "$FAKE_GH_LOG"
+  run_scrum task assign 14 alice --unassign
+  assert_contains "$(gh_calls)" '-X DELETE repos/acme/blog/issues/14/assignees'
+  assert_contains "$(gh_calls)" 'STDIN {"assignees":["alice"]}'
+}
+
+test_cmd_task_drop_with_reason() {
+  ops_env
+  run_scrum task drop 14 --reason "A library does this"
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$(gh_calls)" 'Dropped (not planned): A library does this'
+  assert_contains "$(gh_calls)" 'STDIN {"state":"closed","state_reason":"not_planned"}'
+}
+
+test_cmd_task_drop_closed_task_refused() {
+  ops_env
+  run_scrum task drop 13
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "#13 is closed"
+  assert_eq "" "$(gh_writes)"
+}

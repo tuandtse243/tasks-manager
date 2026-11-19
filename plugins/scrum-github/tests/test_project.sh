@@ -479,3 +479,31 @@ test_hook_plan_apply_backlog_task_not_added() {
   assert_eq "" "$(gh_mutations)" "nothing added to the board"
   assert_not_contains "$ERR" "warning"
 }
+
+# delta project-board-sync: the new task commands update the board in the same run.
+test_hook_task_estimate_updates_points() {
+  project_env
+  route_json 'api repos/acme/blog/issues/12' '{"number":12,"state":"open","labels":[{"name":"status: In progress"},{"name":"points: 3"}],"assignees":[]}'
+  route_json 'api graphql -F query=@*/issue-item.graphql*' "$(issue_item_json 12 '["status: In progress","points: 7"]' OPEN yes 'In Progress' in_progress)"
+  run_scrum task estimate 12 7
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$(gh_calls)" 'value: {number: 7}'
+}
+
+test_hook_task_move_into_sprint_adds_to_board() {
+  project_env
+  route_json 'api repos/acme/blog/issues/30' '{"number":30,"state":"open","milestone":null,"labels":[{"name":"status: New"}],"assignees":[]}'
+  route_json 'api graphql -F query=@*/issue-item.graphql*' "$(issue_item_json 30 '["status: New"]' OPEN no)"
+  run_scrum task move 30 --sprint "Sprint 1"
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$(gh_mutations)" "content=I_30"
+}
+
+test_hook_task_drop_consults_the_board() {
+  project_env
+  route_json 'api repos/acme/blog/issues/12' '{"number":12,"state":"open","labels":[{"name":"status: New"}],"assignees":[]}'
+  route_json 'api graphql -F query=@*/issue-item.graphql*' "$(issue_item_json 12 '["status: New"]' OPEN yes)"
+  run_scrum task drop 12
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$(gh_calls)" "issue-item.graphql"
+}
