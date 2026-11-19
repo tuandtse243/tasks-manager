@@ -207,6 +207,11 @@ EOF
   fi
   if project_enabled; then
     info ""
-    info "Project board: add the repository secret SCRUM_PROJECT_TOKEN, then run: scrum project init"
+    if ghx api "repos/$REPO/actions/secrets" 2>/dev/null \
+        | jq -e '[.secrets[]?.name] | index("SCRUM_PROJECT_TOKEN")' >/dev/null 2>&1; then
+      info "Project board: the secret SCRUM_PROJECT_TOKEN is set; check the board with: scrum project init"
+    else
+      info "Project board: add the repository secret SCRUM_PROJECT_TOKEN, then run: scrum project init"
+    fi
   fi
 }
