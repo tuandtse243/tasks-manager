@@ -83,7 +83,7 @@ Khi một task được đóng với lý do hoàn thành, hệ thống SHALL đ�
 - **THEN** task #3 giữ `status: New`
 
 ### Requirement: Quyền tối thiểu cho workflow
-Workflow đồng bộ trạng thái, kiểm tra PR và digest SHALL chỉ dùng token tự cấp của GitHub Actions với quyền `issues: write`, `pull-requests: read`, `contents: read`, và MUST chạy được khi repo không có secret riêng. Chỉ workflow đồng bộ Project (tuỳ chọn) được yêu cầu secret `SCRUM_PROJECT_TOKEN`. Khi secret này có, workflow đồng bộ trạng thái SHALL dùng nó để cập nhật board.
+Workflow đồng bộ trạng thái, kiểm tra PR và digest SHALL chỉ dùng token tự cấp của GitHub Actions với quyền `issues: write`, `pull-requests: read`, `contents: read`, và MUST chạy được khi repo không có secret riêng. Chỉ workflow đồng bộ Project (tuỳ chọn) được yêu cầu secret `SCRUM_PROJECT_TOKEN`. Workflow digest MAY đọc thêm secret tuỳ chọn `SCRUM_DIGEST_WEBHOOK` để gửi digest ra kênh chat, và MUST chạy được khi secret đó không có. Khi secret này có, workflow đồng bộ trạng thái SHALL dùng nó để cập nhật board.
 
 #### Scenario: Cài vào repo mới
 - **WHEN** workflow được cài vào một repo chưa cấu hình secret nào
@@ -92,6 +92,10 @@ Workflow đồng bộ trạng thái, kiểm tra PR và digest SHALL chỉ dùng 
 #### Scenario: Bật Project mà chưa có secret
 - **WHEN** `project.enabled: true` nhưng repo chưa có `SCRUM_PROJECT_TOKEN`
 - **THEN** đồng bộ trạng thái và kiểm tra PR vẫn chạy thành công, chỉ workflow đồng bộ Project thất bại
+
+#### Scenario: Digest không có webhook
+- **WHEN** workflow digest chạy trong repo chưa đặt `SCRUM_DIGEST_WEBHOOK`
+- **THEN** digest vẫn được đăng thành comment và job thành công
 
 ### Requirement: Soạn mô tả PR cho task
 Lệnh `/task-pr` SHALL soạn mô tả pull request cho task của nhánh hiện tại gồm bốn phần: tóm tắt thay đổi bằng hình thức ngắn nhất làm rõ ý chính, bằng chứng trước và sau, mức nguy hiểm khi merge (đảo ngược được hay không, phạm vi ảnh hưởng), và dòng `Closes #n` của task. Lệnh MUST đưa mô tả cho người dùng duyệt trước khi tạo hoặc sửa PR.
