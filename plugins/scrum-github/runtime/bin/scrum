@@ -16,6 +16,7 @@ Usage: scrum <command> [options]
 Setup
   init [--dry-run] [--force] [--force-file PATH]   Prepare this repo: config, labels, templates, workflows
   config                                          Print the merged configuration as JSON
+  uninstall [--dry-run] [--yes]                   Remove what init installed (keeps scrum.yml and edited files)
 
 Sprints
   sprint new [--title T] [--start YYYY-MM-DD] [--length DAYS] [--goal TEXT]
@@ -71,6 +72,9 @@ case "$cmd" in
     ;;
   init)
     . "$SCRUM_ROOT/lib/cmd_init.sh"; cmd_init "$@"
+    ;;
+  uninstall)
+    . "$SCRUM_ROOT/lib/cmd_uninstall.sh"; cmd_uninstall "$@"
     ;;
   config)
     require_tools nogh

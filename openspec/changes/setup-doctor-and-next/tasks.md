@@ -16,8 +16,8 @@
 
 ## 3. `scrum uninstall` (design mục 7; spec repo-bootstrap "Gỡ cài đặt")
 
-- [ ] 3.1 Tạo `runtime/lib/cmd_uninstall.sh` và lệnh `scrum uninstall [--dry-run] [--yes]` trong dispatcher và `usage`. Thêm `tests/test_uninstall.sh` cho năm scenario của spec (gỡ repo chưa sửa, giữ file đã sửa, không có `--yes`, `--dry-run --yes`, không có lời gọi `gh`). Kiểm tra: `bash tests/run.sh uninstall` xanh
-- [ ] 3.2 Ghi `scrum uninstall` vào bảng lệnh của README plugin. Kiểm tra: bảng có dòng mới và lệnh trong đó chạy được trên repo test
+- [x] 3.1 Tạo `runtime/lib/cmd_uninstall.sh` và lệnh `scrum uninstall [--dry-run] [--yes]` trong dispatcher và `usage`. Thêm `tests/test_uninstall.sh` cho năm scenario của spec (gỡ repo chưa sửa, giữ file đã sửa, không có `--yes`, `--dry-run --yes`, không có lời gọi `gh`). Kiểm tra: `bash tests/run.sh uninstall` xanh
+- [x] 3.2 Ghi `scrum uninstall` vào bảng lệnh của README plugin. Kiểm tra: bảng có dòng mới và lệnh trong đó chạy được trên repo test
 
 ## 4. `scrum doctor` (design mục 4, 5; spec setup-diagnostics)
 
