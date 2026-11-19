@@ -20,7 +20,8 @@ Setup
   doctor [--json]                                 Check tools, login, configuration and what is installed; read-only
   next [--json]                                   The one thing to do next, with its command; read-only
 
-Sprints
+Backlog and sprints
+  backlog [--json]                                Open tasks without a sprint, with points, parent and blockers
   sprint new [--title T] [--start YYYY-MM-DD] [--length DAYS] [--goal TEXT]
   sprint close [SPRINT] [--yes] [--create-next]
 
@@ -145,6 +146,9 @@ case "$cmd" in
       sync) cmd_project_sync "$@" ;;
       *) die "unknown project command '${sub}'. Use: scrum project init | scrum project sync" ;;
     esac
+    ;;
+  backlog)
+    . "$SCRUM_ROOT/lib/cmd_backlog.sh"; cmd_backlog "$@"
     ;;
   status)
     . "$SCRUM_ROOT/lib/cmd_report.sh"; cmd_status "$@"

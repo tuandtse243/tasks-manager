@@ -4,10 +4,10 @@
 
 ## 1. Backlog (design mục 3; spec backlog)
 
-- [ ] 1.1 Tách `recent_velocity` vào `runtime/lib/jq/scrum.jq` và cho `plan-render.jq` dùng nó. Kiểm tra: test plan hiện có vẫn xanh (`bash tests/run.sh plan`)
-- [ ] 1.2 Tạo `runtime/lib/jq/backlog.jq` và test jq trong `tests/test_backlog.sh`: task thuộc backlog (bỏ PR, feature, epic, meta, task đóng), cha từ "Part of #N", tổng, chưa ước lượng, `blocked_by: null` là chưa kiểm tra. Kiểm tra: `bash tests/run.sh backlog` xanh
-- [ ] 1.3 Tạo `runtime/lib/cmd_backlog.sh` (đọc backlog, quan hệ chặn cho tối đa 50 task) và lệnh `scrum backlog [--json]`; test lệnh với `fake-gh` cho backlog có task, bị chặn, rỗng, 60 task (đúng 50 lời gọi chặn), không có lời gọi ghi. Kiểm tra: `bash tests/run.sh backlog` xanh
-- [ ] 1.4 Tạo `skills/backlog/SKILL.md`. Kiểm tra: `claude plugin validate .` đạt; test skill của `test_cli.sh` xanh
+- [x] 1.1 Tách `recent_velocity` vào `runtime/lib/jq/scrum.jq` và cho `plan-render.jq` dùng nó. Kiểm tra: test plan hiện có vẫn xanh (`bash tests/run.sh plan`)
+- [x] 1.2 Tạo `runtime/lib/jq/backlog.jq` và test jq trong `tests/test_backlog.sh`: task thuộc backlog (bỏ PR, feature, epic, meta, task đóng), cha từ "Part of #N", tổng, chưa ước lượng, `blocked_by: null` là chưa kiểm tra. Kiểm tra: `bash tests/run.sh backlog` xanh
+- [x] 1.3 Tạo `runtime/lib/cmd_backlog.sh` (đọc backlog, quan hệ chặn cho tối đa 50 task) và lệnh `scrum backlog [--json]`; test lệnh với `fake-gh` cho backlog có task, bị chặn, rỗng, 60 task (đúng 50 lời gọi chặn), không có lời gọi ghi. Kiểm tra: `bash tests/run.sh backlog` xanh
+- [x] 1.4 Tạo `skills/backlog/SKILL.md`. Kiểm tra: `claude plugin validate .` đạt; test skill của `test_cli.sh` xanh
 
 ## 2. Lệnh task (design mục 2, 5; spec task-management, project-board-sync)
 
