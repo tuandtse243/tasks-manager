@@ -352,7 +352,8 @@ claude plugin validate .     # run by hand; CI does not install Claude Code
 `tests/.shellcheckrc` and `wizards/.shellcheckrc` hold the settings: the test files are Bash
 without a shebang, and the part of the wizard copied from `vendor/pocock/wizard/template.sh` is
 not edited. The CI workflow of this repository (`.github/workflows/ci.yml`) runs the tests on
-Ubuntu and macOS and the `shellcheck` command above.
+Ubuntu and the `shellcheck` command above on every pull request, and the tests on macOS too on
+every push to `main`.
 
 Calculations are pure jq programs in `runtime/lib/jq/` and are tested with JSON fixtures.
 GitHub calls go through `ghx`, which tests replace with `tests/fake-gh` via `SCRUM_GH`.

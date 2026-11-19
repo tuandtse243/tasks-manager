@@ -63,8 +63,9 @@ Lint mã shell (không lint `vendor/`) và kiểm tra plugin:
 claude plugin validate plugins/scrum-github     # chạy tay, CI không cài Claude Code
 ```
 
-CI (`.github/workflows/ci.yml`) chạy bộ test trên Ubuntu và macOS cùng lệnh `shellcheck` ở trên,
-cho mỗi pull request và mỗi lần push vào `main`. Lịch sử phiên bản của plugin ở
+CI (`.github/workflows/ci.yml`) chạy bộ test trên Ubuntu cùng lệnh `shellcheck` ở trên cho mỗi
+pull request, và chạy thêm bộ test trên macOS mỗi lần push vào `main` (repo riêng tư tính phút macOS
+gấp mười). Lịch sử phiên bản của plugin ở
 [CHANGELOG](plugins/scrum-github/CHANGELOG.md).
 
 Claude Code có thể tạo thư mục `openspec/changes/.claude/` khi ghi file dưới `openspec/changes/`.
