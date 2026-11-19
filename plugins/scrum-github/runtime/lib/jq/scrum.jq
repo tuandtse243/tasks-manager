@@ -48,7 +48,11 @@ def closing_refs($repo):
 def label_names: [.labels[]? | if type == "object" then .name else . end];
 def has_label($n): label_names | any(.[]; . == $n);
 def status_label($cfg; $role): $cfg.statuses.label_prefix + $cfg.statuses[$role];
-def status_labels($cfg): [status_label($cfg; "new"), status_label($cfg; "in_progress"), status_label($cfg; "done")];
+# The optional fourth status (statuses.in_review); off when it is not a non-empty text.
+def review_on($cfg): ($cfg.statuses.in_review | type) == "string" and ($cfg.statuses.in_review | length) > 0;
+# The statuses in use, in order. Every list of statuses comes from here.
+def roles($cfg): ["new", "in_progress"] + (if review_on($cfg) then ["in_review"] else [] end) + ["done"];
+def status_labels($cfg): [roles($cfg)[] as $r | status_label($cfg; $r)];
 def points_label($cfg; $p): "\($cfg.points.label_prefix)\($p)";
 
 # Body of a task issue: text, acceptance criteria, subtasks (checkboxes), and "Part of #parent".
@@ -85,11 +89,12 @@ def task_points($cfg):
   [label_names[] | select(startswith($cfg.points.label_prefix))
    | ltrimstr($cfg.points.label_prefix) | tonumber?] | .[0];
 
-# new | in_progress | done | dropped
+# new | in_progress | in_review (when on) | done | dropped
 def task_role($cfg):
   if is_completed then "done"
   elif is_not_planned then "dropped"
   elif has_label(status_label($cfg; "done")) then "done"
+  elif review_on($cfg) and has_label(status_label($cfg; "in_review")) then "in_review"
   elif has_label(status_label($cfg; "in_progress")) then "in_progress"
   else "new" end;
 
@@ -162,9 +167,10 @@ def progress($cfg; $sprint; $issues; $today):
   | ($issues | report_tasks($cfg)) as $t
   | def row($xs): {
         new: ([$xs[] | select(._role == "new")] | bucket),
-        in_progress: ([$xs[] | select(._role == "in_progress")] | bucket),
-        done: ([$xs[] | select(._role == "done")] | bucket),
-        total: ($xs | bucket) };
+        in_progress: ([$xs[] | select(._role == "in_progress")] | bucket) }
+      + (if review_on($cfg) then {in_review: ([$xs[] | select(._role == "in_review")] | bucket)} else {} end)
+      + { done: ([$xs[] | select(._role == "done")] | bucket),
+          total: ($xs | bucket) };
   ([$t[]._who[]] | unique) as $people
   | ( ($people | map(. as $p | {assignee: $p} + row([$t[] | select(._who | any(.[]; . == $p))])))
       + (if any($t[]; (._who | length) == 0) then [{assignee: "Unassigned"} + row([$t[] | select((._who | length) == 0)])] else [] end)
@@ -240,8 +246,7 @@ def burndown($cfg; $sprint; $issues; $today; $off):
 # Kept in this file, not in a project.jq that includes it: jq 1.8.2 aborts at compile time
 # on include chains (jqlang/jq#3636), so every library must be included straight from a program.
 
-def roles: ["new", "in_progress", "done"];
-def is_role: . as $r | roles | index($r) != null;
+def is_role($cfg): . as $r | roles($cfg) | index($r) != null;
 
 # Built-in project workflows that change Status on their own. They would move cards without
 # updating the "Synced status" field, so the next sync would copy their change onto the label.
@@ -250,7 +255,7 @@ def conflicting_workflows:
 
 # Board option name -> role, or null.
 def option_role($cfg; $name):
-  [$cfg.project.status_options | to_entries[] | select(.value == $name) | .key] | .[0];
+  [$cfg.project.status_options | to_entries[] | select(.value == $name) | .key | select(is_role($cfg))] | .[0];
 
 # ---------- project metadata ----------
 # Input: response of share/graphql/project.graphql.
@@ -269,11 +274,11 @@ def project_meta($cfg):
       | {found: true, id: $p.id, title: $p.title, url: $p.url,
          status_field: (if $sf then $sf.id else null end),
          options: (if $sf then
-                     reduce roles[] as $r ({}; . + {($r): ([$sf.options[]? | select(.name == $c.status_options[$r]) | .id] | .[0])})
+                     reduce roles($cfg)[] as $r ({}; . + {($r): ([$sf.options[]? | select(.name == $c.status_options[$r]) | .id] | .[0])})
                    else {} end),
          synced_field: (if $yf and $yf.dataType == "TEXT" then $yf.id else null end),
          points_field: (if $pf and $pf.dataType == "NUMBER" then $pf.id else null end),
-         missing_options: (if $sf then [roles[] as $r | $c.status_options[$r] as $o
+         missing_options: (if $sf then [roles($cfg)[] as $r | $c.status_options[$r] as $o
                                           | select(([$sf.options[]?.name] | index($o)) == null) | $o]
                            else [] end),
          missing_fields: ([
@@ -321,7 +326,7 @@ def plan_item($cfg; $meta):
   | ($it | task_role($cfg)) as $L
   | ($it.board) as $board
   | (if $board == null then null else option_role($cfg; $board) end) as $B
-  | ($it.synced | if . != null and is_role then . else null end) as $S
+  | ($it.synced | if . != null and is_role($cfg) then . else null end) as $S
   | "#\($it.number)" as $n
   | ( if ($it | is_task($cfg)) | not then {ops: [], warnings: []}
       elif $L == "dropped" then {ops: [], warnings: []}

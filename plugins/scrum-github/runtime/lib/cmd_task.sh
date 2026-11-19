@@ -135,10 +135,17 @@ cmd_task_list() {
     esac
     shift
   done
-  case "$status" in ""|new|in_progress|done) ;; *) die "--status must be new, in_progress or done" ;; esac
+  case "$status" in
+    ""|new|in_progress|done) ;;
+    in_review) ;;   # checked once the configuration is loaded
+    *) die "--status must be new, in_progress, in_review or done" ;;
+  esac
   [ "$backlog" = 0 ] || [ -z "$sprint_name" ] || die "use --sprint or --backlog, not both"
   require_tools
   load_config
+  if [ "$status" = in_review ] && [ "$(config_get '(.statuses.in_review // "") != ""')" != true ]; then
+    die "there is no In review status. Turn it on with statuses.in_review in .github/scrum.yml, then run init"
+  fi
   repo="$(repo_slug)"
   if [ "$backlog" = 1 ]; then
     . "$SCRUM_ROOT/lib/cmd_backlog.sh"

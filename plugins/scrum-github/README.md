@@ -127,6 +127,7 @@ statuses:
   label_prefix: "status: "
   new: New
   in_progress: In progress
+  in_review: null                  # optional fourth status, e.g. "In review"; see "How statuses change"
   done: Done
 labels:
   bug: bug
@@ -142,6 +143,7 @@ digest:
   webhook_format: slack            # slack (also Google Chat, Mattermost) or telegram; see below
 attention:                         # "Needs attention" in status, digest and report
   stale_days: 2                    # In progress with no activity for this many working days
+  review_days: 2                   # In review with no activity for this many working days (when on)
   behind_percent: 15               # remaining above the ideal line by more than this % of scope
 colors: {}                         # label name -> hex color, overrides the defaults
 planning:
@@ -154,7 +156,7 @@ project:                           # optional board, see "Project board" below
   owner: null                      # user or organization that owns the project
   number: null                     # from the project URL: .../projects/<number>
   status_field: Status
-  status_options: {new: Todo, in_progress: In Progress, done: Done}
+  status_options: {new: Todo, in_progress: In Progress, in_review: In Review, done: Done}   # in_review: only when on
   synced_field: Synced status      # bookkeeping text field; hide it in views
   points_field: Points             # number field filled from "points: N"; null to turn off
   poll_cron: "*/15 * * * *"        # how often board changes reach the labels
@@ -365,6 +367,23 @@ The workflow `scrum-status-sync` reacts to pull request and issue events:
 | Issue closed as completed | Done |
 | Issue closed as not planned | Unchanged; it never counts |
 | Issue reopened | In progress, or stays New if it had `status: New` |
+
+With `statuses.in_review` set (for example `In review`), there are four statuses, New → In
+progress → In review → Done, and pull requests move tasks between them:
+
+| Event | Task status |
+|---|---|
+| Draft PR with `Closes #n` opened or reopened, or a PR converted back to draft | New or In review → In progress |
+| PR opened, reopened or edited while not a draft, or marked ready for review | New or In progress → In review |
+| PR closed without merging | In review → In progress |
+| PR merged | Done, and the issue is closed as completed |
+
+Done is never moved back. Turning the status on mid-sprint changes no task until its next pull
+request event. Run `/scrum-github:init` after setting it: it creates the `status: In review`
+label and updates the status workflow (it also listens to `converted_to_draft`). With the
+project board on, add an `In Review` column (or set `project.status_options.in_review`) and run
+`scrum project init`. The status table, digest and report then have an In review column or
+section, and Needs attention lists tasks waiting for review longer than `attention.review_days`.
 
 A merge into **any** branch closes the task, not only a merge into the default branch. The
 workflow uses `pull_request_target`, so it runs the workflow file of the PR's base branch: that

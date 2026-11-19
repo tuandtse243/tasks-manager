@@ -4,6 +4,22 @@ All notable changes to the `scrum-github` plugin. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the plugin uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-11-19
+
+### Added
+
+- Optional fourth status `statuses.in_review` (off by default): with it set, a pull request ready
+  for review moves its task to In review, a draft or a PR closed without merging moves it back to
+  In progress, and a merge still means Done. `init` creates its label, the status workflow also
+  listens to `converted_to_draft`, the board syncs an extra column
+  (`project.status_options.in_review`), and the status table, digest, report and Needs attention
+  (`attention.review_days`) show it.
+
+### Changed
+
+- The status workflow template listens to `converted_to_draft`; `init` updates unedited copies.
+  With the status off, nothing else changes.
+
 ## [0.7.0] - 2026-11-19
 
 ### Added
@@ -151,7 +167,8 @@ All notable changes to the `scrum-github` plugin. The format follows
   each pull request links a task, and a daily digest.
 - A task issue form with a points dropdown and a pull request template with `Closes #`.
 
-[0.7.0]: https://github.com/tuandtse243/tasks-manager/tree/main/plugins/scrum-github
+[0.8.0]: https://github.com/tuandtse243/tasks-manager/tree/main/plugins/scrum-github
+[0.7.0]: https://github.com/tuandtse243/tasks-manager/commit/6defddf
 [0.6.0]: https://github.com/tuandtse243/tasks-manager/commit/b47c3ac
 [0.5.0]: https://github.com/tuandtse243/tasks-manager/commit/0ee7981
 [0.4.0]: https://github.com/tuandtse243/tasks-manager/commit/83dd11b

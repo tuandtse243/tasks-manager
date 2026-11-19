@@ -242,7 +242,7 @@ test_pr_template_has_four_sections() {
 
 test_version_matches_plugin_json() {
   run_scrum --version
-  assert_eq "0.7.0" "$OUT"
+  assert_eq "0.8.0" "$OUT"
   assert_eq "$(jq -r .version "$PLUGIN_DIR/.claude-plugin/plugin.json")" "$OUT"
 }
 
@@ -343,4 +343,24 @@ test_digest_workflow_passes_the_webhook_secret() {
   init_env
   run_scrum init
   assert_contains "$(cat "$SCRUM_REPO_DIR/.github/workflows/scrum-daily-digest.yml")" 'SCRUM_DIGEST_WEBHOOK: ${{ secrets.SCRUM_DIGEST_WEBHOOK }}'
+}
+
+# delta repo-bootstrap "Label In review": the status workflow hears converted_to_draft.
+test_status_workflow_hears_converted_to_draft() {
+  assert_contains "$(yq -o=json '.on.pull_request_target.types' "$PLUGIN_DIR/templates/github/workflows/scrum-status-sync.yml" | jq -c .)" '"converted_to_draft"'
+}
+
+test_label_plan_in_review_on_creates_the_label() {
+  local plan
+  plan="$(label_plan "$(defaults | jq '.statuses.in_review = "In review"')" "$(cat "$FIXTURES/labels-after-init.json")")"
+  assert_json_eq '[{"name":"status: In review","color":"1d76db","description":"Task waiting for review"}]' \
+    "$(printf '%s' "$plan" | jq -c '.create')"
+}
+
+test_label_plan_in_review_turned_off_is_obsolete() {
+  local plan existing
+  existing="$(jq '. + [{"name":"status: In review","color":"1d76db","description":"Task waiting for review"}]' "$FIXTURES/labels-after-init.json")"
+  plan="$(label_plan "$(defaults)" "$existing")"
+  assert_eq '["status: In review"]' "$(printf '%s' "$plan" | jq -c '.obsolete')"
+  assert_eq '[]' "$(printf '%s' "$plan" | jq -c '.create')"
 }

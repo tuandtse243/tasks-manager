@@ -12,6 +12,7 @@ def who: if (._who | length) == 0 then tr($strings; "digest_unassigned") else (.
 | (if $last then ($last | fromdateiso8601) else (($s.start | date_epoch) - $off) end) as $since
 | [$t[] | select(is_completed and ((.closed_at | fromdateiso8601) > $since))] as $done_since
 | [$t[] | select(._role == "in_progress")] as $doing
+| [$t[] | select(._role == "in_review")] as $reviewing
 | [$t[] | select(._role == "new")] as $todo
 | ($p.total.total.points - $p.total.done.points) as $remaining
 | { body: ([
@@ -31,6 +32,12 @@ def who: if (._who | length) == 0 then tr($strings; "digest_unassigned") else (.
       (if ($doing | length) == 0 then "- " + tr($strings; "digest_nothing_in_progress")
        else ($doing | sort_by(._who[0] // "~")[] | "- \(who): #\(.number) \(.title) (\(._pts // 0 | pts))") end),
       "",
+      (if review_on($cfg) then
+         "### " + tr($strings; "digest_in_review"),
+         (if ($reviewing | length) == 0 then "- " + tr($strings; "digest_nothing_in_review")
+          else ($reviewing | sort_by(._who[0] // "~")[] | "- \(who): #\(.number) \(.title) (\(._pts // 0 | pts))") end),
+         ""
+       else empty end),
       "### " + tr($strings; "digest_not_started"),
       "- " + trn($strings; "digest_not_started_line"; ($todo | length); {pts: ([$todo[]._pts // 0] | add // 0 | pts)})
     ] | join("\n")) }

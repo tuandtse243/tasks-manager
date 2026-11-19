@@ -28,6 +28,9 @@ statuses:
   label_prefix: "status: "
   new: New
   in_progress: In progress
+  # Optional fourth status between In progress and Done. When set, a pull request ready for review
+  # moves its task here and a draft moves it back to In progress. Run init again after setting it.
+  # in_review: In review
   done: Done
 
 labels:
@@ -60,6 +63,8 @@ attention:
   # percentage of its scope.
   stale_days: 2
   behind_percent: 15
+  # With statuses.in_review set: a task In review with no activity for this many working days.
+  review_days: 2
 
 planning:
   # Where /plan and /discover keep plans: <dir>/<slug>/plan.json, plan.md, brief.md.
@@ -87,6 +92,7 @@ colors: {}
 #   status_options:                # board option for each status
 #     new: Todo
 #     in_progress: In Progress
+#     in_review: In Review         # only used when statuses.in_review is set
 #     done: Done
 #   synced_field: Synced status    # text field the sync uses for bookkeeping; hide it in views
 #   points_field: Points           # number field filled from "points: N" labels; null to turn off

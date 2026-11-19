@@ -34,6 +34,11 @@ include "scrum";
       | working_days_between($cfg; ($a | local_date($off) | add_days(1)); $today) as $idle
       | select($idle >= $cfg.attention.stale_days and $idle > 0)
       | {kind: "stale", number, text: trn($strings; "attention_stale"; $idle; {ref: ($x | ref), status: $cfg.statuses.in_progress})} ),
+    # In review without activity (only when the status is on)
+    ( $open[] | select(._role == "in_review") | . as $x | act as $a | select($a != null)
+      | working_days_between($cfg; ($a | local_date($off) | add_days(1)); $today) as $idle
+      | select($idle >= ($cfg.attention.review_days // 2) and $idle > 0)
+      | {kind: "review", number, text: trn($strings; "attention_review"; $idle; {ref: ($x | ref)})} ),
     # no assignee, no points
     ( $open[] | select((._who | length) == 0) | {kind: "unassigned", number, text: tr($strings; "attention_unassigned"; {ref: ref})} ),
     ( $open[] | select(._pts == null) | {kind: "unestimated", number, text: tr($strings; "attention_unestimated"; {ref: ref})} )

@@ -1,5 +1,5 @@
 # Tasks to list (spec: task-management "Liệt kê task"). Input: issues.
-# --argjson cfg CONFIG --arg me LOGIN_OR_EMPTY --arg status new|in_progress|done|""
+# --argjson cfg CONFIG --arg me LOGIN_OR_EMPTY --arg status new|in_progress|in_review|done|""
 # Output: [{number, title, role, status, points, assignees}] by number.
 include "scrum";
 

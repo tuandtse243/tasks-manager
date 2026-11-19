@@ -30,7 +30,7 @@ Backlog and sprints
 Tasks
   task new --title T [--body B] [--points N] [--assignee LOGIN]... [--sprint S] [--bug]
   task start NUMBER
-  task list [--mine] [--sprint S | --backlog] [--status new|in_progress|done] [--json]
+  task list [--mine] [--sprint S | --backlog] [--status new|in_progress|in_review|done] [--json]
   task move N... --sprint S | --backlog           Move tasks between sprints and the backlog (with a comment)
   task estimate N POINTS                          Replace the points label (checked against the scale)
   task assign N LOGIN... [--unassign]             Add or remove assignees

@@ -1,17 +1,33 @@
-# -n --argjson cfg CONFIG --arg kind pr_open|pr_merged|issue_closed|issue_reopened|issue_opened --argjson issue ISSUE
+# -n --argjson cfg CONFIG --argjson issue ISSUE --argjson draft BOOL
+#    --arg kind pr_open|pr_draft|pr_closed|pr_merged|issue_closed|issue_reopened|issue_opened
+# pr_open: opened, reopened, edited or ready for review ($draft tells which); pr_draft: converted
+# to draft; pr_closed: closed without merging. Without statuses.in_review, pr_open moves New to
+# In progress whatever $draft says, and pr_draft and pr_closed change nothing (as before).
 # Output: {skip: reason or null, labels: new label list or null, close: bool}
 include "scrum";
-def keep($why): {skip: $why, labels: null, close: false};
+($ARGS.named.draft // false) as $draft
+| def keep($why): {skip: $why, labels: null, close: false};
 def move($role; $close):
   ($issue | labels_with_status($cfg; $role)) as $new
   | if (($new | sort) == ($issue | label_names | sort)) and ($close | not) then keep("already \($role)")
     else {skip: null, labels: (if ($new | sort) == ($issue | label_names | sort) then null else $new end), close: $close} end;
 if ($issue | is_pr) then keep("is a pull request")
 elif ($issue | is_task($cfg) | not) then keep("feature or meta issue")
-elif $kind == "pr_open" then
-  if $issue.state != "open" then keep("issue is closed")
-  elif ($issue | task_role($cfg)) != "new" then keep("already \($issue | task_role($cfg))")
-  else move("in_progress"; false) end
+elif ($kind == "pr_open" or $kind == "pr_draft" or $kind == "pr_closed") and $issue.state != "open" then keep("issue is closed")
+elif (review_on($cfg) | not) and ($kind == "pr_open" or $kind == "pr_draft" or $kind == "pr_closed") then
+  if $kind == "pr_open" then
+    if ($issue | task_role($cfg)) != "new" then keep("already \($issue | task_role($cfg))")
+    else move("in_progress"; false) end
+  else keep("no In review status") end
+elif $kind == "pr_open" and ($draft | not) then
+  if ["new", "in_progress"] | index($issue | task_role($cfg)) then move("in_review"; false)
+  else keep("already \($issue | task_role($cfg))") end
+elif $kind == "pr_open" or $kind == "pr_draft" then
+  if ["new", "in_review"] | index($issue | task_role($cfg)) then move("in_progress"; false)
+  else keep("already \($issue | task_role($cfg))") end
+elif $kind == "pr_closed" then
+  if ($issue | task_role($cfg)) == "in_review" then move("in_progress"; false)
+  else keep("not in review") end
 elif $kind == "pr_merged" then move("done"; $issue.state == "open")
 elif $kind == "issue_closed" then
   if ($issue | is_completed) then move("done"; false) else keep("closed as not planned") end

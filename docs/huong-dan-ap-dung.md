@@ -187,6 +187,20 @@ giữ nguyên. Muốn lấy bản mới cho file đó thì dùng `--force-file <
 Lần chạy đầu sau khi nâng, repo chưa có bản ghi file nên mọi file khác bản mới đều báo `conflict`;
 từ lần sau thì file chưa sửa tự cập nhật.
 
+**(Tuỳ chọn) Trạng thái In review.** Muốn thấy task nào đang chờ review, thêm vào `.github/scrum.yml`:
+
+```yaml
+statuses:
+  in_review: In review
+```
+
+rồi chạy lại `/scrum-github:init` (tạo label `status: In review`, cập nhật workflow), commit và push.
+Từ đó PR nháp giữ task ở In progress, PR sẵn sàng review đưa task sang In review, PR chuyển về nháp
+hoặc đóng không merge đưa task về In progress, merge thì Done. Bảng tiến độ, digest và báo cáo có
+thêm cột In review; mục "Cần chú ý" nêu task chờ review quá `attention.review_days` ngày làm việc.
+Bật giữa sprint thì task đang có chỉ đổi ở sự kiện PR kế tiếp. Có dùng board thì thêm cột
+`In Review` rồi chạy `scrum project init`. Bỏ khoá này là tắt; label cũ được giữ.
+
 **Gỡ khỏi repo:** `scrum uninstall` cho xem những gì sẽ xoá và giữ; thêm `--yes` để xoá. Lệnh giữ
 `.github/scrum.yml`, file bạn đã sửa, và mọi thứ trên GitHub (label, milestone, issue).
 
