@@ -63,8 +63,10 @@ stateDiagram-v2
 ## 2. Bảng lệnh
 
 Trong Claude Code, mỗi lệnh gõ dạng `/scrum-github:<tên>`, có thể kèm mô tả bằng lời. Không dùng
-Claude Code thì gọi script `scrum` (cột thứ ba). Trong Claude Code, khi plugin đang bật, `scrum`
-có sẵn trên PATH. Sau khi thiết lập, repo dự án có sẵn script tại `.github/scrum/bin/scrum`.
+Claude Code thì gọi script `scrum` (cột thứ ba). Trong Claude Code, `scrum` có sẵn trên PATH khi
+plugin được cài cho user (`/plugin install` mặc định như vậy); cài cho riêng một project (scope
+local) hoặc nạp bằng `--plugin-dir` thì không, khi đó các skill tự gọi bằng đường dẫn đầy đủ. Sau
+khi thiết lập, repo dự án có sẵn script tại `.github/scrum/bin/scrum`.
 
 | Lệnh Claude Code | Ai, khi nào | Script tương ứng | Ví dụ |
 |---|---|---|---|

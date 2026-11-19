@@ -1,5 +1,6 @@
 {
   "name": "tasks-manager",
+  "description": "Claude Code plugins for running Scrum on GitHub.",
   "owner": {
     "name": "tasks-manager maintainers"
   },

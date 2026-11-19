@@ -6,7 +6,11 @@
     "quality_profile": "showcase",
     "legend": {
       "mode": "hidden"
-    }
+    },
+    "viewBox": [
+      900,
+      528
+    ]
   },
   "lanes": [
     {
@@ -133,7 +137,7 @@
       "col": 5,
       "type": "database",
       "label": "Theo dõi",
-      "sublabel": "status, report, digest"
+      "sublabel": "report, digest"
     }
   ],
   "edges": [

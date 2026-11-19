@@ -4,6 +4,19 @@ All notable changes to the `scrum-github` plugin. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the plugin uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.1] - 2026-11-20
+
+### Added
+
+- A listing icon, `.claude-plugin/icon.png` (1024 px), drawn from `docs/icon.svg`; a test checks it
+  is a square PNG of 512 to 2048 px. The marketplace has a description. `claude plugin validate`
+  now reports no warnings for either manifest.
+
+### Changed
+
+- The sprint flow diagram (`docs/diagrams/sprint-flow`) fits one screen from 1440×900 up, with the
+  cards below it; it was 1219 px tall at 1440×900.
+
 ## [0.8.0] - 2026-11-19
 
 ### Added
