@@ -20,7 +20,7 @@
 
 ## 5. Board (design mục 3; spec project-board-sync)
 
-- [ ] 5.1 Board dùng `roles($cfg)`; test kéo thẻ vào cột In Review, `project init` thiếu option, và chế độ tắt bỏ qua cột đó. Kiểm tra: `bash tests/run.sh test_project` xanh
+- [x] 5.1 Board dùng `roles($cfg)`; test kéo thẻ vào cột In Review, `project init` thiếu option, và chế độ tắt bỏ qua cột đó. Kiểm tra: `bash tests/run.sh test_project` xanh
 
 ## 6. Phiên bản và tài liệu
 

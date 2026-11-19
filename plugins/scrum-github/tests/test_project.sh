@@ -507,3 +507,49 @@ test_hook_task_drop_consults_the_board() {
   assert_status 0 "$STATUS" "$ERR"
   assert_contains "$(gh_calls)" "issue-item.graphql"
 }
+
+# ---------- In review column (delta project-board-sync "Cột In review trên board") ----------
+
+rcfg() { pcfg | jq -c '.statuses.in_review = "In review" | .project.status_options.in_review = "Review"'; }
+rplan() { jq -s . <<<"$*" | jqt project-sync-plan --argjson cfg "$(rcfg)" --argjson meta "$(jqt project-meta --argjson cfg "$(rcfg)" < "$FIXTURES/project-meta.json")"; }
+
+test_meta_in_review_option() {
+  local m; m="$(jqt project-meta --argjson cfg "$(rcfg)" < "$FIXTURES/project-meta.json")"
+  assert_eq "O_review" "$(jq -r .options.in_review <<<"$m")"
+  assert_eq "[]" "$(jq -c .missing_options <<<"$m")"
+}
+
+test_meta_in_review_missing_option() {
+  local m; m="$(jqt project-meta --argjson cfg "$(pcfg | jq -c '.statuses.in_review = "In review"')" < "$FIXTURES/project-meta.json")"
+  assert_eq '["In Review"]' "$(jq -c .missing_options <<<"$m")"
+}
+
+test_plan_drag_to_review_column() {
+  local p; p="$(rplan "$(item 5 'status: In progress,points: 3' Review in_progress open 3)")"
+  assert_eq '[{"op":"set_labels","number":5,"labels":["points: 3","status: In review"]},{"op":"set_synced","number":5,"text":"in_review"}]' \
+    "$(jq -c '[.ops[] | del(.msg, .item_id)]' <<<"$p")"
+}
+
+test_plan_in_review_label_moves_card() {
+  local p; p="$(rplan "$(item 5 'status: In review' 'In Progress' in_progress)")"
+  assert_eq '[{"op":"set_status","number":5,"option_id":"O_review"},{"op":"set_synced","number":5,"text":"in_review"}]' \
+    "$(jq -c '[.ops[] | del(.msg, .item_id)]' <<<"$p")"
+}
+
+test_plan_off_review_column_still_warns() {
+  local cfg p
+  cfg="$(pcfg | jq -c '.project.status_options.in_review = "Review"')"
+  p="$(jq -s . <<<"$(item 8 'status: New' Review new)" | jqt project-sync-plan --argjson cfg "$cfg" --argjson meta "$(pmeta)")"
+  assert_eq '[]' "$(jq -c .ops <<<"$p")"
+  assert_contains "$(jq -r '.warnings[0]' <<<"$p")" '#8 is in the board column "Review"'
+}
+
+test_cmd_init_in_review_needs_its_column() {
+  project_env
+  printf '%s\nstatuses:\n  in_review: In review\n' "$PROJECT_YML" > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  run_scrum project init
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" 'no option "In Review"'
+  assert_eq "" "$(gh_mutations)"
+  assert_eq "" "$(gh_writes)"
+}
