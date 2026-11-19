@@ -203,3 +203,14 @@ Skill `/scrum-github:task` SHALL nhận yêu cầu bằng lời về liệt kê,
 #### Scenario: Yêu cầu bằng lời
 - **WHEN** người dùng gõ `/scrum-github:task đưa #12 về backlog`
 - **THEN** skill nói sẽ chuyển #12 về backlog, chờ đồng ý, rồi chạy `scrum task move 12 --backlog`
+
+### Requirement: Lệnh task với In review
+Khi `statuses.in_review` đặt, `scrum task list --status in_review` SHALL liệt kê task In review, và mọi thao tác đặt trạng thái MUST giữ đúng một label trạng thái trong bốn trạng thái. Khi không đặt, `--status in_review` MUST bị từ chối và nêu cách bật.
+
+#### Scenario: Liệt kê task chờ review
+- **WHEN** In review bật và người dùng chạy `scrum task list --status in_review`
+- **THEN** chỉ task có label In review được in
+
+#### Scenario: Tắt
+- **WHEN** In review không bật và người dùng chạy `scrum task list --status in_review`
+- **THEN** lệnh dừng và nói cần đặt `statuses.in_review`
