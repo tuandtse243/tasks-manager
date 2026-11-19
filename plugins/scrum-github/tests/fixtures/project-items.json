@@ -1,0 +1,13 @@
+{"data":{"node":{"items":{"pageInfo":{"hasNextPage":false,"endCursor":"C1"},"nodes":[
+  {"id":"PVTI_1","type":"ISSUE","content":{"id":"I_1","number":1,"state":"OPEN","stateReason":null,"repository":{"nameWithOwner":"acme/blog"},"labels":{"nodes":[{"name":"status: New"},{"name":"points: 7"}]},"milestone":{"number":1,"state":"OPEN"}},
+   "status":{"name":"Todo"},"synced":{"text":"new"},"points":{"number":7}},
+  {"id":"PVTI_2","type":"ISSUE","content":{"id":"I_2","number":2,"state":"OPEN","stateReason":null,"repository":{"nameWithOwner":"acme/blog"},"labels":{"nodes":[{"name":"status: New"},{"name":"points: 3"}]},"milestone":{"number":1,"state":"OPEN"}},
+   "status":{"name":"In Progress"},"synced":{"text":"new"},"points":{"number":3}},
+  {"id":"PVTI_3","type":"ISSUE","content":{"id":"I_3","number":3,"state":"OPEN","stateReason":"REOPENED","repository":{"nameWithOwner":"acme/blog"},"labels":{"nodes":[{"name":"status: In progress"},{"name":"points: 1"}]},"milestone":{"number":1,"state":"OPEN"}},
+   "status":{"name":"Done"},"synced":{"text":"in_progress"},"points":{"number":1}},
+  {"id":"PVTI_9","type":"ISSUE","content":{"id":"I_9","number":9,"state":"OPEN","stateReason":null,"repository":{"nameWithOwner":"acme/blog"},"labels":{"nodes":[{"name":"type: feature"}]},"milestone":{"number":1,"state":"OPEN"}},
+   "status":{"name":"Done"},"synced":null,"points":null},
+  {"id":"PVTI_pr","type":"PULL_REQUEST","content":{},"status":{"name":"Done"},"synced":null,"points":null},
+  {"id":"PVTI_draft","type":"DRAFT_ISSUE","content":{},"status":{"name":"Todo"},"synced":null,"points":null},
+  {"id":"PVTI_x","type":"ISSUE","content":{"id":"I_x","number":1,"state":"OPEN","stateReason":null,"repository":{"nameWithOwner":"acme/other"},"labels":{"nodes":[]},"milestone":null},
+   "status":{"name":"Done"},"synced":null,"points":null}]}}}}

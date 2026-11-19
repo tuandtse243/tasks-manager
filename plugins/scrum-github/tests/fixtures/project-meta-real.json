@@ -1,0 +1,122 @@
+{
+  "data": {
+    "repositoryOwner": {
+      "projectV2": {
+        "id": "PVT_real",
+        "title": "scrum-sandbox board",
+        "url": "https://github.com/users/tuandtse243/projects/1",
+        "fields": {
+          "nodes": [
+            {
+              "id": "F_Title",
+              "name": "Title",
+              "dataType": "TITLE"
+            },
+            {
+              "id": "F_Assignees",
+              "name": "Assignees",
+              "dataType": "ASSIGNEES"
+            },
+            {
+              "id": "F_Status",
+              "name": "Status",
+              "dataType": "SINGLE_SELECT",
+              "options": [
+                {
+                  "id": "O_Todo",
+                  "name": "Todo"
+                },
+                {
+                  "id": "O_InProgress",
+                  "name": "In Progress"
+                },
+                {
+                  "id": "O_Done",
+                  "name": "Done"
+                }
+              ]
+            },
+            {
+              "id": "F_Labels",
+              "name": "Labels",
+              "dataType": "LABELS"
+            },
+            {
+              "id": "F_Linkedpullrequests",
+              "name": "Linked pull requests",
+              "dataType": "LINKED_PULL_REQUESTS"
+            },
+            {
+              "id": "F_Milestone",
+              "name": "Milestone",
+              "dataType": "MILESTONE"
+            },
+            {
+              "id": "F_Repository",
+              "name": "Repository",
+              "dataType": "REPOSITORY"
+            },
+            {
+              "id": "F_Reviewers",
+              "name": "Reviewers",
+              "dataType": "REVIEWERS"
+            },
+            {
+              "id": "F_Parentissue",
+              "name": "Parent issue",
+              "dataType": "PARENT_ISSUE"
+            },
+            {
+              "id": "F_Subissuesprogress",
+              "name": "Sub-issues progress",
+              "dataType": "SUB_ISSUES_PROGRESS"
+            },
+            {
+              "id": "F_Created",
+              "name": "Created",
+              "dataType": "CREATED"
+            },
+            {
+              "id": "F_Updated",
+              "name": "Updated",
+              "dataType": "UPDATED"
+            },
+            {
+              "id": "F_Closed",
+              "name": "Closed",
+              "dataType": "CLOSED"
+            }
+          ]
+        },
+        "workflows": {
+          "nodes": [
+            {
+              "name": "Auto-add sub-issues to project",
+              "enabled": true
+            },
+            {
+              "name": "Auto-close issue",
+              "enabled": true
+            },
+            {
+              "name": "Item added to project",
+              "enabled": true
+            },
+            {
+              "name": "Item closed",
+              "enabled": true
+            },
+            {
+              "name": "Pull request linked to issue",
+              "enabled": true
+            },
+            {
+              "name": "Pull request merged",
+              "enabled": true
+            }
+          ]
+        }
+      }
+    }
+  }
+}

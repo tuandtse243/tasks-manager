@@ -1,0 +1,5 @@
+{
+  "message": "An error occurred while adding the sub-issue to the parent issue. Issue may not contain duplicate sub-issues and Sub issue may only have one parent",
+  "documentation_url": "https://docs.github.com/rest/issues/sub-issues#add-sub-issue",
+  "status": "422"
+}

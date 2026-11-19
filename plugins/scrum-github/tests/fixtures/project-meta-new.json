@@ -1,0 +1,72 @@
+{
+  "data": {
+    "repositoryOwner": {
+      "projectV2": {
+        "id": "PVT_p1",
+        "title": "Blog board",
+        "url": "https://github.com/orgs/acme/projects/2",
+        "fields": {
+          "nodes": [
+            {
+              "id": "F_title",
+              "name": "Title",
+              "dataType": "TITLE"
+            },
+            {
+              "id": "F_status",
+              "name": "Status",
+              "dataType": "SINGLE_SELECT",
+              "options": [
+                {
+                  "id": "O_todo",
+                  "name": "Todo"
+                },
+                {
+                  "id": "O_prog",
+                  "name": "In Progress"
+                },
+                {
+                  "id": "O_done",
+                  "name": "Done"
+                },
+                {
+                  "id": "O_review",
+                  "name": "Review"
+                }
+              ]
+            },
+            {
+              "id": "F_ms",
+              "name": "Milestone",
+              "dataType": "MILESTONE"
+            }
+          ]
+        },
+        "workflows": {
+          "nodes": [
+            {
+              "name": "Item closed",
+              "enabled": true
+            },
+            {
+              "name": "Item reopened",
+              "enabled": false
+            },
+            {
+              "name": "Pull request merged",
+              "enabled": false
+            },
+            {
+              "name": "Auto-close issue",
+              "enabled": true
+            },
+            {
+              "name": "Auto-add to project",
+              "enabled": true
+            }
+          ]
+        }
+      }
+    }
+  }
+}

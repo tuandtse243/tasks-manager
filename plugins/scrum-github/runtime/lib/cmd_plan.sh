@@ -1,0 +1,416 @@
+# shellcheck shell=bash
+# scrum plan init | validate | render | check | apply   (design 2-9, 15)
+# A plan file (share/plan.schema.json) is the contract between the skills and GitHub. Every
+# decision is pure jq (plan-*.jq); this file reads GitHub, runs the jq, and applies the result.
+. "$SCRUM_ROOT/lib/cmd_task.sh"
+
+# ---------- reading and writing the plan file ----------
+
+# plan_load FILE  Sets PLAN_JSON (version 2 form) or prints every error and exits 1.
+# Needs CONFIG_JSON (the point scale).
+plan_load() {
+  local file="$1" raw errors
+  [ -f "$file" ] || die "no plan file at $file"
+  raw="$(jq -c . "$file" 2>/dev/null)" || die "$file is not valid JSON"
+  PLAN_JSON="$(printf '%s' "$raw" | jqlib plan-normalize -c)"
+  errors="$(printf '%s' "$PLAN_JSON" | jqlib plan-validate --argjson cfg "$CONFIG_JSON" | jq -r '.[]')"
+  if [ -n "$errors" ]; then
+    printf 'scrum: error: the plan %s is not valid:\n' "$file" >&2
+    printf '%s\n' "$errors" | sed 's/^/  - /' >&2
+    exit 1
+  fi
+}
+
+# plan_writeback FILE REF NUMBER  Record an issue number in the plan file (version 2 form).
+plan_writeback() {
+  local out
+  out="$(jqlib plan-writeback --arg ref "$2" --argjson issue "$3" < "$1")" || return 1
+  printf '%s\n' "$out" | write_atomic "$1"
+}
+
+plan_view_path() { printf '%s/plan.md' "$(dirname "$1")"; }
+
+# Milestones for estimates; [] when GitHub cannot be reached (no gh, not logged in, offline).
+plan_try_milestones() {
+  local ms
+  ms="$( { r="$(repo_slug)" && fetch_milestones "$r"; } 2>/dev/null )" || ms=""
+  if [ -n "$ms" ] && printf '%s' "$ms" | jq -e 'type == "array"' >/dev/null 2>&1; then
+    printf '%s' "$ms"
+  else
+    printf '[]'
+  fi
+}
+
+# plan_render_to FILE OUT MILESTONES  Render PLAN_JSON (already loaded from FILE) into OUT.
+plan_render_to() {
+  local text
+  text="$(printf '%s' "$PLAN_JSON" | jqlib plan-render -r --argjson cfg "$CONFIG_JSON" --argjson milestones "$3")" || return 1
+  mkdir -p "$(dirname "$2")"
+  printf '%s\n' "$text" | write_atomic "$2"
+}
+
+plan_summary() {
+  printf '%s' "$PLAN_JSON" | jq -r '
+    [.features[] | .tasks[]] as $t
+    | "\(.features | length) feature\(if (.features | length) == 1 then "" else "s" end), \($t | length) task\(if ($t | length) == 1 then "" else "s" end), \([$t[].points // 0] | add) points"
+      + (if .epic != null then " (epic: \(.epic.title))" else "" end)'
+}
+
+# ---------- scrum plan init ----------
+
+cmd_plan_init() {
+  local title="" slug=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --slug) slug="${2:-}"; shift ;;
+      -*) die "unknown option for plan init: $1" ;;
+      *) [ -z "$title" ] || die "usage: scrum plan init \"<title>\" [--slug SLUG]"; title="$1" ;;
+    esac
+    shift
+  done
+  [ -n "$title" ] || [ -n "$slug" ] || die "usage: scrum plan init \"<title>\" [--slug SLUG]"
+  require_tools nogh
+  load_config
+  if [ -z "$slug" ]; then
+    slug="$(jq -rn -L "$JQ_LIB" --arg t "$title" 'include "scrum"; $t | slug_text')"
+    [ -n "$slug" ] || die "cannot make a folder name from \"$title\". Pass one: --slug lowercase-words-with-dashes"
+  elif ! jq -en -L "$JQ_LIB" --arg s "$slug" 'include "scrum"; $s | is_slug' >/dev/null; then
+    die "invalid slug \"$slug\": use lowercase letters, digits and single dashes, for example blog-post-comments"
+  fi
+  local root rel abs
+  root="$(repo_dir)"
+  rel="$(config_get .planning.dir)/$slug"
+  abs="$root/$rel"
+  mkdir -p "$abs" || die "cannot create $rel"
+  jq -n --arg slug "$slug" --arg dir "$rel" \
+    --argjson plan "$([ -f "$abs/plan.json" ] && echo true || echo false)" \
+    --argjson view "$([ -f "$abs/plan.md" ] && echo true || echo false)" \
+    --argjson brief "$([ -f "$abs/brief.md" ] && echo true || echo false)" \
+    '{slug: $slug, dir: $dir, plan: "\($dir)/plan.json", view: "\($dir)/plan.md", brief: "\($dir)/brief.md",
+      exists: {plan: $plan, view: $view, brief: $brief}}'
+  if [ -f "$abs/plan.json" ]; then
+    printf 'scrum: note: %s/plan.json already exists; nothing was changed. Edit it and keep its ids and issue numbers.\n' "$rel" >&2
+  fi
+}
+
+# ---------- scrum plan validate ----------
+
+cmd_plan_validate() {
+  local file="${1:-}"
+  [ -n "$file" ] || die "usage: scrum plan validate FILE"
+  require_tools nogh
+  load_config
+  plan_load "$file"
+  info "The plan is valid: $(plan_summary)."
+}
+
+# ---------- scrum plan render ----------
+
+cmd_plan_render() {
+  local file="" out="" offline=0
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --out) out="${2:-}"; shift ;;
+      --offline) offline=1 ;;
+      -*) die "unknown option for plan render: $1" ;;
+      *) file="$1" ;;
+    esac
+    shift
+  done
+  [ -n "$file" ] || die "usage: scrum plan render FILE [--out PATH] [--offline]"
+  require_tools nogh
+  load_config
+  plan_load "$file"
+  [ -n "$out" ] || out="$(plan_view_path "$file")"
+  local ms="[]"
+  [ "$offline" = 1 ] || ms="$(plan_try_milestones)"
+  plan_render_to "$file" "$out" "$ms" || die "cannot write $out"
+  info "Wrote $out ($(plan_summary))."
+}
+
+# ---------- reading GitHub and computing actions ----------
+
+# plan_state REPO UPDATE  Prints the state JSON plan-actions needs, reading only what is required.
+plan_state() {
+  local repo="$1" update="$2" ms="null" subs="{}" blocked="{}" issues="{}" n list
+  if printf '%s' "$PLAN_JSON" | jq -e '[.sprint, (.features[].tasks[].sprint)] | any(. != null and . != "")' >/dev/null; then
+    ms="$(fetch_milestones "$repo")" || die "cannot read the sprints (milestones) of $repo"
+  fi
+  for n in $(printf '%s' "$PLAN_JSON" | jq -r '(.epic.issue // empty), (.features[] | .issue // empty)'); do
+    list="$(gh_get_all "repos/$repo/issues/$n/sub_issues?per_page=100" 2>/dev/null | jq -c 'map(.number)' 2>/dev/null)" || list="[]"
+    [ -n "$list" ] || list="[]"
+    subs="$(printf '%s' "$subs" | jq -c --arg n "$n" --argjson l "$list" '.[$n] = $l')"
+  done
+  for n in $(printf '%s' "$PLAN_JSON" | jq -r '.features[].tasks[] | select(.issue != null and ((.depends_on // []) | length) > 0) | .issue'); do
+    list="$(gh_get_all "repos/$repo/issues/$n/dependencies/blocked_by?per_page=100" 2>/dev/null | jq -c 'map(.number)' 2>/dev/null)" || list="[]"
+    [ -n "$list" ] || list="[]"
+    blocked="$(printf '%s' "$blocked" | jq -c --arg n "$n" --argjson l "$list" '.[$n] = $l')"
+  done
+  if [ "$update" = true ]; then
+    local issue
+    for n in $(printf '%s' "$PLAN_JSON" | jq -r '(.epic.issue // empty), (.features[] | .issue // empty), (.features[].tasks[] | .issue // empty)'); do
+      issue="$(gh_get "repos/$repo/issues/$n" 2>/dev/null)" || issue=""
+      if [ -n "$issue" ] && printf '%s' "$issue" | jq -e 'type == "object" and has("number")' >/dev/null 2>&1; then
+        issues="$(printf '%s' "$issues" | jq -c --arg n "$n" --argjson i "$issue" '.[$n] = $i')"
+      fi
+    done
+  fi
+  jq -n --argjson ms "$ms" --arg today "$(today)" --argjson subs "$subs" --argjson blocked "$blocked" --argjson issues "$issues" \
+    '{milestones: $ms, today: $today, subs: $subs, blocked: $blocked, issues: $issues}'
+}
+
+# plan_actions REPO UPDATE  Sets PLAN_ACTIONS (the actions array) or exits 1 on sprint errors.
+plan_actions() {
+  local state result errors
+  state="$(plan_state "$1" "$2")"
+  result="$(printf '%s' "$PLAN_JSON" | jqlib plan-actions -c --argjson cfg "$CONFIG_JSON" --argjson state "$state" --argjson update "$2")"
+  errors="$(printf '%s' "$result" | jq -r '.errors[]')"
+  if [ -n "$errors" ]; then
+    printf 'scrum: error: the plan cannot be applied; nothing was changed:\n' >&2
+    printf '%s\n' "$errors" | sed 's/^/  - /' >&2
+    exit 1
+  fi
+  PLAN_ACTIONS="$(printf '%s' "$result" | jq -c .actions)"
+}
+
+print_actions() {
+  printf '%s' "$PLAN_ACTIONS" | jq -r '.[].text'
+  printf '%s' "$PLAN_ACTIONS" | jq -r '
+    "\([.[] | select(.op | startswith("create"))] | length) to create, \([.[] | select(.op == "update")] | length) to update, \([.[] | select(.op | startswith("link"))] | length) links, \([.[] | select(.op == "skip")] | length) unchanged."'
+}
+
+# ---------- scrum plan check ----------
+
+cmd_plan_check() {
+  local file="" offline=0
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --offline) offline=1 ;;
+      -*) die "unknown option for plan check: $1" ;;
+      *) file="$1" ;;
+    esac
+    shift
+  done
+  [ -n "$file" ] || die "usage: scrum plan check FILE [--offline]"
+  require_tools nogh
+  load_config
+  plan_load "$file"
+  info "The plan is valid: $(plan_summary)."
+  local view ms="[]"
+  view="$(plan_view_path "$file")"
+  if [ "$offline" = 1 ]; then
+    plan_render_to "$file" "$view" "[]" || die "cannot write $view"
+    info "Wrote $view."
+    return 0
+  fi
+  require_tools
+  local repo
+  repo="$(repo_slug)"
+  ms="$(plan_try_milestones)"
+  plan_render_to "$file" "$view" "$ms" || die "cannot write $view"
+  info "Wrote $view."
+  plan_actions "$repo" false
+  info ""
+  info "scrum plan apply would do:"
+  print_actions
+}
+
+# ---------- scrum plan apply ----------
+
+# ISSUE_MAP: JSON {"ref": {"number": N, "id": ID}} built while applying; ids are looked up on demand.
+ISSUE_MAP="{}"
+map_set() { ISSUE_MAP="$(printf '%s' "$ISSUE_MAP" | jq -c --arg r "$1" --argjson n "$2" --argjson i "$3" '.[$r] = {number: $n, id: $i}')"; }
+map_number() {
+  local n
+  n="$(printf '%s' "$ISSUE_MAP" | jq -r --arg r "$1" '.[$r].number // empty')"
+  [ -n "$n" ] || n="$(printf '%s' "$PLAN_JSON" | jq -r --arg r "$1" \
+    'if $r == "epic" then .epic.issue else ([.features[] | select(.id == $r) | .issue] + [.features[].tasks[] | select(.id == $r) | .issue] | .[0]) end // empty')"
+  printf '%s' "$n"
+}
+# map_id REPO REF  The issue's database id (sub-issues and dependencies need it, not the number).
+map_id() {
+  local id n
+  id="$(printf '%s' "$ISSUE_MAP" | jq -r --arg r "$2" '.[$r].id // empty')"
+  if [ -z "$id" ]; then
+    n="$(map_number "$2")"
+    [ -n "$n" ] || return 1
+    id="$(gh_get "repos/$1/issues/$n" | jq -r '.id // empty')" || return 1
+    [ -n "$id" ] || return 1
+    map_set "$2" "$n" "$id"
+  fi
+  printf '%s' "$id"
+}
+
+# plan_fallback REPO NUMBER BLOCK CONTENT  Write a marked block into an issue body (design 5).
+plan_fallback() {
+  local body
+  body="$(gh_get "repos/$1/issues/$2" | jq -r '.body // ""')" || return 1
+  jq -n -L "$JQ_LIB" --arg b "$body" --arg name "$3" --arg c "$4" 'include "scrum"; {body: ($b | set_scrum_block($name; $c))}' \
+    | gh_send PATCH "repos/$1/issues/$2" >/dev/null
+}
+
+cmd_plan_apply() {
+  local file="" dry=0 update=false
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --dry-run) dry=1 ;;
+      --update) update=true ;;
+      -*) die "unknown option for plan apply: $1" ;;
+      *) file="$1" ;;
+    esac
+    shift
+  done
+  [ -n "$file" ] || die "usage: scrum plan apply FILE [--dry-run] [--update] (a JSON plan, see share/plan.schema.json)"
+  require_tools nogh
+  load_config
+  plan_load "$file"
+  require_tools
+  local repo
+  repo="$(repo_slug)"
+  plan_actions "$repo" "$update"
+
+  if [ "$dry" = 1 ]; then
+    info "Dry run: nothing is written to GitHub or to $file."
+    print_actions
+    return 0
+  fi
+
+  # From here on the view is rendered again on every exit, so plan.md follows plan.json.
+  # Milestones are read once now, so the view keeps its velocity estimate like `plan render`.
+  local view
+  view="$(plan_view_path "$file")"
+  APPLY_FILE="$file"; APPLY_VIEW="$view"; APPLY_MS="$(plan_try_milestones)"
+  trap plan_apply_render_view EXIT
+
+  local failed=0 acts a op ref created number id parent pnum touched=""
+  acts="$(mktemp "${TMPDIR:-/tmp}/scrum-plan.XXXXXX")"
+  printf '%s' "$PLAN_ACTIONS" | jq -c '.[]' > "$acts"
+
+  # 1. Create, in order, recording each number in the plan before the next call.
+  while IFS= read -r a; do
+    op="$(printf '%s' "$a" | jq -r .op)"; ref="$(printf '%s' "$a" | jq -r .ref)"
+    case "$op" in
+      create_epic|create_feature)
+        if ! created="$(printf '%s' "$a" | jq -c .payload | gh_send POST "repos/$repo/issues")"; then
+          failed=1; warn "creating $ref failed; stopped. Run the same command again to continue."; break
+        fi ;;
+      create_task)
+        parent="$(printf '%s' "$a" | jq -r .parent)"; pnum="$(map_number "$parent")"
+        if ! created="$( (create_task "$repo" "$(printf '%s' "$a" | jq -c .task)" "$(printf '%s' "$a" | jq -c .milestone)" "$pnum") )"; then
+          failed=1; warn "creating $ref failed; stopped. Run the same command again to continue."; break
+        fi ;;
+      *) continue ;;
+    esac
+    number="$(printf '%s' "$created" | jq -r '.number // empty' 2>/dev/null)"
+    id="$(printf '%s' "$created" | jq -r '.id // empty' 2>/dev/null)"
+    if [ -z "$number" ]; then failed=1; warn "GitHub did not return an issue for $ref; stopped."; break; fi
+    [ -n "$id" ] || id=null
+    map_set "$ref" "$number" "$id"
+    plan_writeback "$file" "$ref" "$number" || { failed=1; warn "could not record #$number for $ref in $file"; break; }
+    info "created #$number $ref $(printf '%s' "$created" | jq -r .title)"
+    [ "$op" = create_task ] && touched="$touched $number"
+  done < "$acts"
+  if [ "$failed" = 1 ]; then rm -f "$acts"; exit 1; fi
+
+  # 2. Updates (--update only).
+  local patch labels
+  while IFS= read -r a; do
+    case "$(printf '%s' "$a" | jq -r .op)" in
+      update) ;;
+      skip) [ "$(printf '%s' "$a" | jq -r .reason)" = closed ] && info "$(printf '%s' "$a" | jq -r .text)"; continue ;;
+      *) continue ;;
+    esac
+    ref="$(printf '%s' "$a" | jq -r .ref)"; number="$(printf '%s' "$a" | jq -r .issue)"
+    patch="$(printf '%s' "$a" | jq -c .patch)"
+    if [ "$patch" != "{}" ]; then
+      printf '%s' "$patch" | gh_send PATCH "repos/$repo/issues/$number" >/dev/null || { failed=1; warn "updating #$number ($ref) failed"; continue; }
+    fi
+    labels="$(printf '%s' "$a" | jq -c .labels)"
+    if [ "$labels" != "null" ]; then
+      jq -n --argjson l "$labels" '{labels: $l}' | gh_send PUT "repos/$repo/issues/$number/labels" >/dev/null \
+        || { failed=1; warn "updating the labels of #$number ($ref) failed"; continue; }
+    fi
+    info "$(printf '%s' "$a" | jq -r .text)"
+    touched="$touched $number"
+  done < "$acts"
+
+  # 3. Sub-issues; a parent whose links are refused gets a checklist of all its children instead.
+  local child cid fallback_parents=""
+  while IFS= read -r a; do
+    [ "$(printf '%s' "$a" | jq -r .op)" = link_sub ] || continue
+    parent="$(printf '%s' "$a" | jq -r .parent)"; child="$(printf '%s' "$a" | jq -r .child)"
+    pnum="$(map_number "$parent")"
+    if cid="$(map_id "$repo" "$child")" && jq -n --argjson id "$cid" '{sub_issue_id: $id}' \
+        | gh_send POST "repos/$repo/issues/$pnum/sub_issues" >/dev/null 2>&1; then
+      info "linked #$(map_number "$child") $child as sub-issue of #$pnum $parent"
+    else
+      case " $fallback_parents " in *" $parent "*) ;; *) fallback_parents="$fallback_parents $parent" ;; esac
+    fi
+  done < "$acts"
+  local list heading
+  for parent in $fallback_parents; do
+    pnum="$(map_number "$parent")"
+    if [ "$parent" = epic ]; then heading="Features"; else heading="Tasks"; fi
+    list="$(printf '%s' "$PLAN_JSON" | jq -r --arg p "$parent" \
+      'if $p == "epic" then .features[].id else (.features[] | select(.id == $p) | .tasks[].id) end' \
+      | while IFS= read -r child; do n="$(map_number "$child")"; [ -z "$n" ] || printf -- '- [ ] #%s\n' "$n"; done)"
+    if plan_fallback "$repo" "$pnum" children "### $heading
+
+$list"; then
+      info "Sub-issues are not available here; listed the children of #$pnum ($parent) as a checklist in its body instead (fallback)."
+    else
+      failed=1; warn "could not write the checklist fallback into #$pnum"
+    fi
+  done
+
+  # 4. Dependencies: "blocked by"; refused ones are listed in the issue body instead.
+  local blocker bid tnum fallback_tasks=""
+  while IFS= read -r a; do
+    [ "$(printf '%s' "$a" | jq -r .op)" = link_blocked ] || continue
+    ref="$(printf '%s' "$a" | jq -r .ref)"; blocker="$(printf '%s' "$a" | jq -r .blocker)"
+    tnum="$(map_number "$ref")"
+    if bid="$(map_id "$repo" "$blocker")" && jq -n --argjson id "$bid" '{issue_id: $id}' \
+        | gh_send POST "repos/$repo/issues/$tnum/dependencies/blocked_by" >/dev/null 2>&1; then
+      info "linked #$tnum $ref as blocked by #$(map_number "$blocker") $blocker"
+    else
+      case " $fallback_tasks " in *" $ref "*) ;; *) fallback_tasks="$fallback_tasks $ref" ;; esac
+    fi
+  done < "$acts"
+  for ref in $fallback_tasks; do
+    tnum="$(map_number "$ref")"
+    list="$(printf '%s' "$PLAN_JSON" | jq -r --arg r "$ref" '.features[].tasks[] | select(.id == $r) | (.depends_on // [])[]' \
+      | while IFS= read -r blocker; do n="$(map_number "$blocker")"; [ -z "$n" ] || printf -- '- #%s\n' "$n"; done)"
+    if plan_fallback "$repo" "$tnum" blocked-by "### Blocked by
+
+$list"; then
+      info "Dependencies are not available here; listed what blocks #$tnum ($ref) in its body instead (fallback)."
+    else
+      failed=1; warn "could not write the blocked-by fallback into #$tnum"
+    fi
+  done
+  rm -f "$acts"
+
+  # 5. Board (only tasks of the open sprint are added; backlog tasks are left alone).
+  for number in $touched; do project_touch "$repo" "$number"; done
+
+  local skipped
+  skipped="$(printf '%s' "$PLAN_ACTIONS" | jq -r '[.[] | select(.op == "skip" and .reason != "closed")] | length')"
+  if [ -z "$(printf '%s' "$PLAN_ACTIONS" | jq -r '.[] | select(.op != "skip") | .op' | head -1)" ]; then
+    info "Nothing to do: every item of the plan already has its issue ($skipped)."
+  else
+    info "Done. Issue numbers are recorded in $file; view: $view"
+  fi
+  [ "$failed" = 0 ] || exit 1
+}
+
+# EXIT trap of apply: render the view from the plan file as it is now (numbers included).
+plan_apply_render_view() {
+  plan_load_quiet "$APPLY_FILE" && plan_render_to "$APPLY_FILE" "$APPLY_VIEW" "${APPLY_MS:-[]}" >/dev/null 2>&1 || true
+}
+
+# Reload the plan file without exiting on problems (used by the EXIT trap of apply).
+plan_load_quiet() {
+  local raw
+  raw="$(jq -c . "$1" 2>/dev/null)" || return 1
+  PLAN_JSON="$(printf '%s' "$raw" | jqlib plan-normalize -c)" || return 1
+}

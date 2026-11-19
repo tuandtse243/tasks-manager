@@ -1,0 +1,76 @@
+# Scrum on GitHub configuration, read by the scrum-github plugin and its workflows.
+# Every key is optional; a missing key uses the default shown here.
+version: 1
+
+# Time zone for "today", burndown days and the daily digest, e.g. Asia/Ho_Chi_Minh.
+timezone: UTC
+
+sprint:
+  # Calendar days per sprint, start day included (22 to 26 September = 5).
+  length_days: 5
+  # Sprint (milestone) title. {n} is the sprint number.
+  name_pattern: "Sprint {n}"
+
+points:
+  # Allowed story points. Each value becomes a label such as "points: 3".
+  scale: [0, 1, 3, 7]
+  label_prefix: "points: "
+
+statuses:
+  # Each status becomes a label such as "status: In progress". A task has exactly one.
+  label_prefix: "status: "
+  new: New
+  in_progress: In progress
+  done: Done
+
+labels:
+  bug: bug
+  # Parent issue of the tasks created by /plan. Not counted in points.
+  feature: "type: feature"
+  # Parent issue of several features (a large requirement). Not counted in points.
+  epic: "type: epic"
+  # Bookkeeping issues such as the daily digest. Not counted.
+  meta: "scrum: meta"
+  # Put this label on a pull request that has no task, so the link check passes.
+  no_task: no-task
+
+branch:
+  # Branch created by task-start. {number} is the issue number, {slug} comes from its title.
+  pattern: "feat/{number}-{slug}"
+
+digest:
+  enabled: true
+  # When the daily digest runs (cron, UTC). This value is written into the workflow file,
+  # so after changing it run: scrum init --force-file .github/workflows/scrum-daily-digest.yml
+  cron: "0 1 * * 1-5"
+
+planning:
+  # Where /plan and /discover keep plans: <dir>/<slug>/plan.json, plan.md, brief.md.
+  # A path inside the repo, relative to its root.
+  dir: docs/plans
+  # Project context document written by /project-scan.
+  context_file: docs/project-context.md
+  # Hours per story point, to show hours in plan.md. Unset (null) shows points only.
+  hours_per_point: null
+  # The project context counts as stale after this many commits.
+  context_stale_commits: 50
+
+# Override label colors: label name -> 6-digit hex color.
+colors: {}
+
+# Optional: mirror task status on a GitHub Projects (v2) board. Off by default.
+# The "status: ..." labels stay the source of truth; moving a card on the board changes the label.
+# Needs the repository secret SCRUM_PROJECT_TOKEN (Projects and Issues read/write).
+# After turning it on run: scrum init, then scrum project init.
+# project:
+#   enabled: true
+#   owner: my-org                  # user or organization that owns the project
+#   number: 1                      # from the project URL: .../projects/1
+#   status_field: Status           # single-select field shown as board columns
+#   status_options:                # board option for each status
+#     new: Todo
+#     in_progress: In Progress
+#     done: Done
+#   synced_field: Synced status    # text field the sync uses for bookkeeping; hide it in views
+#   points_field: Points           # number field filled from "points: N" labels; null to turn off
+#   poll_cron: "*/15 * * * *"      # how often board changes reach the labels (cron, UTC)

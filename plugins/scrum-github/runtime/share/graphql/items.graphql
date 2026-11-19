@@ -1,0 +1,31 @@
+# One page of project items. Variables: project (node id), after (cursor, optional),
+# status, synced, points (field names; a name that does not exist reads as null).
+query($project: ID!, $after: String, $status: String!, $synced: String!, $points: String!) {
+  node(id: $project) {
+    ... on ProjectV2 {
+      items(first: 100, after: $after) {
+        pageInfo { hasNextPage endCursor }
+        nodes { ...Item }
+      }
+    }
+  }
+}
+
+fragment Item on ProjectV2Item {
+  id
+  type
+  content {
+    ... on Issue {
+      id
+      number
+      state
+      stateReason
+      repository { nameWithOwner }
+      labels(first: 50) { nodes { name } }
+      milestone { number state }
+    }
+  }
+  status: fieldValueByName(name: $status) { ... on ProjectV2ItemFieldSingleSelectValue { name } }
+  synced: fieldValueByName(name: $synced) { ... on ProjectV2ItemFieldTextValue { text } }
+  points: fieldValueByName(name: $points) { ... on ProjectV2ItemFieldNumberValue { number } }
+}
