@@ -36,6 +36,7 @@ Ngoài phạm vi: thứ tự ưu tiên của backlog (label priority hay xếp h
 - `sprint-lifecycle`: thêm yêu cầu lập kế hoạch sprint (sức chứa từ velocity, xem trước, cảnh báo, chỉ ghi sau khi xác nhận).
 - `task-management`: thêm các yêu cầu liệt kê, chuyển sprint, ước lượng lại, giao việc và bỏ task.
 - `project-board-sync`: "Thêm task vào Project" và "Cập nhật board ngay khi đổi trạng thái" áp dụng cho các lệnh ghi mới.
+- `next-step-guidance`: `scrum next` gợi ý chọn task cho sprint khi sprint hiện tại rỗng mà backlog có task.
 
 ## Impact
 
