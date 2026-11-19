@@ -4,11 +4,11 @@
 
 ## 1. Cấu hình (spec scrum-config)
 
-- [ ] 1.1 Thêm `sprint.working_days`, `attention.stale_days`, `attention.behind_percent`, `language`, `digest.webhook_format` vào `runtime/share/defaults.json`, `templates/scrum.yml` (có chú thích) và quy tắc kiểm tra trong `validate-config.jq`; test cho từng giá trị sai. Kiểm tra: `bash tests/run.sh test_config` xanh
+- [x] 1.1 Thêm `sprint.working_days`, `attention.stale_days`, `attention.behind_percent`, `language`, `digest.webhook_format` vào `runtime/share/defaults.json`, `templates/scrum.yml` (có chú thích) và quy tắc kiểm tra trong `validate-config.jq`; test cho từng giá trị sai. Kiểm tra: `bash tests/run.sh test_config` xanh
 
 ## 2. Ngày làm việc (design mục 1; spec sprint-reporting "Đường burndown", "Tóm tắt tiến độ sprint")
 
-- [ ] 2.1 `working_days`, `is_working_day`, `days_left` theo ngày làm việc và đường lý tưởng đi ngang qua ngày nghỉ trong `scrum.jq`; test thứ 6 tới thứ 3, sprint qua cuối tuần, và ví dụ 22 đến 26/9/2014 cho đúng số cũ. Kiểm tra: `bash tests/run.sh test_report` xanh
+- [x] 2.1 `working_days`, `is_working_day`, `days_left` theo ngày làm việc và đường lý tưởng đi ngang qua ngày nghỉ trong `scrum.jq`; test thứ 6 tới thứ 3, sprint qua cuối tuần, và ví dụ 22 đến 26/9/2014 cho đúng số cũ. Kiểm tra: `bash tests/run.sh test_report` xanh
 
 ## 3. Ngôn ngữ (design mục 4; spec scrum-config "Ngôn ngữ")
 

@@ -243,3 +243,35 @@ test_epic_label_same_as_meta_or_no_task_rejected() {
   errs="$(jq '.labels.epic = "Scrum: Meta"' "$PLUGIN_DIR/runtime/share/defaults.json" | jqt validate-config | jq -r '.[]')"
   assert_contains "$errs" "labels.epic"
 }
+
+# ---------- working days, attention, language, webhook format (delta scrum-config) ----------
+
+errors_with() { jq "$1" "$PLUGIN_DIR/runtime/share/defaults.json" | jqt validate-config | jq -r '.[]'; }
+
+test_new_keys_have_defaults() {
+  assert_eq '[1,2,3,4,5] 2 15 en slack' "$(jq -r '"\(.sprint.working_days | tojson) \(.attention.stale_days) \(.attention.behind_percent) \(.language) \(.digest.webhook_format)"' "$PLUGIN_DIR/runtime/share/defaults.json")"
+}
+
+test_working_days_rejected() {
+  assert_contains "$(errors_with '.sprint.working_days = [0, 1]')" "sprint.working_days: values must be 1 (Monday) to 7 (Sunday)"
+  assert_contains "$(errors_with '.sprint.working_days = []')" "sprint.working_days: must be a non-empty list"
+  assert_contains "$(errors_with '.sprint.working_days = [1, 1]')" "sprint.working_days: values must not repeat"
+}
+
+test_attention_thresholds_rejected() {
+  assert_contains "$(errors_with '.attention.stale_days = -1')" "attention.stale_days: must be a whole number"
+  assert_contains "$(errors_with '.attention.behind_percent = "x"')" "attention.behind_percent: must be a whole number"
+}
+
+test_language_rejected() {
+  assert_contains "$(errors_with '.language = "fr"')" "language: must be en or vi"
+}
+
+test_webhook_format_rejected() {
+  assert_contains "$(errors_with '.digest.webhook_format = "teams"')" "digest.webhook_format: must be slack or telegram"
+}
+
+test_template_matches_defaults_for_new_keys() {
+  assert_eq "$(jq -c '{language, w: .sprint.working_days, attention, f: .digest.webhook_format}' "$PLUGIN_DIR/runtime/share/defaults.json")" \
+    "$(yq -o=json '.' "$PLUGIN_DIR/templates/scrum.yml" | jq -c '{language, w: .sprint.working_days, attention, f: .digest.webhook_format}')"
+}

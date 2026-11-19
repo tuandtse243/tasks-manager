@@ -5,11 +5,18 @@ version: 1
 # Time zone for "today", burndown days and the daily digest, e.g. Asia/Ho_Chi_Minh.
 timezone: UTC
 
+# Language of the status table, the digest, the HTML report and the sprint summary: en or vi.
+# Status names come from "statuses" below.
+language: en
+
 sprint:
   # Calendar days per sprint, start day included (22 to 26 September = 5).
   length_days: 5
   # Sprint (milestone) title. {n} is the sprint number.
   name_pattern: "Sprint {n}"
+  # Working days (1 = Monday ... 7 = Sunday). "Days left" counts them, and the ideal burndown
+  # line stays flat on the other days.
+  working_days: [1, 2, 3, 4, 5]
 
 points:
   # Allowed story points. Each value becomes a label such as "points: 3".
@@ -41,8 +48,18 @@ branch:
 digest:
   enabled: true
   # When the daily digest runs (cron, UTC). This value is written into the workflow file,
-  # so after changing it run: scrum init --force-file .github/workflows/scrum-daily-digest.yml
+  # so after changing it run scrum init (or /scrum-github:init) again.
   cron: "0 1 * * 1-5"
+  # The digest also goes to a chat when the repository secret SCRUM_DIGEST_WEBHOOK is set:
+  # slack (also Google Chat and Mattermost) or telegram.
+  webhook_format: slack
+
+attention:
+  # "Needs attention" in the status table, digest and report: a task In progress with no
+  # activity for this many working days, and a sprint behind the ideal line by more than this
+  # percentage of its scope.
+  stale_days: 2
+  behind_percent: 15
 
 planning:
   # Where /plan and /discover keep plans: <dir>/<slug>/plan.json, plan.md, brief.md.

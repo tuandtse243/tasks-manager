@@ -10,6 +10,12 @@ def days_between($a; $b): ((($b | date_epoch) - ($a | date_epoch)) / 86400) | fl
 # ISO timestamp -> local date for a UTC offset in seconds.
 def local_date($off): (fromdateiso8601 + $off) | epoch_date;
 def is_date: type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+# ISO weekday of a date: 1 = Monday ... 7 = Sunday.
+def weekday: date_epoch | strftime("%u") | tonumber;
+def is_working_day($cfg): weekday as $w | ($cfg.sprint.working_days // [1, 2, 3, 4, 5]) | index($w) != null;
+# Working days from $a to $b, both included (0 when $b is before $a).
+def working_days_between($cfg; $a; $b):
+  if $b < $a then 0 else [range(0; days_between($a; $b) + 1) | . as $i | $a | add_days($i) | select(is_working_day($cfg))] | length end;
 
 # ---------- text ----------
 # Lowercase ASCII words joined by "-", at most 40 characters. Non-ASCII letters are dropped,
@@ -111,11 +117,18 @@ def current_sprint($today):
      | sort_by(sprint_info.start) | .[0])
     // ($open | sort_by(sprint_info.end // "9999-12-31") | .[0]);
 
-def days_left($s; $today):
+# Working days left, today included (spec sprint-reporting "Tóm tắt tiến độ sprint").
+def days_left($cfg; $s; $today):
   if $s.end == null then null
   elif $today > $s.end then 0
-  elif $today < $s.start then days_between($s.start; $s.end) + 1
-  else days_between($today; $s.end) + 1 end;
+  else working_days_between($cfg; (if $today < $s.start then $s.start else $today end); $s.end) end;
+
+# Ideal remaining at the end of day $d: falls only across working days, from $total to 0.
+def ideal_at($cfg; $s; $total; $d):
+  working_days_between($cfg; $s.start; $s.end) as $w
+  | if $w <= 1 then (if $d >= $s.end then 0 else $total end)
+    else working_days_between($cfg; $s.start; ($d | add_days(-1))) as $k
+    | (($total * (1 - ([$k, $w - 1] | min) / ($w - 1))) * 100 | round) / 100 end;
 
 # ---------- progress ----------
 def bucket: {count: length, points: ([.[]._pts // 0] | add // 0)};
@@ -143,7 +156,7 @@ def progress($cfg; $sprint; $issues; $today):
       total: $total,
       pct_done: (if $total.total.points > 0 then ($total.done.points * 100 / $total.total.points | round) else null end),
       unestimated: ([$t[] | select(._pts == null)] | length),
-      days_left: days_left($s; $today) };
+      days_left: days_left($cfg; $s; $today) };
 
 # ---------- burndown ----------
 def burndown($cfg; $sprint; $issues; $today; $off):
@@ -154,7 +167,7 @@ def burndown($cfg; $sprint; $issues; $today; $off):
   | { start: $s.start, end: $s.end, total: $total,
       days: [range(0; $n) | . as $i | ($s.start | add_days($i)) as $d
         | { date: $d,
-            ideal: (if $n == 1 then 0 else (($total * (1 - ($i / ($n - 1)))) * 100 | round) / 100 end),
+            ideal: ideal_at($cfg; $s; $total; $d),
             remaining: (if $d > $today then null
                         else $total - ([$t[] | select(is_completed and ((.closed_at | local_date($off)) <= $d)) | ._pts // 0] | add // 0)
                         end) }] };

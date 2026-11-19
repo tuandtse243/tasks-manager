@@ -1,9 +1,17 @@
 {
   "version": 1,
   "timezone": "UTC",
+  "language": "en",
   "sprint": {
     "length_days": 5,
-    "name_pattern": "Sprint {n}"
+    "name_pattern": "Sprint {n}",
+    "working_days": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ]
   },
   "points": {
     "scale": [
@@ -32,7 +40,8 @@
   },
   "digest": {
     "enabled": true,
-    "cron": "0 1 * * 1-5"
+    "cron": "0 1 * * 1-5",
+    "webhook_format": "slack"
   },
   "colors": {},
   "project": {
@@ -54,5 +63,9 @@
     "context_file": "docs/project-context.md",
     "hours_per_point": null,
     "context_stale_commits": 50
+  },
+  "attention": {
+    "stale_days": 2,
+    "behind_percent": 15
   }
 }

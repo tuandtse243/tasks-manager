@@ -191,3 +191,25 @@ test_epic_is_not_a_task_for_status_sync() {
   d="$(jq -n -L "$PLUGIN_DIR/runtime/lib/jq" --argjson cfg "$(defaults)" 'include "scrum"; {labels: [{name: "type: epic"}]} | is_task($cfg)')"
   assert_eq "false" "$d"
 }
+
+# ---------- working days (delta sprint-reporting) ----------
+
+jqs() { jq -n -L "$PLUGIN_DIR/runtime/lib/jq" --argjson cfg "$(defaults)" "include \"scrum\"; $1"; }
+
+test_days_left_skips_the_weekend() {
+  # Friday 2026-11-20, sprint ends Tuesday 2026-11-24: Friday, Monday, Tuesday.
+  assert_eq "3" "$(jqs '{start: "2026-11-16", end: "2026-11-24"} as $s | days_left($cfg; $s; "2026-11-20")')"
+  assert_eq "0" "$(jqs '{start: "2026-11-16", end: "2026-11-24"} as $s | days_left($cfg; $s; "2026-11-25")')"
+}
+
+test_ideal_is_flat_over_the_weekend() {
+  # Monday 2026-11-16 to Friday 2026-11-27: 10 working days, 18 points.
+  local ideal
+  ideal="$(jqs '{start: "2026-11-16", end: "2026-11-27"} as $s | [range(0; 12) as $i | ideal_at($cfg; $s; 18; ($s.start | add_days($i)))]' | jq -c .)"
+  assert_eq '[18,16,14,12,10,8,8,8,6,4,2,0]' "$ideal" "Sat 21, Sun 22 and Mon 23 stay at 8"
+}
+
+test_working_days_from_config() {
+  assert_eq "6" "$(jq -n -L "$PLUGIN_DIR/runtime/lib/jq" --argjson cfg "$(defaults | jq '.sprint.working_days = [1,2,3,4,5,6]')" \
+    'include "scrum"; working_days_between($cfg; "2026-11-16"; "2026-11-22")')"
+}

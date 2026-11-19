@@ -62,6 +62,26 @@ def nonempty_string: type == "string" and length > 0;
     (if ($c.branch.pattern | type) == "string" and ($c.branch.pattern | contains("{number}")) then empty
      else "branch.pattern: must contain {number}" end),
     (if ($c.digest.enabled | type) == "boolean" then empty else "digest.enabled: must be true or false" end),
+    (if $c.digest.webhook_format == "slack" or $c.digest.webhook_format == "telegram" then empty
+     else "digest.webhook_format: must be slack or telegram (got \($c.digest.webhook_format | tojson))" end),
+
+    # language
+    (if $c.language == "en" or $c.language == "vi" then empty
+     else "language: must be en or vi (got \($c.language | tojson))" end),
+
+    # attention
+    (["stale_days", "behind_percent"][] as $k
+     | if ($c.attention[$k] | is_int) and $c.attention[$k] >= 0 then empty
+       else "attention.\($k): must be a whole number, 0 or more (got \($c.attention[$k] | tojson))" end),
+
+    # sprint.working_days
+    (if ($c.sprint.working_days | type) != "array" or ($c.sprint.working_days | length) == 0
+       then "sprint.working_days: must be a non-empty list of weekdays, 1 (Monday) to 7 (Sunday)"
+     elif any($c.sprint.working_days[]; (is_int and . >= 1 and . <= 7) | not)
+       then "sprint.working_days: values must be 1 (Monday) to 7 (Sunday) (got \($c.sprint.working_days | tojson))"
+     elif ($c.sprint.working_days | length) != ($c.sprint.working_days | unique | length)
+       then "sprint.working_days: values must not repeat"
+     else empty end),
     (if ($c.digest.cron | type) == "string" and ($c.digest.cron | split(" ") | map(select(. != "")) | length) == 5 then empty
      else "digest.cron: must be a 5-field cron expression" end),
     (if ($c.colors | type) == "object" then

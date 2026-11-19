@@ -44,7 +44,7 @@ else
           | step("start"; "Pick up #\($p.number) \"\($p.title)\"\(if ($p._who | index($me)) then " (assigned to you)" else "" end).";
                  "/scrum-github:task-start \($p.number)"; [$p.number])
         else
-          days_left($s; $today) as $d
+          days_left($cfg; $s; $today) as $d
           | step("done"; "No task left to pick up in \($s.title)\(if $d == null then "" else " (\($d) day\(if $d == 1 then "" else "s" end) left)" end).";
                  "/scrum-github:sprint-status"; [])
         end
