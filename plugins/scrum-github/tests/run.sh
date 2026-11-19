@@ -9,6 +9,10 @@ PLUGIN_DIR="$(cd "$TESTS_DIR/.." && pwd)"
 SCRUM="$PLUGIN_DIR/runtime/bin/scrum"
 FIXTURES="$TESTS_DIR/fixtures"
 export TESTS_DIR PLUGIN_DIR SCRUM FIXTURES
+# The runtime behaves differently inside GitHub Actions. Tests that need that set these
+# themselves, so a CI runner's own values must not leak in.
+unset GITHUB_ACTIONS GITHUB_EVENT_NAME GITHUB_EVENT_PATH GITHUB_REPOSITORY GITHUB_STEP_SUMMARY \
+  SCRUM_PROJECT_TOKEN
 
 pattern="${1:-}"
 pass=0; fail=0; failed_names=""
@@ -51,7 +55,8 @@ route_first() { # route_first 'GLOB' FILE  Like route, but ahead of every earlie
   mv "$FAKE_GH_DIR/routes.new" "$FAKE_GH_DIR/routes"
 }
 route_json() { # route_json 'GLOB' 'json text'
-  local f="r$(wc -l < "$FAKE_GH_DIR/routes" | tr -d ' ').json"
+  local f
+  f="r$(wc -l < "$FAKE_GH_DIR/routes" | tr -d ' ').json"
   printf '%s' "$2" > "$FAKE_GH_DIR/$f"
   route "$1" "$f"
 }
@@ -65,6 +70,7 @@ setup_repo() { # setup_repo [yaml-content]
   if [ $# -gt 0 ]; then printf '%s\n' "$1" > "$SCRUM_REPO_DIR/.github/scrum.yml"; fi
 }
 
+# shellcheck disable=SC2034  # OUT, ERR and STATUS are read by the test files
 run_scrum() { # run_scrum args...  -> sets OUT, ERR, STATUS
   set +e
   OUT="$("$BASH" "$SCRUM" "$@" 2>"$T/stderr")"; STATUS=$?
@@ -83,9 +89,11 @@ for file in "$TESTS_DIR"/test_*.sh; do
   names="$(grep -E '^test_[A-Za-z0-9_]+\(\)' "$file" | sed 's/().*//')"
   printf '%s\n' "$(basename "$file")"
   for name in $names; do
-    T="$(mktemp -d "${TMPDIR:-/tmp}/scrumtest.XXXXXX")"
+    # cd + pwd drops the "//" left when TMPDIR ends in "/" (as on macOS runners).
+    T="$(cd "$(mktemp -d "${TMPDIR:-/tmp}/scrumtest.XXXXXX")" && pwd)"
     export T
     # Not inside `if`: errexit must stay active in the subshell.
+    # shellcheck source=/dev/null  # the test file is chosen at run time
     ( set -e; cd "$T"; . "$file"; "$name" ) 2>"$T/.err"
     rc=$?
     if [ "$rc" -eq 0 ]; then

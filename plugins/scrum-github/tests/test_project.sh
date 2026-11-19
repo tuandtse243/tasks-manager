@@ -105,7 +105,7 @@ test_plan_drag_to_done_closes() {
 
 test_plan_drag_out_of_done_reopens_as_new() {
   assert_json_eq '[{"op":"set_labels","number":7,"labels":["status: New"]},{"op":"reopen","number":7},{"op":"set_synced","number":7,"text":"new"}]' \
-    "$(ops "$(item 7 'status: Done' Todo done closed)")"
+    "$(ops "$(item 7 'status: Done' Todo 'done' closed)")"
 }
 
 test_plan_unknown_column_warns() {
@@ -253,7 +253,7 @@ test_cmd_sync_uses_project_token() {
 
 test_cmd_sync_missing_secret_in_actions() {
   project_env
-  GITHUB_ACTIONS=true SCRUM_PROJECT_TOKEN= run_scrum project sync
+  GITHUB_ACTIONS=true SCRUM_PROJECT_TOKEN='' run_scrum project sync
   assert_status 1 "$STATUS"
   assert_contains "$OUT" "::error title=Project token missing::"
   assert_contains "$ERR" "SCRUM_PROJECT_TOKEN"
@@ -441,7 +441,7 @@ test_hook_event_without_secret_warns() {
   local ev="$T/event.json"
   jq -n '{action: "closed", pull_request: {merged: true, body: "Closes #12"}}' > "$ev"
   route_json 'api repos/acme/blog/issues/12' '{"number":12,"state":"open","labels":[{"name":"status: In progress"}]}'
-  GITHUB_EVENT_PATH="$ev" GITHUB_EVENT_NAME=pull_request_target GITHUB_ACTIONS=true SCRUM_PROJECT_TOKEN= run_scrum event
+  GITHUB_EVENT_PATH="$ev" GITHUB_EVENT_NAME=pull_request_target GITHUB_ACTIONS=true SCRUM_PROJECT_TOKEN='' run_scrum event
   assert_status 0 "$STATUS" "$ERR"
   assert_contains "$(gh_writes)" "PUT repos/acme/blog/issues/12/labels"
   assert_contains "$ERR" "SCRUM_PROJECT_TOKEN is not set"

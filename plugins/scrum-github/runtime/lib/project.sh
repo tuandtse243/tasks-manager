@@ -2,7 +2,7 @@
 # GitHub Projects (v2) board sync. Sourced by common.sh.
 # The "status: ..." labels are the source of truth; the board's Status field mirrors them and can be
 # changed on the board. The text field "Synced status" holds the status of the last sync, which tells
-# which side changed. Decisions are pure jq (lib/jq/project.jq).
+# which side changed. Decisions are pure jq (the project board section of lib/jq/scrum.jq).
 #
 # These functions never exit: they return 1 and leave a message in PROJECT_ERR, so the best-effort
 # hooks can carry on. Callers check every return code (errexit does not apply inside `if`).
@@ -146,7 +146,9 @@ project_run_plan() {
   plan="$(jqlib project-sync-plan --argjson cfg "$CONFIG_JSON" --argjson meta "$PROJECT_META" < "$items")" \
     || { PROJECT_ERR="cannot plan the sync"; return 1; }
   printf '%s' "$plan" | jq -r '.warnings[]' | while IFS= read -r w; do warn "$w"; done
+  # shellcheck disable=SC2034  # read by cmd_project.sh
   PROJECT_CHANGED="$(printf '%s' "$plan" | jq '.changed | length')"
+  # shellcheck disable=SC2034  # read by cmd_project.sh
   PROJECT_UNCHANGED="$(printf '%s' "$plan" | jq '.unchanged')"
   ops="$(mktemp "${TMPDIR:-/tmp}/scrum-ops.XXXXXX")"
   printf '%s' "$plan" | jq '.ops' > "$ops"
@@ -177,7 +179,7 @@ project_sync_issue() {
   if [ "$(printf '%s' "$item" | jq -r .id)" = "null" ]; then
     local addable node id
     addable="$(printf '%s' "$item" | jq -L "$JQ_LIB" -r --argjson cfg "$CONFIG_JSON" \
-      'include "scrum"; include "project"; normalize_item | is_task($cfg) and (is_not_planned | not) and (.milestone.state // "") == "OPEN"')"
+      'include "scrum"; normalize_item | is_task($cfg) and (is_not_planned | not) and (.milestone.state // "") == "OPEN"')"
     if [ "$addable" != "true" ]; then
       return 0
     fi
@@ -231,6 +233,7 @@ project_sync_all() {
     jq -c --argjson x "$line" '. + [$x]' "$items" > "$items.new" && mv "$items.new" "$items"
   done < "$missing"
   rm -f "$missing"
+  # shellcheck disable=SC2034  # read by cmd_project.sh
   PROJECT_ADDED="$added"
 
   project_run_plan "$items" "$repo" "$dry" || { rm -f "$items"; return 1; }

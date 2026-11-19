@@ -18,7 +18,7 @@ test_two_statuses_become_one() {
 }
 
 test_same_status_is_unchanged() {
-  assert_eq "false" "$(status_of '["status: Done"]' done | jq -r .changed)"
+  assert_eq "false" "$(status_of '["status: Done"]' 'done' | jq -r .changed)"
 }
 
 payload() { jqt task-payload -n --argjson cfg "$(defaults)" --argjson task "$1" --argjson milestone 1 "${@:2}"; }

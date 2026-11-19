@@ -28,7 +28,7 @@ cmd_project_init() {
   load_config
   project_require_enabled
   project_require_token
-  local repo problems conflicts fields line name type res
+  local repo problems conflicts fields name type res
   repo="$(repo_slug)"
   [ "$dry" = 1 ] && info "Dry run: nothing will be written."
 

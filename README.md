@@ -1,5 +1,7 @@
 # tasks-manager
 
+[![CI](https://github.com/tuandtse243/tasks-manager/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/tuandtse243/tasks-manager/actions/workflows/ci.yml)
+
 Chạy Scrum ngay trên GitHub, không cần Jira hay Trello. Repo này là một **marketplace plugin của
 Claude Code**. Hiện marketplace có một plugin là [`scrum-github`](plugins/scrum-github/README.md).
 
@@ -53,6 +55,21 @@ openspec/                         spec (specs/) và lịch sử thay đổi (cha
 bash plugins/scrum-github/tests/run.sh          # toàn bộ test, offline, khoảng 2 phút
 bash plugins/scrum-github/tests/run.sh plan     # chỉ chạy tests/test_plan.sh
 ```
+
+Lint mã shell (không lint `vendor/`) và kiểm tra plugin:
+
+```bash
+(cd plugins/scrum-github && shellcheck --severity=warning runtime/bin/scrum runtime/lib/*.sh scripts/*.sh wizards/*.sh tests/run.sh tests/test_*.sh tests/fake-gh)
+claude plugin validate plugins/scrum-github     # chạy tay, CI không cài Claude Code
+```
+
+CI (`.github/workflows/ci.yml`) chạy bộ test trên Ubuntu và macOS cùng lệnh `shellcheck` ở trên,
+cho mỗi pull request và mỗi lần push vào `main`. Lịch sử phiên bản của plugin ở
+[CHANGELOG](plugins/scrum-github/CHANGELOG.md).
+
+Claude Code có thể tạo thư mục `openspec/changes/.claude/` khi ghi file dưới `openspec/changes/`.
+Thư mục này đã nằm trong `.gitignore`, nhưng `openspec list` vẫn có thể hiện nó như một change tên
+`.claude`; bỏ qua hoặc xoá đi.
 
 Mỗi thay đổi lớn đi qua OpenSpec: đề xuất bằng `/opsx:propose`, làm bằng `/opsx:apply`, xong thì
 `/opsx:archive` để gộp spec vào `openspec/specs/`.

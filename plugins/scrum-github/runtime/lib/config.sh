@@ -13,7 +13,7 @@ merge_config() {
 
 # load_config [FILE]  Sets CONFIG_JSON or dies. Without FILE uses .github/scrum.yml.
 load_config() {
-  local file="${1:-$(config_path)}" raw err merged errors
+  local file="${1:-$(config_path)}" raw merged errors
   if [ ! -f "$file" ]; then
     die "no Scrum configuration found at .github/scrum.yml. Run /scrum-github:scrum-init first (or: scrum init)"
   fi
