@@ -51,7 +51,18 @@
     "report_remaining_tip": "{date}: {pts} remaining",
     "report_notes": "The burndown is rebuilt from each task's history: the tasks in the sprint and their points on each day. Pull requests, feature issues, digest issues and tasks closed as not planned are not counted.",
     "report_history_limited": "History was read for part of the issues only (at most 100 tasks of the sprint and 30 that may have left it); the rest use their current state.",
-    "na": "n/a"
+    "na": "n/a",
+    "summary_title": "{title} summary",
+    "summary_goal": "**Goal:** {goal}",
+    "summary_velocity": "**Velocity:** {v} points.",
+    "summary_compare": "Average of the {n} sprints before: {avg} ({list}).",
+    "summary_no_compare": "No earlier sprint to compare with.",
+    "summary_scope": "**Scope after the first day:** {added} points added, {removed} points removed.",
+    "summary_done": "Done",
+    "summary_carry": "Carried over to the next sprint",
+    "summary_none": "None.",
+    "summary_unestimated": "unestimated",
+    "summary_compare_one": "The sprint before: {avg} ({list})."
   },
   "vi": {
     "assignee": "Người nhận",
@@ -100,6 +111,16 @@
     "report_remaining_tip": "{date}: còn {pts}",
     "report_notes": "Burndown được dựng lại từ lịch sử của từng task: task nào thuộc sprint và có bao nhiêu điểm ở mỗi ngày. Pull request, issue feature, issue digest và task đóng với lý do not planned không được tính.",
     "report_history_limited": "Lịch sử chỉ được đọc cho một phần issue (tối đa 100 task của sprint và 30 task có thể đã rời sprint); phần còn lại dùng trạng thái hiện tại.",
-    "na": "chưa có"
+    "na": "chưa có",
+    "summary_title": "Tổng kết {title}",
+    "summary_goal": "**Mục tiêu:** {goal}",
+    "summary_velocity": "**Velocity:** {v} điểm.",
+    "summary_compare": "Trung bình {n} sprint trước: {avg} ({list}).",
+    "summary_no_compare": "Chưa có sprint trước để so sánh.",
+    "summary_scope": "**Phạm vi sau ngày đầu:** thêm {added} điểm, bỏ {removed} điểm.",
+    "summary_done": "Đã xong",
+    "summary_carry": "Chuyển sang sprint sau",
+    "summary_none": "Không có.",
+    "summary_unestimated": "chưa ước lượng"
   }
 }

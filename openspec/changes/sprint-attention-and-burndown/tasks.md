@@ -30,7 +30,7 @@
 
 ## 7. Tổng kết khi đóng sprint (design mục 6; spec sprint-lifecycle)
 
-- [ ] 7.1 `sprint-summary.jq` và bước đăng tổng kết trong `cmd_sprint_close` (tìm hoặc tạo issue digest, lỗi chỉ cảnh báo); test. Kiểm tra: `bash tests/run.sh test_sprint` xanh
+- [x] 7.1 `sprint-summary.jq` và bước đăng tổng kết trong `cmd_sprint_close` (tìm hoặc tạo issue digest, lỗi chỉ cảnh báo); test. Kiểm tra: `bash tests/run.sh test_sprint` xanh
 
 ## 8. Phiên bản và tài liệu
 

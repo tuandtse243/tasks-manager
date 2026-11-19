@@ -125,6 +125,25 @@ cmd_sprint_close() {
 
   printf '%s' "$plan" | jq -c '{description, state: "closed"}' | gh_send PATCH "repos/$repo/milestones/$number" >/dev/null
   info "Closed $title. Velocity: $(printf '%s' "$plan" | jq -r .velocity) points."
+  post_sprint_summary "$repo" "$ms" "$sprint" "$issues" "$plan" \
+    || warn "the sprint summary was not posted on the digest issue; the sprint is closed"
+}
+
+# post_sprint_summary REPO MILESTONES SPRINT ISSUES PLAN  The summary as a comment on the
+# sprint's digest issue. Every step returns 1 on failure: the caller only warns.
+post_sprint_summary() {
+  local repo="$1" ms="$2" sprint="$3" issues="$4" plan="$5" burndown body n
+  . "$SCRUM_ROOT/lib/cmd_report.sh" || return 1
+  . "$SCRUM_ROOT/lib/cmd_digest.sh" || return 1
+  history_issues "$repo" "$sprint" "$issues" || return 1
+  burndown="$(jqlib burndown -n --argjson cfg "$CONFIG_JSON" --argjson sprint "$sprint" --argjson issues "$HISSUES" \
+    --arg today "$(today)" --argjson off "$(tz_offset)")" || return 1
+  body="$(jqlib sprint-summary -n --argjson plan "$plan" --argjson ms "$ms" --argjson sprint "$sprint" \
+    --argjson burndown "$burndown" --argjson strings "$(strings_json)" --argjson cfg "$CONFIG_JSON")" || return 1
+  find_digest_issue "$repo" "$sprint" "$issues" || return 1
+  n="$(printf '%s' "$DIGEST_ISSUE" | jq -r .number)" || return 1
+  printf '%s' "$body" | jq -c '{body}' | gh_send POST "repos/$repo/issues/$n/comments" >/dev/null || return 1
+  info "Posted the sprint summary on #$n."
 }
 
 # ---------- sprint fill ----------

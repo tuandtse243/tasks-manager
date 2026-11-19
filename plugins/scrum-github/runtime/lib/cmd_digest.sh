@@ -1,6 +1,24 @@
 # shellcheck shell=bash
 # scrum digest: post the daily digest comment on the "<sprint> digest" issue.
 
+# find_digest_issue REPO SPRINT ISSUES  Sets DIGEST_ISSUE to the "<sprint> digest" meta issue of
+# the sprint, creating it when missing (then DIGEST_CREATED=1). Not run in $(...).
+find_digest_issue() {
+  local repo="$1" sprint="$2" issues="$3" title number meta
+  title="$(printf '%s' "$sprint" | jq -r .title)"
+  number="$(printf '%s' "$sprint" | jq -r .number)"
+  meta="$(config_get .labels.meta)"
+  DIGEST_CREATED=0
+  DIGEST_ISSUE="$(printf '%s' "$issues" | jq -c --arg t "$title digest" --arg m "$meta" \
+    '[.[] | select(.title == $t and any(.labels[]?; .name == $m) and (has("pull_request") | not))] | sort_by(.number) | .[0]')"
+  [ "$DIGEST_ISSUE" = "null" ] || return 0
+  DIGEST_ISSUE="$(jq -n --arg t "$title digest" --arg m "$meta" --arg s "$title" --argjson n "$number" \
+    '{title: $t, body: "Daily progress of \($s), posted by the scrum-daily-digest workflow. Not a task.", labels: [$m], milestone: $n}' \
+    | gh_send POST "repos/$repo/issues")" || return 1
+  DIGEST_CREATED=1
+  info "Created issue #$(printf '%s' "$DIGEST_ISSUE" | jq -r .number) \"$title digest\"."
+}
+
 cmd_digest() {
   require_tools
   load_config
@@ -8,7 +26,7 @@ cmd_digest() {
     info "The digest is turned off (digest.enabled: false). Nothing posted."
     return 0
   fi
-  local repo ms sprint number title issues digest_title meta digest_issue n comments body
+  local repo ms sprint number title issues digest_issue n comments body
   repo="$(repo_slug)"
   ms="$(fetch_milestones "$repo")"
   sprint="$(jqlib sprint-resolve -n --argjson ms "$ms" --argjson cfg "$CONFIG_JSON" --arg title "" --arg today "$(today)")"
@@ -19,17 +37,10 @@ cmd_digest() {
   number="$(printf '%s' "$sprint" | jq -r .number)"
   title="$(printf '%s' "$sprint" | jq -r .title)"
   issues="$(fetch_milestone_issues "$repo" "$number")"
-  digest_title="$title digest"
-  meta="$(config_get .labels.meta)"
-
-  digest_issue="$(printf '%s' "$issues" | jq -c --arg t "$digest_title" --arg m "$meta" \
-    '[.[] | select(.title == $t and any(.labels[]?; .name == $m) and (has("pull_request") | not))] | sort_by(.number) | .[0]')"
-  if [ "$digest_issue" = "null" ]; then
-    digest_issue="$(jq -n --arg t "$digest_title" --arg m "$meta" --arg s "$title" --argjson n "$number" \
-      '{title: $t, body: "Daily progress of \($s), posted by the scrum-daily-digest workflow. Not a task.", labels: [$m], milestone: $n}' \
-      | gh_send POST "repos/$repo/issues")"
+  find_digest_issue "$repo" "$sprint" "$issues" || die "cannot create the digest issue"
+  digest_issue="$DIGEST_ISSUE"
+  if [ "$DIGEST_CREATED" = 1 ]; then
     comments="[]"
-    info "Created issue #$(printf '%s' "$digest_issue" | jq -r .number) \"$digest_title\"."
   else
     comments="$(gh_get_all "repos/$repo/issues/$(printf '%s' "$digest_issue" | jq -r .number)/comments?per_page=100")"
   fi
