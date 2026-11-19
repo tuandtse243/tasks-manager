@@ -23,7 +23,7 @@
 ## 5. Kiểm tra tích hợp
 
 - [x] 5.1 Toàn bộ test của plugin, `shellcheck`, `openspec validate docs-by-role`. Kiểm tra: tất cả đạt
-- [ ] 5.2 Mở pull request, CI xanh, merge
+- [x] 5.2 Mở pull request, CI xanh, merge
 
 ## Workflow follow-up
 
