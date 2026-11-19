@@ -1,0 +1,5 @@
+{
+  "message": "An error occurred while adding the blocking issue to the issue. Validation failed: Target issue cannot be the same as the source issue",
+  "documentation_url": "https://docs.github.com/rest/issues/issue-dependencies#add-a-dependency-an-issue-is-blocked-by",
+  "status": "422"
+}

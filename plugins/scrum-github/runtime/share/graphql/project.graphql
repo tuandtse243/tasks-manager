@@ -1,0 +1,19 @@
+# The project, its fields and its built-in workflows. Variables: owner (user or org), number.
+query($owner: String!, $number: Int!) {
+  repositoryOwner(login: $owner) {
+    ... on ProjectV2Owner {
+      projectV2(number: $number) {
+        id
+        title
+        url
+        fields(first: 50) {
+          nodes {
+            ... on ProjectV2FieldCommon { id name dataType }
+            ... on ProjectV2SingleSelectField { options { id name } }
+          }
+        }
+        workflows(first: 50) { nodes { name enabled } }
+      }
+    }
+  }
+}

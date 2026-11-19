@@ -1,0 +1,224 @@
+# spec: repo-bootstrap
+
+label_plan() { # label_plan CONFIG_JSON EXISTING_JSON
+  jqt label-plan -n --argjson cfg "$1" --argjson existing "$2"
+}
+defaults() { cat "$PLUGIN_DIR/runtime/share/defaults.json"; }
+
+test_label_plan_first_run_keeps_bug() {
+  local plan
+  plan="$(label_plan "$(defaults)" "$(cat "$FIXTURES/labels-github-default.json")")"
+  assert_json_eq '["status: New","status: In progress","status: Done","points: 0","points: 1","points: 3","points: 7","type: feature","type: epic","scrum: meta","no-task"]' \
+    "$(printf '%s' "$plan" | jq -c '[.create[].name]')"
+  assert_eq '[]' "$(printf '%s' "$plan" | jq -c '.update')"
+  assert_eq '["bug"]' "$(printf '%s' "$plan" | jq -c '.unchanged')"
+}
+
+test_label_plan_second_run_changes_nothing() {
+  local plan
+  plan="$(label_plan "$(defaults)" "$(cat "$FIXTURES/labels-after-init.json")")"
+  assert_eq '[]' "$(printf '%s' "$plan" | jq -c '.create')"
+  assert_eq '[]' "$(printf '%s' "$plan" | jq -c '.update')"
+}
+
+test_label_plan_has_epic() {
+  local plan
+  plan="$(label_plan "$(defaults)" "[]")"
+  assert_json_eq '{"name":"type: epic","color":"5319e7","description":"Large requirement split into features"}' \
+    "$(printf '%s' "$plan" | jq -c '.create[] | select(.name == "type: epic")')"
+}
+
+# delta scrum-config "Nhãn epic: Repo cài bản cũ"
+test_label_plan_old_install_creates_only_epic() {
+  local old plan
+  old="$(jq 'map(select(.name != "type: epic"))' "$FIXTURES/labels-after-init.json")"
+  plan="$(label_plan "$(defaults)" "$old")"
+  assert_eq '["type: epic"]' "$(printf '%s' "$plan" | jq -c '[.create[].name]')"
+  assert_eq '[]' "$(printf '%s' "$plan" | jq -c '.update')"
+  assert_contains "$(printf '%s' "$plan" | jq -c '.unchanged')" '"type: feature"'
+}
+
+test_label_plan_restores_hand_edited_color() {
+  local existing plan
+  existing="$(jq 'map(if .name == "status: Done" then .color = "000000" else . end)' "$FIXTURES/labels-after-init.json")"
+  plan="$(label_plan "$(defaults)" "$existing")"
+  assert_json_eq '[{"current":"status: Done","name":"status: Done","color":"0e8a16","description":"Task finished"}]' \
+    "$(printf '%s' "$plan" | jq -c '.update')"
+}
+
+test_label_plan_reports_obsolete_points() {
+  local cfg plan
+  cfg="$(defaults | jq '.points.scale = [0,1,3]')"
+  plan="$(label_plan "$cfg" "$(cat "$FIXTURES/labels-after-init.json")")"
+  assert_eq '["points: 7"]' "$(printf '%s' "$plan" | jq -c '.obsolete')"
+  assert_eq '[]' "$(printf '%s' "$plan" | jq -c '.create')"
+}
+
+test_label_plan_color_override() {
+  local cfg plan
+  cfg="$(defaults | jq '.colors = {"bug": "#FF0000", "status: New": "123456"}')"
+  plan="$(label_plan "$cfg" "$(cat "$FIXTURES/labels-after-init.json")")"
+  assert_json_eq '["bug","status: New"]' "$(printf '%s' "$plan" | jq -c '[.update[].name] | sort')"
+  assert_eq 'ff0000' "$(printf '%s' "$plan" | jq -r '.update[] | select(.name == "bug") | .color')"
+}
+
+# ---------- scrum init with a fake gh ----------
+
+init_env() {
+  setup_fake_gh
+  setup_repo
+  route 'api --paginate repos/acme/blog/labels*' "labels.json"
+  cp "$FIXTURES/labels-github-default.json" "$FAKE_GH_DIR/labels.json"
+}
+
+test_init_creates_config_labels_and_files() {
+  init_env
+  run_scrum init
+  assert_status 0 "$STATUS" "$ERR"
+  [ -f "$SCRUM_REPO_DIR/.github/scrum.yml" ] || _fail "config not created"
+  assert_eq "$(cat "$PLUGIN_DIR/templates/scrum.yml")" "$(cat "$SCRUM_REPO_DIR/.github/scrum.yml")"
+  assert_eq "11" "$(gh_writes | grep -c 'POST repos/acme/blog/labels')" "11 labels created"
+  for f in ISSUE_TEMPLATE/task.yml pull_request_template.md workflows/scrum-status-sync.yml workflows/scrum-pr-link-check.yml workflows/scrum-daily-digest.yml scrum/bin/scrum scrum/lib/jq/scrum.jq scrum/share/defaults.json scrum/GENERATED.md; do
+    [ -f "$SCRUM_REPO_DIR/.github/$f" ] || _fail "missing .github/$f"
+  done
+  [ -x "$SCRUM_REPO_DIR/.github/scrum/bin/scrum" ] || _fail "vendored scrum not executable"
+  assert_contains "$OUT" "git add .github"
+}
+
+test_init_dry_run_writes_nothing() {
+  init_env
+  run_scrum init --dry-run
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "would create   status: New"
+  assert_contains "$OUT" "would create  .github/pull_request_template.md"
+  assert_eq "" "$(gh_writes)" "no GitHub writes"
+  [ ! -e "$SCRUM_REPO_DIR/.github/scrum.yml" ] || _fail "config written in dry run"
+  [ ! -e "$SCRUM_REPO_DIR/.github/scrum" ] || _fail "runtime written in dry run"
+}
+
+test_init_keeps_existing_config() {
+  init_env
+  printf 'points:\n  scale: [1, 2, 3, 5, 8]\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  run_scrum init
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq 'points:
+  scale: [1, 2, 3, 5, 8]' "$(cat "$SCRUM_REPO_DIR/.github/scrum.yml")"
+  assert_contains "$(gh_calls)" '"name":"points: 5"'
+  assert_contains "$(cat "$SCRUM_REPO_DIR/.github/ISSUE_TEMPLATE/task.yml")" '- "8"'
+}
+
+test_init_second_run_makes_no_writes() {
+  init_env
+  run_scrum init
+  assert_status 0 "$STATUS" "$ERR"
+  cp "$FIXTURES/labels-after-init.json" "$FAKE_GH_DIR/labels.json"
+  : > "$FAKE_GH_LOG"
+  run_scrum init
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "" "$(gh_writes)" "no GitHub writes on second run"
+  assert_not_contains "$OUT" "created"
+  assert_contains "$OUT" "unchanged     .github/workflows/scrum-status-sync.yml"
+}
+
+test_init_keeps_edited_file_until_forced() {
+  init_env
+  mkdir -p "$SCRUM_REPO_DIR/.github"
+  printf 'Our own template\n' > "$SCRUM_REPO_DIR/.github/pull_request_template.md"
+  run_scrum init
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "Our own template" "$(cat "$SCRUM_REPO_DIR/.github/pull_request_template.md")"
+  assert_contains "$OUT" "conflict      .github/pull_request_template.md"
+  assert_contains "$OUT" "--force-file .github/pull_request_template.md"
+  run_scrum init --force-file .github/pull_request_template.md
+  assert_contains "$(cat "$SCRUM_REPO_DIR/.github/pull_request_template.md")" "Closes #"
+}
+
+test_issue_form_follows_point_scale() {
+  init_env
+  printf 'points:\n  scale: [0, 1, 3, 7]\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  run_scrum init
+  local form; form="$(cat "$SCRUM_REPO_DIR/.github/ISSUE_TEMPLATE/task.yml")"
+  assert_contains "$form" 'labels: ["status: New"]'
+  assert_eq '["0","1","3","7"]' "$(yq -o=json '.body[] | select(.id == "points") | .attributes.options' "$SCRUM_REPO_DIR/.github/ISSUE_TEMPLATE/task.yml" | jq -c .)"
+  printf 'points:\n  scale: [1, 2, 3, 5, 8]\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  run_scrum init --force-file .github/ISSUE_TEMPLATE/task.yml
+  assert_eq '["1","2","3","5","8"]' "$(yq -o=json '.body[] | select(.id == "points") | .attributes.options' "$SCRUM_REPO_DIR/.github/ISSUE_TEMPLATE/task.yml" | jq -c .)"
+}
+
+test_digest_cron_comes_from_config() {
+  init_env
+  printf 'digest:\n  cron: "30 2 * * 1-5"\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  run_scrum init
+  assert_eq '30 2 * * 1-5' "$(yq '.on.schedule[0].cron' "$SCRUM_REPO_DIR/.github/workflows/scrum-daily-digest.yml")"
+}
+
+test_workflows_never_check_out_pr_code() {
+  local wf perms
+  for wf in "$PLUGIN_DIR"/templates/github/workflows/*.yml; do
+    assert_not_contains "$(cat "$wf")" "github.event.pull_request.head" "$(basename "$wf") checks out PR code"
+    # The only secret is the optional project token (delta pr-task-linking: Quyền tối thiểu cho workflow).
+    assert_eq "" "$(grep -o 'secrets\.[A-Za-z_]*' "$wf" | grep -v '^secrets\.SCRUM_PROJECT_TOKEN$' || true)" "$(basename "$wf") uses another secret"
+    perms="$(yq -o=json '.permissions' "$wf" | jq -c -S .)"
+    case "$(basename "$wf")" in
+      scrum-project-sync.yml) assert_eq '{"contents":"read","issues":"write"}' "$perms" "$(basename "$wf") permissions" ;;
+      *) assert_eq '{"contents":"read","issues":"write","pull-requests":"read"}' "$perms" "$(basename "$wf") permissions" ;;
+    esac
+  done
+  for wf in scrum-pr-link-check.yml scrum-daily-digest.yml; do
+    assert_not_contains "$(cat "$PLUGIN_DIR/templates/github/workflows/$wf")" "secrets." "$wf needs no secret"
+  done
+}
+
+test_init_second_run_does_not_ask_to_commit() {
+  init_env
+  git init -q "$SCRUM_REPO_DIR"
+  run_scrum init
+  git -C "$SCRUM_REPO_DIR" add -A && git -C "$SCRUM_REPO_DIR" -c user.email=t@example.com -c user.name=t commit -qm init
+  cp "$FIXTURES/labels-after-init.json" "$FAKE_GH_DIR/labels.json"
+  run_scrum init
+  assert_status 0 "$STATUS" "$ERR"
+  assert_not_contains "$OUT" "git add .github"
+}
+
+# ---------- project board (spec: project-board-sync, Workflow đồng bộ Project) ----------
+
+test_init_project_off_skips_project_workflow() {
+  init_env
+  run_scrum init
+  assert_status 0 "$STATUS" "$ERR"
+  [ ! -f "$SCRUM_REPO_DIR/.github/workflows/scrum-project-sync.yml" ] || _fail "project workflow installed while the project is off"
+  assert_contains "$(cat "$SCRUM_REPO_DIR/.github/workflows/scrum-status-sync.yml")" 'SCRUM_PROJECT_TOKEN: ${{ secrets.SCRUM_PROJECT_TOKEN }}'
+  assert_not_contains "$OUT" "scrum project init"
+}
+
+test_init_project_on_installs_workflow_with_cron() {
+  init_env
+  printf 'project:\n  enabled: true\n  owner: acme\n  number: 2\n  poll_cron: "*/20 1-11 * * 1-5"\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  run_scrum init
+  assert_status 0 "$STATUS" "$ERR"
+  local wf="$SCRUM_REPO_DIR/.github/workflows/scrum-project-sync.yml"
+  [ -f "$wf" ] || _fail "project workflow not installed"
+  assert_contains "$(cat "$wf")" 'cron: "*/20 1-11 * * 1-5"'
+  assert_contains "$(cat "$wf")" 'SCRUM_PROJECT_TOKEN: ${{ secrets.SCRUM_PROJECT_TOKEN }}'
+  assert_contains "$(cat "$wf")" 'group: scrum-project-sync'
+  assert_contains "$OUT" "scrum project init"
+}
+
+test_init_old_status_sync_is_a_conflict() {
+  init_env
+  run_scrum init
+  local wf="$SCRUM_REPO_DIR/.github/workflows/scrum-status-sync.yml"
+  # the file as version 0.1.0 installed it
+  grep -v 'SCRUM_PROJECT_TOKEN\|Optional: moves the card' "$wf" > "$wf.old"; mv "$wf.old" "$wf"
+  run_scrum init
+  assert_contains "$OUT" "conflict      .github/workflows/scrum-status-sync.yml"
+  run_scrum init --force-file .github/workflows/scrum-status-sync.yml
+  assert_contains "$OUT" "overwritten   .github/workflows/scrum-status-sync.yml"
+  assert_contains "$(cat "$wf")" "SCRUM_PROJECT_TOKEN"
+}
+
+test_version_matches_plugin_json() {
+  run_scrum --version
+  assert_eq "0.3.0" "$OUT"
+  assert_eq "$(jq -r .version "$PLUGIN_DIR/.claude-plugin/plugin.json")" "$OUT"
+}

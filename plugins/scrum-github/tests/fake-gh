@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# Fake gh for tests. Logs every call to $FAKE_GH_LOG and answers from $FAKE_GH_DIR/routes:
+# each line is "GLOB<TAB>FILE"; the first GLOB matching the joined arguments wins.
+# FILE "!fail" makes the call exit 1. No match prints nothing and exits 0.
+# A call made with GH_TOKEN set (the project token) is logged as "TOKEN <value>" first.
+args="$*"
+if [ -n "${GH_TOKEN:-}" ]; then printf 'TOKEN %s\n' "$GH_TOKEN" >> "$FAKE_GH_LOG"; fi
+printf '%s\n' "$args" >> "$FAKE_GH_LOG"
+case " $args " in
+  *" --input - "*)
+    body="$(cat)"
+    compact="$(printf '%s' "$body" | jq -c . 2>/dev/null || printf '%s' "$body" | tr '\n' ' ')"
+    printf 'STDIN %s\n' "$compact" >> "$FAKE_GH_LOG"
+    ;;
+esac
+# FILE "a.json,b.json,c.json" answers a.json on the first match, b.json on the second, and so
+# on; the last file answers every later match. Any of them may be "!fail".
+line_no=0
+while IFS="$(printf '\t')" read -r pat file; do
+  line_no=$((line_no + 1))
+  [ -n "$pat" ] || continue
+  # shellcheck disable=SC2254
+  case "$args" in
+    $pat)
+      case "$file" in
+        *,*)
+          count_file="$FAKE_GH_DIR/.seen.$line_no"
+          n=0; [ -f "$count_file" ] && n="$(cat "$count_file")"
+          printf '%s' "$((n + 1))" > "$count_file"
+          rest="$file"; i=0
+          while [ "$i" -lt "$n" ] && [ "${rest#*,}" != "$rest" ]; do rest="${rest#*,}"; i=$((i + 1)); done
+          file="${rest%%,*}" ;;
+      esac
+      if [ "$file" = "!fail" ]; then echo "gh: HTTP 422 (fake failure)" >&2; exit 1; fi
+      [ -n "$file" ] && cat "$FAKE_GH_DIR/$file"
+      exit 0
+      ;;
+  esac
+done < "$FAKE_GH_DIR/routes"
+exit 0

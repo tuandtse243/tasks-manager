@@ -1,0 +1,40 @@
+{
+  "brief": {
+    "description": "Requirement brief written by /scrum-github:discover: <planning.dir>/<slug>/brief.md",
+    "required": [
+      "Problem",
+      "Solution",
+      "Users and user stories",
+      "In scope",
+      "Out of scope",
+      "Decisions",
+      "Assumptions",
+      "Risks",
+      "Appendix: questions and answers"
+    ],
+    "optional": [
+      "Size",
+      "Project fit",
+      "Sources"
+    ],
+    "stamp": false
+  },
+  "context": {
+    "description": "Project context written by /scrum-github:project-scan: planning.context_file",
+    "required": [
+      "Overview",
+      "Technology",
+      "Directory structure",
+      "Main flows",
+      "Data model",
+      "External integrations",
+      "Conventions",
+      "Running and testing",
+      "Glossary"
+    ],
+    "optional": [
+      "Team notes"
+    ],
+    "stamp": true
+  }
+}

@@ -1,0 +1,24 @@
+# One issue and the project items it belongs to. Variables: owner, name, number, status, synced, points.
+query($owner: String!, $name: String!, $number: Int!, $status: String!, $synced: String!, $points: String!) {
+  repository(owner: $owner, name: $name) {
+    issue(number: $number) {
+      id
+      number
+      state
+      stateReason
+      repository { nameWithOwner }
+      labels(first: 50) { nodes { name } }
+      milestone { number state }
+      projectItems(first: 20) {
+        nodes {
+          id
+          type
+          project { id }
+          status: fieldValueByName(name: $status) { ... on ProjectV2ItemFieldSingleSelectValue { name } }
+          synced: fieldValueByName(name: $synced) { ... on ProjectV2ItemFieldTextValue { text } }
+          points: fieldValueByName(name: $points) { ... on ProjectV2ItemFieldNumberValue { number } }
+        }
+      }
+    }
+  }
+}

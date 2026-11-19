@@ -1,0 +1,157 @@
+#!/usr/bin/env bash
+# scrum: Scrum on GitHub. Entry point for skills, workflows and the command line.
+# Works on Bash 3.2 (macOS default) and later.
+set -euo pipefail
+
+SCRUM_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export SCRUM_ROOT
+
+# shellcheck source=../lib/common.sh
+. "$SCRUM_ROOT/lib/common.sh"
+
+usage() {
+  cat <<'EOF'
+Usage: scrum <command> [options]
+
+Setup
+  init [--dry-run] [--force] [--force-file PATH]   Prepare this repo: config, labels, templates, workflows
+  config                                          Print the merged configuration as JSON
+
+Sprints
+  sprint new [--title T] [--start YYYY-MM-DD] [--length DAYS] [--goal TEXT]
+  sprint close [SPRINT] [--yes] [--create-next]
+
+Tasks
+  task new --title T [--body B] [--points N] [--assignee LOGIN]... [--sprint S] [--bug]
+  task start NUMBER
+
+Plans (a plan file per requirement: <planning.dir>/<slug>/plan.json, see share/plan.schema.json)
+  plan init "<title>" [--slug SLUG]               Create the plan folder; print its paths as JSON (offline)
+  plan validate FILE                              Check a plan; print features, tasks, points (offline)
+  plan render FILE [--out PATH] [--offline]       Write the plan.md view with estimates
+  plan check FILE [--offline]                     validate + render + what apply would do; writes nothing to GitHub
+  plan apply FILE [--dry-run] [--update]          Create the missing epic, features and tasks, link them, record numbers
+
+Documents (offline)
+  doc check FILE [--type brief|context]           Check the required sections of a brief or the project context
+  context inventory                               Print an inventory of the repo (git ls-files) as JSON
+  context status                                  Print whether the project context exists and how stale it is
+  context stamp                                   Record HEAD and today's date in the project context
+
+Progress
+  status [SPRINT] [--json]                        Progress table by person and status
+  report [SPRINT] [--out FILE]                    Self-contained HTML burndown report
+  digest                                          Post the daily digest (used by the scheduled workflow)
+
+Project board (GitHub Projects, optional: project.enabled in .github/scrum.yml)
+  project init [--dry-run] [--allow-builtin-workflows]
+                                                  Check the project, create its fields, add sprint tasks
+  project sync [--issue N]                        Sync statuses and points between labels and the board
+
+Automation (GitHub Actions)
+  event                                           Apply status rules for $GITHUB_EVENT_PATH
+  pr-check                                        Fail when a pull request links no task
+
+Environment
+  SCRUM_REPO      owner/name of the target repo (default: GITHUB_REPOSITORY or the current git remote)
+  SCRUM_TODAY     override today's date (YYYY-MM-DD), mainly for tests
+  SCRUM_PROJECT_TOKEN  token for the project board (default: gh's own login)
+EOF
+}
+
+cmd="${1:-}"
+if [ $# -gt 0 ]; then shift; fi
+
+case "$cmd" in
+  ""|help|-h|--help)
+    usage
+    ;;
+  --version|version)
+    cat "$SCRUM_ROOT/VERSION"
+    ;;
+  init)
+    . "$SCRUM_ROOT/lib/cmd_init.sh"; cmd_init "$@"
+    ;;
+  config)
+    require_tools nogh
+    load_config
+    printf '%s\n' "$CONFIG_JSON"
+    ;;
+  sprint)
+    sub="${1:-}"; if [ $# -gt 0 ]; then shift; fi
+    . "$SCRUM_ROOT/lib/cmd_sprint.sh"
+    case "$sub" in
+      new) cmd_sprint_new "$@" ;;
+      close) cmd_sprint_close "$@" ;;
+      *) die "unknown sprint command '${sub}'. Use: scrum sprint new | scrum sprint close" ;;
+    esac
+    ;;
+  task)
+    sub="${1:-}"; if [ $# -gt 0 ]; then shift; fi
+    . "$SCRUM_ROOT/lib/cmd_task.sh"
+    case "$sub" in
+      new) cmd_task_new "$@" ;;
+      start) cmd_task_start "$@" ;;
+      *) die "unknown task command '${sub}'. Use: scrum task new | scrum task start" ;;
+    esac
+    ;;
+  plan)
+    sub="${1:-}"; if [ $# -gt 0 ]; then shift; fi
+    . "$SCRUM_ROOT/lib/cmd_plan.sh"
+    case "$sub" in
+      init) cmd_plan_init "$@" ;;
+      validate) cmd_plan_validate "$@" ;;
+      render) cmd_plan_render "$@" ;;
+      check) cmd_plan_check "$@" ;;
+      apply) cmd_plan_apply "$@" ;;
+      *) die "unknown plan command '${sub}'. Use: scrum plan init | validate | render | check | apply" ;;
+    esac
+    ;;
+  doc)
+    sub="${1:-}"; if [ $# -gt 0 ]; then shift; fi
+    . "$SCRUM_ROOT/lib/cmd_doc.sh"
+    case "$sub" in
+      check) cmd_doc_check "$@" ;;
+      *) die "unknown doc command '${sub}'. Use: scrum doc check FILE [--type brief|context]" ;;
+    esac
+    ;;
+  context)
+    sub="${1:-}"; if [ $# -gt 0 ]; then shift; fi
+    . "$SCRUM_ROOT/lib/cmd_context.sh"
+    case "$sub" in
+      inventory) cmd_context_inventory "$@" ;;
+      status) cmd_context_status "$@" ;;
+      stamp) cmd_context_stamp "$@" ;;
+      *) die "unknown context command '${sub}'. Use: scrum context inventory | status | stamp" ;;
+    esac
+    ;;
+  project)
+    sub="${1:-}"; if [ $# -gt 0 ]; then shift; fi
+    . "$SCRUM_ROOT/lib/cmd_project.sh"
+    case "$sub" in
+      init) cmd_project_init "$@" ;;
+      sync) cmd_project_sync "$@" ;;
+      *) die "unknown project command '${sub}'. Use: scrum project init | scrum project sync" ;;
+    esac
+    ;;
+  status)
+    . "$SCRUM_ROOT/lib/cmd_report.sh"; cmd_status "$@"
+    ;;
+  report)
+    . "$SCRUM_ROOT/lib/cmd_report.sh"; cmd_report "$@"
+    ;;
+  digest)
+    . "$SCRUM_ROOT/lib/cmd_digest.sh"; cmd_digest "$@"
+    ;;
+  event)
+    . "$SCRUM_ROOT/lib/cmd_event.sh"; cmd_event "$@"
+    ;;
+  pr-check)
+    . "$SCRUM_ROOT/lib/cmd_event.sh"; cmd_pr_check "$@"
+    ;;
+  *)
+    printf 'scrum: unknown command "%s"\n\n' "$cmd" >&2
+    usage >&2
+    exit 2
+    ;;
+esac

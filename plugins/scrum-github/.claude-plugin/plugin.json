@@ -1,0 +1,9 @@
+{
+  "name": "scrum-github",
+  "version": "0.3.0",
+  "description": "Run Scrum on GitHub: sprints as milestones, tasks as issues, automatic status from pull requests, burndown reports and daily digests, and AI planning from a requirement to an epic, features and tasks.",
+  "author": {
+    "name": "task-manageer maintainers"
+  },
+  "keywords": ["scrum", "github", "sprint", "milestone", "issues", "burndown"]
+}

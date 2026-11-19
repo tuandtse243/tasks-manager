@@ -1,0 +1,28 @@
+name: Task
+description: A task for the current sprint
+labels: [{{STATUS_NEW_LABEL}}]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What needs to be done?
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      placeholder: |
+        - [ ] ...
+    validations:
+      required: false
+  - type: dropdown
+    id: points
+    attributes:
+      label: Points
+      description: Story points. Leave empty if not estimated yet.
+      options:
+{{POINTS_OPTIONS}}
+    validations:
+      required: false

@@ -1,0 +1,4 @@
+# Add an issue to a project. Variables: project, content (issue node id).
+mutation($project: ID!, $content: ID!) {
+  addProjectV2ItemById(input: {projectId: $project, contentId: $content}) { item { id } }
+}

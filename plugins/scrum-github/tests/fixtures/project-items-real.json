@@ -1,0 +1,158 @@
+{
+  "data": {
+    "node": {
+      "items": {
+        "pageInfo": {
+          "hasNextPage": false,
+          "endCursor": "Y3Vyc29yOnYyOpKrMDAwMDAwMDAuMjXOEnJX_g=="
+        },
+        "nodes": [
+          {
+            "id": "PVTI_r0",
+            "type": "ISSUE",
+            "content": {
+              "id": "I_r0",
+              "number": 11,
+              "state": "OPEN",
+              "stateReason": null,
+              "repository": {
+                "nameWithOwner": "tuandtse243/scrum-sandbox"
+              },
+              "labels": {
+                "nodes": [
+                  {
+                    "name": "status: New"
+                  },
+                  {
+                    "name": "points: 1"
+                  }
+                ]
+              },
+              "milestone": {
+                "number": 2,
+                "state": "OPEN"
+              }
+            },
+            "status": {
+              "name": "Todo"
+            },
+            "synced": {
+              "text": "new"
+            },
+            "points": {
+              "number": 1.0
+            }
+          },
+          {
+            "id": "PVTI_r1",
+            "type": "ISSUE",
+            "content": {
+              "id": "I_r1",
+              "number": 10,
+              "state": "OPEN",
+              "stateReason": null,
+              "repository": {
+                "nameWithOwner": "tuandtse243/scrum-sandbox"
+              },
+              "labels": {
+                "nodes": [
+                  {
+                    "name": "status: New"
+                  },
+                  {
+                    "name": "points: 3"
+                  }
+                ]
+              },
+              "milestone": {
+                "number": 2,
+                "state": "OPEN"
+              }
+            },
+            "status": {
+              "name": "Todo"
+            },
+            "synced": {
+              "text": "new"
+            },
+            "points": {
+              "number": 3.0
+            }
+          },
+          {
+            "id": "PVTI_r2",
+            "type": "ISSUE",
+            "content": {
+              "id": "I_r2",
+              "number": 4,
+              "state": "OPEN",
+              "stateReason": null,
+              "repository": {
+                "nameWithOwner": "tuandtse243/scrum-sandbox"
+              },
+              "labels": {
+                "nodes": [
+                  {
+                    "name": "status: New"
+                  },
+                  {
+                    "name": "points: 3"
+                  }
+                ]
+              },
+              "milestone": {
+                "number": 2,
+                "state": "OPEN"
+              }
+            },
+            "status": {
+              "name": "Todo"
+            },
+            "synced": {
+              "text": "new"
+            },
+            "points": {
+              "number": 3.0
+            }
+          },
+          {
+            "id": "PVTI_r3",
+            "type": "ISSUE",
+            "content": {
+              "id": "I_r3",
+              "number": 3,
+              "state": "OPEN",
+              "stateReason": null,
+              "repository": {
+                "nameWithOwner": "tuandtse243/scrum-sandbox"
+              },
+              "labels": {
+                "nodes": [
+                  {
+                    "name": "status: In progress"
+                  },
+                  {
+                    "name": "points: 1"
+                  }
+                ]
+              },
+              "milestone": {
+                "number": 2,
+                "state": "OPEN"
+              }
+            },
+            "status": {
+              "name": "In Progress"
+            },
+            "synced": {
+              "text": "in_progress"
+            },
+            "points": {
+              "number": 1.0
+            }
+          }
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "task-manageer",
+  "owner": {
+    "name": "task-manageer maintainers"
+  },
+  "plugins": [
+    {
+      "name": "scrum-github",
+      "source": "./plugins/scrum-github",
+      "description": "Run Scrum on GitHub: sprints as milestones, tasks as issues, automatic status from pull requests, burndown reports and daily digests, and AI planning from a requirement to an epic, features and tasks."
+    }
+  ]
+}
