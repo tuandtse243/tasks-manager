@@ -36,6 +36,9 @@ gh_graphql() {
   ghp api graphql -F "query=@$SHARE_DIR/graphql/$q.graphql" "$@"
 }
 
+# The fixed texts in the configured language (share/strings.json), as JSON. Needs CONFIG_JSON.
+strings_json() { jq -c --arg l "$(config_get '.language // "en"')" '.[$l] // .en' "$SHARE_DIR/strings.json"; }
+
 # Run a jq program from lib/jq with that directory on the module path.
 jqlib() {
   local prog="$1"; shift

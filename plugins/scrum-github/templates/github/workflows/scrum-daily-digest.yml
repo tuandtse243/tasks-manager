@@ -22,3 +22,6 @@ jobs:
         run: .github/scrum/bin/scrum digest
         env:
           GH_TOKEN: ${{ github.token }}
+          # Optional: the digest also goes to a chat (Slack, Google Chat, Mattermost or Telegram)
+          # when this repository secret is set; see digest.webhook_format in .github/scrum.yml.
+          SCRUM_DIGEST_WEBHOOK: ${{ secrets.SCRUM_DIGEST_WEBHOOK }}

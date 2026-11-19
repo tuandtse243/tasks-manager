@@ -15,21 +15,30 @@ backlog_count() {
     'include "scrum"; [.[] | select(.state == "open" and .milestone == null and is_task($cfg))] | length'
 }
 
-# fetch_backlog REPO [ISSUES]  Sets BACKLOG to the output of backlog.jq.
-fetch_backlog() {
-  local issues="${2:-}" nums n list blocked='{}'
-  [ -n "$issues" ] || issues="$(backlog_issues "$1")"
-  nums="$(printf '%s' "$issues" | jq -r -L "$JQ_LIB" --argjson cfg "$CONFIG_JSON" --argjson max "$BACKLOG_BLOCKED_LIMIT" \
-    'include "scrum"; [.[] | select(.state == "open" and .milestone == null and is_task($cfg)) | .number] | sort | .[:$max][]')"
-  for n in $nums; do
-    if list="$(gh_get_all "repos/$1/issues/$n/dependencies/blocked_by?per_page=100" 2>/dev/null)"; then
+# blocked_map REPO NUMBERS...  {"N": [open blocking numbers]} for each number; null when GitHub
+# did not answer. One call per number: callers pass at most BACKLOG_BLOCKED_LIMIT numbers.
+blocked_map() {
+  local repo="$1" n list blocked='{}'
+  shift
+  for n in "$@"; do
+    if list="$(gh_get_all "repos/$repo/issues/$n/dependencies/blocked_by?per_page=100" 2>/dev/null)"; then
       list="$(printf '%s' "$list" | jq -c '[.[] | select(.state == "open") | .number] | sort' 2>/dev/null)" || list=null
     else
       list=null
     fi
     blocked="$(printf '%s' "$blocked" | jq -c --arg k "$n" --argjson v "$list" '.[$k] = $v')"
   done
-  BACKLOG="$(printf '%s' "$issues" | jqlib backlog --argjson cfg "$CONFIG_JSON" --argjson blocked "$blocked")"
+  printf '%s' "$blocked"
+}
+
+# fetch_backlog REPO [ISSUES]  Sets BACKLOG to the output of backlog.jq.
+fetch_backlog() {
+  local issues="${2:-}" nums
+  [ -n "$issues" ] || issues="$(backlog_issues "$1")"
+  nums="$(printf '%s' "$issues" | jq -r -L "$JQ_LIB" --argjson cfg "$CONFIG_JSON" --argjson max "$BACKLOG_BLOCKED_LIMIT" \
+    'include "scrum"; [.[] | select(.state == "open" and .milestone == null and is_task($cfg)) | .number] | sort | .[:$max][]')"
+  # shellcheck disable=SC2086  # one number per word
+  BACKLOG="$(printf '%s' "$issues" | jqlib backlog --argjson cfg "$CONFIG_JSON" --argjson blocked "$(blocked_map "$1" $nums)")"
 }
 
 # print_backlog  The backlog in BACKLOG, for a person.

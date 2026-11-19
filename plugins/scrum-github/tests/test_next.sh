@@ -81,7 +81,7 @@ test_next_start_lowest_unassigned_never_someone_elses() {
 test_next_nothing_left() {
   next_of true true "$SPRINT" "$( { issue 22 New 3 bob; issue 12 'In progress' 3 bob; issue 9 Done 1 alice; } | issues)"
   assert_eq "done" "$(step_id)"
-  assert_contains "$(printf '%s' "$STEP" | jq -r .message)" "9 days left"
+  assert_contains "$(printf '%s' "$STEP" | jq -r .message)" "7 days left"
   assert_eq "/scrum-github:sprint-status" "$(printf '%s' "$STEP" | jq -r .command)"
 }
 

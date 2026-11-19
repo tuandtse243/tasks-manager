@@ -330,3 +330,43 @@ test_cmd_sprint_new_no_hint_with_empty_backlog() {
   assert_status 0 "$STATUS" "$ERR"
   assert_not_contains "$OUT" "sprint-fill"
 }
+
+# ---------- sprint summary on close (delta sprint-lifecycle "Đóng sprint") ----------
+
+close_env() { # Sprint 1 with Sprint 2 open next, and Sprint 0 closed with velocity 8
+  sprint_env
+  jq '. + [{"number":2,"title":"Sprint 2","state":"open","description":"<!-- scrum:start=2014-09-29 end=2014-10-03 -->"},
+           {"number":0,"title":"Sprint 0","state":"closed","closed_at":"2014-09-19T18:00:00Z","description":"<!-- scrum:start=2014-09-15 end=2014-09-19 -->\n<!-- scrum:velocity=8 -->"}]' \
+    "$FIXTURES/milestones.json" > "$FAKE_GH_DIR/milestones.json"
+}
+
+test_cmd_close_posts_summary_on_digest_issue() {
+  close_env
+  run_scrum sprint close "Sprint 1" --yes
+  assert_status 0 "$STATUS" "$ERR"
+  local body; body="$(gh_calls | grep -A1 'issues/8/comments' | sed -n 's/^STDIN //p' | jq -r .body)"
+  assert_contains "$body" "<!-- scrum:summary -->"
+  assert_contains "$body" "## Sprint 1 summary"
+  assert_contains "$body" "**Velocity:** 10 points. The sprint before: 8 (Sprint 0: 8)."
+  assert_contains "$body" "- #2 Login (3 pts)"
+  assert_contains "$body" "### Carried over to the next sprint"
+  assert_contains "$body" "- #4 Add a comment (3 pts, New)"
+  assert_contains "$OUT" "Posted the sprint summary on #8."
+}
+
+test_cmd_close_summary_failure_is_a_warning() {
+  close_env
+  route_first 'api -X POST repos/acme/blog/issues/8/comments*' '!fail'
+  run_scrum sprint close "Sprint 1" --yes
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$ERR" "the sprint summary was not posted"
+  assert_contains "$(gh_calls)" '"state":"closed"'
+}
+
+test_cmd_close_summary_in_vietnamese() {
+  close_env
+  printf 'version: 1\nlanguage: vi\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  run_scrum sprint close "Sprint 1" --yes
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$(gh_calls)" "Tổng kết Sprint 1"
+}

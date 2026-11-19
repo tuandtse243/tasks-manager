@@ -10,6 +10,12 @@ def days_between($a; $b): ((($b | date_epoch) - ($a | date_epoch)) / 86400) | fl
 # ISO timestamp -> local date for a UTC offset in seconds.
 def local_date($off): (fromdateiso8601 + $off) | epoch_date;
 def is_date: type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+# ISO weekday of a date: 1 = Monday ... 7 = Sunday.
+def weekday: date_epoch | strftime("%u") | tonumber;
+def is_working_day($cfg): weekday as $w | ($cfg.sprint.working_days // [1, 2, 3, 4, 5]) | index($w) != null;
+# Working days from $a to $b, both included (0 when $b is before $a).
+def working_days_between($cfg; $a; $b):
+  if $b < $a then 0 else [range(0; days_between($a; $b) + 1) | . as $i | $a | add_days($i) | select(is_working_day($cfg))] | length end;
 
 # ---------- text ----------
 # Lowercase ASCII words joined by "-", at most 40 characters. Non-ASCII letters are dropped,
@@ -18,6 +24,25 @@ def slug_text:
   ascii_downcase | gsub("[^a-z0-9]+"; "-") | gsub("^-+|-+$"; "") | .[0:40] | gsub("-+$"; "");
 def slug: slug_text | if . == "" then "task" else . end;
 def is_slug: type == "string" and test("^[a-z0-9]+(-[a-z0-9]+)*$");
+
+# ---------- text in the configured language (share/strings.json) ----------
+# $s is the table of one language. {name} in the text is replaced by $args.name; a missing key
+# prints the key itself, so a gap is visible rather than silent.
+def tr($s; $key; $args):
+  reduce ($args | to_entries[]) as $e (($s[$key] // $key); gsub("\\{" + $e.key + "\\}"; $e.value | tostring));
+def tr($s; $key): tr($s; $key; {});
+# Picks "<key>_one" for 1 when the language has it (English plural), else "<key>"; {n} is $n.
+def trn($s; $key; $n; $args):
+  tr($s; (if $n == 1 and $s[$key + "_one"] != null then $key + "_one" else $key end); $args + {n: $n});
+
+# ---------- pull request links ----------
+# Input: a pull request body. Issue numbers it closes in $repo (close/fix/resolve keywords).
+# HTML comments are ignored, like GitHub does. References to other repositories are ignored.
+def closing_refs($repo):
+  gsub("<!--[\\s\\S]*?-->"; "") as $b
+  | ($repo | ascii_downcase) as $r
+  | [ $b | capture("(?<![A-Za-z0-9_])(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?):?\\s+(?:(?<repo>[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+))?#(?<num>[0-9]+)(?![0-9])"; "gi")
+      | select(.repo == null or (.repo | ascii_downcase) == $r) | .num | tonumber ] | unique;
 
 # ---------- labels and tasks ----------
 def label_names: [.labels[]? | if type == "object" then .name else . end];
@@ -111,11 +136,18 @@ def current_sprint($today):
      | sort_by(sprint_info.start) | .[0])
     // ($open | sort_by(sprint_info.end // "9999-12-31") | .[0]);
 
-def days_left($s; $today):
+# Working days left, today included (spec sprint-reporting "Tóm tắt tiến độ sprint").
+def days_left($cfg; $s; $today):
   if $s.end == null then null
   elif $today > $s.end then 0
-  elif $today < $s.start then days_between($s.start; $s.end) + 1
-  else days_between($today; $s.end) + 1 end;
+  else working_days_between($cfg; (if $today < $s.start then $s.start else $today end); $s.end) end;
+
+# Ideal remaining at the end of day $d: falls only across working days, from $total to 0.
+def ideal_at($cfg; $s; $total; $d):
+  working_days_between($cfg; $s.start; $s.end) as $w
+  | if $w <= 1 then (if $d >= $s.end then 0 else $total end)
+    else working_days_between($cfg; $s.start; ($d | add_days(-1))) as $k
+    | (($total * (1 - ([$k, $w - 1] | min) / ($w - 1))) * 100 | round) / 100 end;
 
 # ---------- progress ----------
 def bucket: {count: length, points: ([.[]._pts // 0] | add // 0)};
@@ -143,21 +175,66 @@ def progress($cfg; $sprint; $issues; $today):
       total: $total,
       pct_done: (if $total.total.points > 0 then ($total.done.points * 100 / $total.total.points | round) else null end),
       unestimated: ([$t[] | select(._pts == null)] | length),
-      days_left: days_left($s; $today) };
+      days_left: days_left($cfg; $s; $today) };
 
 # ---------- burndown ----------
+# Issues may carry `_events` (GitHub issue events, oldest first). The state of an issue at the
+# end of day $d is rebuilt by undoing, from its current state, the events after $d: labeled X
+# removes X, unlabeled X adds it back, milestoned into the sprint means it was not in yet,
+# demilestoned from the sprint means it still was, closed/reopened flip the state. Without
+# events an issue is in the sprint from the first day and closes at its closed_at.
+# `_in_now: false` marks an issue that is not in the sprint any more (it may have left it).
+
+# day_state($cfg; $title; $d; $off) on one issue -> {in, pts, done}
+def day_state($cfg; $title; $d; $off):
+  . as $i
+  | ([$i._events // [] | .[] | select((.created_at | local_date($off)) > $d)] | reverse) as $after
+  | ([$i._events // [] | .[] | select(.event == "closed" or .event == "reopened")] | length > 0) as $tracked
+  | reduce $after[] as $e (
+      { labels: [$i.labels[]? | if type == "object" then .name else . end],
+        in: (if $i | has("_in_now") then $i._in_now else true end),   # not `//`: false is a value
+        closed: ($i.state == "closed") };
+      if $e.event == "labeled" then .labels -= [$e.label.name]
+      elif $e.event == "unlabeled" then .labels += [$e.label.name]
+      elif $e.event == "milestoned" and $e.milestone.title == $title then .in = false
+      elif $e.event == "demilestoned" and $e.milestone.title == $title then .in = true
+      elif $e.event == "closed" then .closed = false
+      elif $e.event == "reopened" then .closed = true
+      else . end )
+  | ( [$i._events // [] | .[] | select(.event == "closed" and (.created_at | local_date($off)) <= $d)] | .[-1] ) as $last_close
+  | (if $tracked then .closed
+     else ($i.state == "closed" and $i.closed_at != null and (($i.closed_at | local_date($off)) <= $d)) end) as $closed
+  | (($last_close.state_reason // $i.state_reason // "completed") | if . == null then "completed" else . end) as $reason
+  | (if $i.created_at != null and (($i.created_at | local_date($off)) > $d) then false else .in end) as $in
+  | { in: ($in and (($closed and $reason == "not_planned") | not)),
+      pts: ({labels: (.labels | map({name: .}))} | task_points($cfg)),
+      done: ($closed and $reason != "not_planned") };
+
 def burndown($cfg; $sprint; $issues; $today; $off):
   ($sprint | sprint_info) as $s
-  | ($issues | report_tasks($cfg)) as $t
-  | ([$t[]._pts // 0] | add // 0) as $total
+  # A task closed as not planned counts nowhere, not even before it was dropped (spec
+  # sprint-reporting "Phạm vi số liệu").
+  | [$issues[] | select(is_task($cfg)) | select(is_not_planned | not)] as $t
   | (days_between($s.start; $s.end) + 1) as $n
+  | [range(0; $n) | . as $k | $s.start | add_days($k)] as $dates
+  | [$dates[] as $d | [$t[] | day_state($cfg; $s.title; $d; $off) + {number}]] as $states
+  | [$states[] | [.[] | select(.in) | .pts // 0] | add // 0] as $scope
+  | ($scope[0]) as $total
+  | [range(1; $n) as $k | select($dates[$k] <= $today)
+     | ($states[$k - 1] | map({key: (.number | tostring), value: .}) | from_entries) as $prev
+     | $states[$k][] | . as $now | ($prev[.number | tostring]) as $was
+     | if $now.in and ($was.in | not) then {added: ($now.pts // 0)}
+       elif ($now.in | not) and $was.in then {removed: ($was.pts // 0)}
+       else empty end ] as $moves
   | { start: $s.start, end: $s.end, total: $total,
-      days: [range(0; $n) | . as $i | ($s.start | add_days($i)) as $d
+      added: ([$moves[].added // 0] | add // 0),
+      removed: ([$moves[].removed // 0] | add // 0),
+      days: [range(0; $n) as $k | $dates[$k] as $d
         | { date: $d,
-            ideal: (if $n == 1 then 0 else (($total * (1 - ($i / ($n - 1)))) * 100 | round) / 100 end),
+            ideal: ideal_at($cfg; $s; $total; $d),
+            scope: (if $d > $today then null else $scope[$k] end),
             remaining: (if $d > $today then null
-                        else $total - ([$t[] | select(is_completed and ((.closed_at | local_date($off)) <= $d)) | ._pts // 0] | add // 0)
-                        end) }] };
+                        else [$states[$k][] | select(.in and (.done | not)) | .pts // 0] | add // 0 end) }] };
 
 # ---------- project board (GitHub Projects v2) ----------
 # Kept in this file, not in a project.jq that includes it: jq 1.8.2 aborts at compile time

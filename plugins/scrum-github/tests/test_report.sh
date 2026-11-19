@@ -2,6 +2,7 @@
 
 defaults() { cat "$PLUGIN_DIR/runtime/share/defaults.json"; }
 sprint1() { jq '.[0]' "$FIXTURES/milestones.json"; }
+strings() { jq -c --arg l "$1" '.[$l]' "$PLUGIN_DIR/runtime/share/strings.json"; }
 
 progress_of() { # progress_of ISSUES TODAY
   jqt progress -n --argjson cfg "$(defaults)" --argjson sprint "$(sprint1)" --argjson issues "$1" --arg today "$2"
@@ -31,8 +32,8 @@ test_progress_shared_task_counted_once() {
 
 test_progress_table_text() {
   local table
-  table="$(progress_of "$(cat "$FIXTURES/issues-sprint1.json")" 2014-09-24 | jqt progress-table -r)"
-  assert_contains "$table" "Sprint 1  (2014-09-22 to 2014-09-26, 3 days left)"
+  table="$(progress_of "$(cat "$FIXTURES/issues-sprint1.json")" 2014-09-24 | jqt progress-table -r --argjson cfg "$(defaults)" --argjson strings "$(strings en)")"
+  assert_contains "$table" "Sprint 1  (2014-09-22 to 2014-09-26, 3 working days left)"
   assert_contains "$table" "david     1 (3 pts)  1 (1 pt)     1 (3 pts)   3 (7 pts)"
   assert_contains "$table" "Done: 71% of points (10 of 14)."
 }
@@ -74,7 +75,7 @@ test_cmd_status_table() {
   report_env
   run_scrum status
   assert_status 0 "$STATUS" "$ERR"
-  assert_contains "$OUT" "Sprint 1  (2014-09-22 to 2014-09-26, 3 days left)"
+  assert_contains "$OUT" "Sprint 1  (2014-09-22 to 2014-09-26, 3 working days left)"
   assert_contains "$OUT" "ruby"
   assert_eq "" "$(gh_writes)" "status never writes"
 }
@@ -107,16 +108,18 @@ test_cmd_report_writes_self_contained_html() {
   assert_eq "Register, login, post, comment" "$(jq -r .goal <<<"$data")"
 }
 
-digest_body() { # digest_body COMMENTS TODAY
+digest_body() { # digest_body COMMENTS TODAY [LANG] [ATTENTION_JSON]
   jqt digest -n --argjson cfg "$(defaults)" --argjson sprint "$(sprint1)" --argjson issues "$(cat "$FIXTURES/issues-sprint1.json")" \
-    --argjson comments "$1" --arg today "$2" --argjson off 0 | jq -r .body
+    --argjson comments "$1" --arg today "$2" --argjson off 0 --argjson strings "$(strings "${3:-en}")" \
+    --argjson attention "${4:-[]}" | jq -r .body
 }
 
 test_digest_first_day_counts_from_sprint_start() {
   local body; body="$(digest_body '[]' 2014-09-24)"
   assert_contains "$body" "<!-- scrum:digest -->"
   assert_contains "$body" "## Sprint 1 digest, 2014-09-24"
-  assert_contains "$body" "**Remaining:** 4 of 14 points. 3 days left (ends 2014-09-26)."
+  assert_contains "$body" "**Remaining:** 4 of 14 points. 3 working days left (ends 2014-09-26)."
+  assert_not_contains "$body" "Needs attention"
   assert_contains "$body" "### Done since the start of the sprint"
   assert_contains "$body" "- #2 Login (3 pts), @david"
   assert_contains "$body" "- @david: #3 Write a post (1 pt)"
@@ -190,4 +193,303 @@ test_epic_is_not_a_task_for_status_sync() {
   local d
   d="$(jq -n -L "$PLUGIN_DIR/runtime/lib/jq" --argjson cfg "$(defaults)" 'include "scrum"; {labels: [{name: "type: epic"}]} | is_task($cfg)')"
   assert_eq "false" "$d"
+}
+
+# ---------- working days (delta sprint-reporting) ----------
+
+jqs() { jq -n -L "$PLUGIN_DIR/runtime/lib/jq" --argjson cfg "$(defaults)" "include \"scrum\"; $1"; }
+
+test_days_left_skips_the_weekend() {
+  # Friday 2026-11-20, sprint ends Tuesday 2026-11-24: Friday, Monday, Tuesday.
+  assert_eq "3" "$(jqs '{start: "2026-11-16", end: "2026-11-24"} as $s | days_left($cfg; $s; "2026-11-20")')"
+  assert_eq "0" "$(jqs '{start: "2026-11-16", end: "2026-11-24"} as $s | days_left($cfg; $s; "2026-11-25")')"
+}
+
+test_ideal_is_flat_over_the_weekend() {
+  # Monday 2026-11-16 to Friday 2026-11-27: 10 working days, 18 points.
+  local ideal
+  ideal="$(jqs '{start: "2026-11-16", end: "2026-11-27"} as $s | [range(0; 12) as $i | ideal_at($cfg; $s; 18; ($s.start | add_days($i)))]' | jq -c .)"
+  assert_eq '[18,16,14,12,10,8,8,8,6,4,2,0]' "$ideal" "Sat 21, Sun 22 and Mon 23 stay at 8"
+}
+
+test_working_days_from_config() {
+  assert_eq "6" "$(jq -n -L "$PLUGIN_DIR/runtime/lib/jq" --argjson cfg "$(defaults | jq '.sprint.working_days = [1,2,3,4,5,6]')" \
+    'include "scrum"; working_days_between($cfg; "2026-11-16"; "2026-11-22")')"
+}
+
+# ---------- language (delta scrum-config "Ngôn ngữ") ----------
+
+test_strings_have_the_same_keys_in_every_language() {
+  # A key may only be missing in vi when it is the English plural form "<key>_one".
+  local missing
+  missing="$(jq -r '(.en | keys) - (.vi | keys) | map(select(endswith("_one") | not)) | .[]' "$PLUGIN_DIR/runtime/share/strings.json")"
+  assert_eq "" "$missing" "keys missing in vi"
+  assert_eq "" "$(jq -r '(.vi | keys) - (.en | keys) | .[]' "$PLUGIN_DIR/runtime/share/strings.json")" "keys only in vi"
+}
+
+test_progress_table_in_vietnamese() {
+  local table
+  table="$(progress_of "$(cat "$FIXTURES/issues-sprint1.json")" 2014-09-24 | jqt progress-table -r --argjson cfg "$(defaults)" --argjson strings "$(strings vi)")"
+  assert_contains "$table" "Sprint 1  (2014-09-22 đến 2014-09-26, còn 3 ngày làm việc)"
+  assert_contains "$table" "Người nhận"
+  assert_contains "$table" "In progress"
+  assert_contains "$table" "Đã xong: 71% số điểm (10/14)."
+}
+
+test_digest_in_vietnamese_with_attention() {
+  local body; body="$(digest_body '[]' 2014-09-24 vi '["#3 is blocked by #2"]')"
+  assert_contains "$body" "## Digest Sprint 1, 2014-09-24"
+  assert_contains "$body" "**Còn lại:** 4/14 điểm. Còn 3 ngày làm việc (kết thúc 2014-09-26)."
+  assert_contains "$body" "### Cần chú ý"
+  assert_contains "$body" "- #3 is blocked by #2"
+  assert_contains "$body" "### Xong từ đầu sprint"
+}
+
+# ---------- needs attention (delta sprint-reporting) ----------
+
+# at_issue NUMBER STATUS POINTS ASSIGNEE UPDATED_AT
+at_issue() {
+  jq -nc --argjson n "$1" --arg s "$2" --arg p "$3" --arg a "$4" --arg u "$5" '{
+    number: $n, title: "Task \($n)", state: (if $s == "Done" then "closed" else "open" end),
+    state_reason: (if $s == "Done" then "completed" else null end), closed_at: (if $s == "Done" then $u else null end),
+    updated_at: $u,
+    labels: ([{name: "status: \($s)"}] + (if $p == "" then [] else [{name: "points: \($p)"}] end)),
+    assignees: (if $a == "" then [] else [{login: $a}] end) }'
+}
+AT_SPRINT='{"number":4,"title":"Sprint 4","state":"open","description":"<!-- scrum:start=2026-11-20 end=2026-11-27 -->"}'
+attention_of() { # ISSUES BLOCKED PRS TODAY [SPRINT] [LANG]
+  jqt attention -n --argjson cfg "$(defaults)" --argjson sprint "${5:-$AT_SPRINT}" --argjson issues "$1" \
+    --argjson blocked "$2" --argjson prs "$3" --arg today "$4" --argjson off 0 --arg repo acme/blog \
+    --argjson strings "$(strings "${6:-en}")"
+}
+
+test_attention_blocked() {
+  local a; a="$(attention_of "$(at_issue 12 New 3 alice 2026-11-20T08:00:00Z | jq -sc .)" '{"12":[10]}' '[]' 2026-11-20)"
+  assert_eq '["#12 Task 12 is blocked by #10."]' "$(jq -c .lines <<<"$a")"
+}
+
+test_attention_stale_in_progress() {
+  local a; a="$(attention_of "$(at_issue 14 'In progress' 3 alice 2026-11-16T10:00:00Z | jq -sc .)" '{}' '[]' 2026-11-20)"
+  assert_eq '["#14 Task 14 is In progress with no activity for 4 working days."]' "$(jq -c .lines <<<"$a")"
+}
+
+test_attention_recent_pr_activity_is_not_stale() {
+  local prs='[{"number":40,"body":"Work on it\n\nCloses #14","updated_at":"2026-11-19T15:00:00Z"}]'
+  local a; a="$(attention_of "$(at_issue 14 'In progress' 3 alice 2026-11-16T10:00:00Z | jq -sc .)" '{}' "$prs" 2026-11-20)"
+  assert_eq '[]' "$(jq -c .lines <<<"$a")"
+}
+
+test_attention_unassigned_and_unestimated() {
+  local a; a="$(attention_of "$( { at_issue 15 New '' '' 2026-11-20T08:00:00Z; at_issue 9 Done '' '' 2026-11-17T08:00:00Z; } | jq -sc .)" '{}' '[]' 2026-11-20)"
+  assert_eq '["#15 Task 15 has no assignee.","#15 Task 15 has no points."]' "$(jq -c .lines <<<"$a")"
+}
+
+test_attention_behind_the_ideal_line() {
+  # Monday 16 to Friday 20; on Wednesday 18 the ideal is 10 of 20; 14 left is 20% behind.
+  local s='{"number":5,"title":"Sprint 5","state":"open","description":"<!-- scrum:start=2026-11-16 end=2026-11-20 -->"}'
+  local issues; issues="$( { at_issue 1 Done 6 alice 2026-11-17T08:00:00Z; at_issue 2 'In progress' 7 alice 2026-11-18T08:00:00Z; at_issue 3 New 7 bob 2026-11-18T08:00:00Z; } | jq -sc .)"
+  local a; a="$(attention_of "$issues" '{}' '[]' 2026-11-18 "$s")"
+  assert_eq '["The sprint is 4 points behind the ideal line (14 left, ideal 10)."]' "$(jq -c .lines <<<"$a")"
+}
+
+test_attention_nothing() {
+  local a; a="$(attention_of "$(at_issue 12 'In progress' 3 alice 2026-11-20T08:00:00Z | jq -sc .)" '{"12":[]}' '[]' 2026-11-20)"
+  assert_eq '[]' "$(jq -c .items <<<"$a")"
+}
+
+test_attention_in_vietnamese() {
+  local a; a="$(attention_of "$(at_issue 15 New 3 '' 2026-11-20T08:00:00Z | jq -sc .)" '{}' '[]' 2026-11-20 "$AT_SPRINT" vi)"
+  assert_eq '["#15 Task 15 chưa có người nhận."]' "$(jq -c .lines <<<"$a")"
+}
+
+test_cmd_status_shows_needs_attention() {
+  report_env
+  route_json 'api --paginate repos/acme/blog/issues/4/dependencies/blocked_by*' '[{"number":3,"state":"open"}]'
+  run_scrum status
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "Needs attention:"
+  assert_contains "$OUT" "  - #4 Add a comment is blocked by #3."
+  assert_eq "" "$(gh_writes)" "status never writes"
+}
+
+test_cmd_status_json_has_attention() {
+  report_env
+  run_scrum status --json
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "array" "$(printf '%s' "$OUT" | jq -r '.attention | type')"
+}
+
+test_cmd_status_without_attention_has_no_section() {
+  report_env
+  run_scrum status
+  assert_not_contains "$OUT" "Needs attention"
+}
+
+test_cmd_digest_includes_needs_attention() {
+  digest_env
+  route_json 'api --paginate repos/acme/blog/issues/4/dependencies/blocked_by*' '[{"number":3,"state":"open"}]'
+  route_json 'api -X POST repos/acme/blog/issues/8/comments*' '{}'
+  route_json 'api --paginate repos/acme/blog/issues/8/comments*' '[]'
+  run_scrum digest
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$(gh_calls)" '### Needs attention'
+  assert_contains "$(gh_calls)" '- #4 Add a comment is blocked by #3.'
+}
+
+# ---------- burndown from issue history (delta sprint-reporting "Đường burndown") ----------
+
+# h_issue NUMBER POINTS STATE [IN_NOW] [EVENTS_JSON]
+h_issue() {
+  jq -nc --argjson n "$1" --arg p "$2" --arg st "$3" --argjson in "${4:-true}" --argjson ev "${5:-[]}" '{
+    number: $n, title: "T\($n)", state: $st, state_reason: (if $st == "closed" then "completed" else null end),
+    created_at: "2014-09-01T00:00:00Z", _in_now: $in, _events: $ev,
+    labels: [{name: "status: New"}, {name: "points: \($p)"}], assignees: [] }'
+}
+ev() { jq -nc --arg e "$1" --arg at "$2" --arg x "${3:-}" '{event: $e, created_at: $at}
+  + (if $e == "labeled" or $e == "unlabeled" then {label: {name: $x}} elif $e == "milestoned" or $e == "demilestoned" then {milestone: {title: $x}} else {} end)'; }
+hburn() { jqt burndown -n --argjson cfg "$(defaults)" --argjson sprint "$(sprint1)" --argjson issues "$1" --arg today 2014-09-26 --argjson off 0; }
+
+test_history_task_added_mid_sprint() {
+  local issues b
+  issues="$( { h_issue 1 7 open; h_issue 2 3 open true "[$(ev milestoned 2014-09-24T08:00:00Z 'Sprint 1')]"; } | jq -sc .)"
+  b="$(hburn "$issues")"
+  assert_eq '[7,7,10,10,10]' "$(jq -c '[.days[].scope]' <<<"$b")"
+  assert_eq '[7,7,10,10,10]' "$(jq -c '[.days[].remaining]' <<<"$b")"
+  assert_eq "3 0 7" "$(jq -r '"\(.added) \(.removed) \(.total)"' <<<"$b")"
+}
+
+test_history_task_removed_from_sprint() {
+  local issues b
+  issues="$( { h_issue 1 7 open; h_issue 3 3 open false "[$(ev demilestoned 2014-09-23T08:00:00Z 'Sprint 1')]"; } | jq -sc .)"
+  b="$(hburn "$issues")"
+  assert_eq '[10,7,7,7,7]' "$(jq -c '[.days[].scope]' <<<"$b")"
+  assert_eq "0 3" "$(jq -r '"\(.added) \(.removed)"' <<<"$b")"
+}
+
+test_history_points_changed_mid_sprint() {
+  local issues b
+  issues="$(h_issue 4 7 open true "[$(ev unlabeled 2014-09-24T08:00:00Z 'points: 3'),$(ev labeled 2014-09-24T08:00:01Z 'points: 7')]" | jq -sc .)"
+  b="$(hburn "$issues")"
+  assert_eq '[3,3,7,7,7]' "$(jq -c '[.days[].remaining]' <<<"$b")"
+}
+
+test_history_reopened_task() {
+  local issues b
+  issues="$(h_issue 5 3 open true "[$(ev closed 2014-09-23T08:00:00Z),$(ev reopened 2014-09-25T08:00:00Z)]" | jq -sc .)"
+  b="$(hburn "$issues")"
+  assert_eq '[3,0,0,3,3]' "$(jq -c '[.days[].remaining]' <<<"$b")"
+}
+
+test_history_task_created_mid_sprint_is_not_counted_before() {
+  local issues b
+  issues="$( { h_issue 1 7 open; h_issue 6 1 open | jq -c '.created_at = "2014-09-24T10:00:00Z"'; } | jq -sc .)"
+  b="$(hburn "$issues")"
+  assert_eq '[7,7,8,8,8]' "$(jq -c '[.days[].scope]' <<<"$b")"
+}
+
+report_data() { sed -n 's/^<script id="scrum-data" type="application\/json">\(.*\)<\/script>$/\1/p' "$T/scrum-reports/sprint-1.html"; }
+
+test_cmd_report_uses_history_and_finds_removed_tasks() {
+  report_env
+  export SCRUM_TODAY=2014-09-26
+  # #4 joined Sprint 1 on the 24th; #20 left it on the 23rd (now in the backlog).
+  route_json 'api --paginate repos/acme/blog/issues/4/events*' "[$(ev milestoned 2014-09-24T08:00:00Z 'Sprint 1')]"
+  route_json 'api -X GET search/issues*' '{"items":[{"number":20,"title":"Old","state":"open","milestone":null,"created_at":"2014-09-01T00:00:00Z","labels":[{"name":"status: New"},{"name":"points: 7"}],"assignees":[]},{"number":21,"title":"Other","state":"open","milestone":null,"labels":[],"assignees":[]}]}'
+  route_json 'api --paginate repos/acme/blog/issues/20/events*' "[$(ev demilestoned 2014-09-23T08:00:00Z 'Sprint 1')]"
+  route_json 'api --paginate repos/acme/blog/issues/21/events*' '[]'
+  run_scrum report
+  assert_status 0 "$STATUS" "$ERR"
+  local data; data="$(report_data)"
+  assert_eq '[18,11,14,14,14]' "$(jq -c '[.burndown.days[].scope]' <<<"$data")"
+  assert_eq "3 7" "$(jq -r '"\(.burndown.added) \(.burndown.removed)"' <<<"$data")"
+  assert_eq "false" "$(jq -r .history_limited <<<"$data")"
+  assert_contains "$(gh_calls)" 'search/issues -f q=repo:acme/blog is:issue updated:>=2014-09-22 -milestone:"Sprint 1"'
+  assert_eq "" "$(gh_writes)" "report never writes"
+}
+
+test_cmd_report_reads_history_of_100_tasks_at_most() {
+  report_env
+  jq -n '[range(1; 106) | {number: ., title: "T\(.)", state: "open", labels: [{name: "status: New"}], assignees: []}]' > "$FAKE_GH_DIR/issues.json"
+  run_scrum report
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "100" "$(gh_calls | grep -c '/events')"
+  assert_eq "true" "$(jq -r .history_limited <<<"$(report_data)")"
+}
+
+test_cmd_report_in_vietnamese() {
+  report_env
+  printf 'version: 1\nlanguage: vi\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  run_scrum report
+  assert_status 0 "$STATUS" "$ERR"
+  local data; data="$(report_data)"
+  assert_eq "vi" "$(jq -r .language <<<"$data")"
+  assert_eq "Theo người" "$(jq -r .strings.report_by_person <<<"$data")"
+}
+
+# ---------- digest webhook (delta sprint-reporting "Digest hằng ngày") ----------
+
+fake_curl() { # fake_curl HTTP_CODE|fail  -> SCRUM_CURL logs its arguments and body to $T/curl.log
+  cat > "$T/fake-curl" <<CURL
+#!/usr/bin/env bash
+printf 'ARGS %s\n' "\$*" >> "$T/curl.log"
+printf 'BODY %s\n' "\$(cat)" >> "$T/curl.log"
+[ "$1" = fail ] && exit 7
+printf '%s' "$1"
+CURL
+  chmod +x "$T/fake-curl"
+  export SCRUM_CURL="$T/fake-curl"
+}
+webhook_env() {
+  digest_env
+  route_json 'api -X POST repos/acme/blog/issues/8/comments*' '{}'
+  route_json 'api --paginate repos/acme/blog/issues/8/comments*' '[]'
+}
+
+test_digest_webhook_slack() {
+  webhook_env
+  fake_curl 200
+  SCRUM_DIGEST_WEBHOOK=https://hooks.example/T/x run_scrum digest
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$(cat "$T/curl.log")" "https://hooks.example/T/x"
+  local body; body="$(sed -n 's/^BODY //p' "$T/curl.log")"
+  assert_contains "$(jq -r .text <<<"$body")" "## Sprint 1 digest, 2014-09-24"
+  assert_not_contains "$(jq -r .text <<<"$body")" "<!-- scrum:digest -->"
+  assert_eq '["text"]' "$(jq -c keys <<<"$body")"
+  assert_contains "$OUT" "Sent the digest to the slack webhook."
+}
+
+test_digest_webhook_telegram() {
+  webhook_env
+  printf 'version: 1\ndigest:\n  webhook_format: telegram\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  fake_curl 200
+  SCRUM_DIGEST_WEBHOOK='https://api.telegram.org/botTOKEN/sendMessage?chat_id=42' run_scrum digest
+  assert_status 0 "$STATUS" "$ERR"
+  local body; body="$(sed -n 's/^BODY //p' "$T/curl.log")"
+  assert_eq '["disable_web_page_preview","text"]' "$(jq -c keys <<<"$body")"
+}
+
+test_digest_webhook_error_is_a_warning() {
+  webhook_env
+  fake_curl 500
+  SCRUM_DIGEST_WEBHOOK=https://hooks.example/T/x run_scrum digest
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$ERR" "the digest webhook answered HTTP 500"
+  assert_contains "$(gh_calls)" 'api -X POST repos/acme/blog/issues/8/comments'
+  assert_not_contains "$ERR" "hooks.example" "the secret URL is never printed"
+}
+
+test_digest_webhook_unreachable_is_a_warning() {
+  webhook_env
+  fake_curl fail
+  SCRUM_DIGEST_WEBHOOK=https://hooks.example/T/x run_scrum digest
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$ERR" "could not be reached"
+}
+
+test_digest_without_webhook_calls_no_curl() {
+  webhook_env
+  fake_curl 200
+  run_scrum digest
+  assert_status 0 "$STATUS" "$ERR"
+  [ ! -f "$T/curl.log" ] || _fail "curl was called"
 }
