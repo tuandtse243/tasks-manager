@@ -2,7 +2,14 @@
 
 Run Scrum on GitHub without a separate tool. A sprint is a milestone, a task is an issue,
 and a pull request with `Closes #n` moves its task through **New → In progress → Done**
-on its own. Reports, burndown and a daily digest come from the same data.
+on its own (with an optional In review status). Reports, burndown and a daily digest come from
+the same data.
+
+**This README is the reference:** every command and option, every configuration key, the status
+rules, how data is stored, and development. For how to work with it day to day, read the
+Vietnamese guide [Hướng dẫn áp dụng](../../docs/huong-dan-ap-dung.md) and the one-page cheat sheets
+for the [Product Owner](../../docs/cheat-sheet-po.md), the [Scrum Master](../../docs/cheat-sheet-sm.md)
+and [Developers](../../docs/cheat-sheet-dev.md).
 
 This plugin automates the six steps of the guide "Quản lý dự án theo Scrum đơn giản với GitHub":
 
@@ -72,6 +79,7 @@ the full path). Elsewhere run `runtime/bin/scrum <command>` (or `bin/scrum`).
 | `/scrum-github:init` | `scrum init [--dry-run] [--force] [--force-file PATH]` | Create `.github/scrum.yml`, sync labels, install or update templates, workflows and the runtime |
 | `/scrum-github:doctor` | `scrum doctor [--json]` | Check tools, `gh` login and scopes, configuration, labels, what is pushed, versions and the board secret; each problem with its fix. Read-only |
 | `/scrum-github:next` | `scrum next [--json]` | The one thing to do next, with its command. Read-only |
+| – | `scrum config` | Print the merged configuration (`.github/scrum.yml` over the defaults) as JSON; offline |
 | – | `scrum uninstall [--dry-run] [--yes]` | Remove what `init` installed from the working tree; keeps `.github/scrum.yml`, files you edited, and everything on GitHub |
 | `/scrum-github:sprint-new` | `scrum sprint new [--title T] [--start DATE] [--length DAYS] [--goal TEXT]` | Create the next sprint |
 | `/scrum-github:backlog` | `scrum backlog [--json]` | Open tasks without a sprint: points, assignees, parent, blockers, totals |
