@@ -100,6 +100,7 @@ Dòng cảnh báo sandbox ở từng skill được thay bằng một dòng chun
 ## Risks / Trade-offs
 
 - [Người dùng đã có một lệnh khác tên `scrum` trên PATH, và nó đứng trước `bin/` của plugin] → skill gọi nhầm lệnh. Dòng dự phòng trong mỗi skill nói: nếu `scrum --version` không in phiên bản plugin thì dùng đường dẫn đầy đủ; ghi thêm trong phần xử lý sự cố.
+- [Claude Code không đưa `bin/` vào PATH với plugin cài ở scope local hoặc nạp bằng `--plugin-dir` (quan sát ở 2.1.328, chế độ `-p`)] → `scrum` không có trên PATH; skill dùng dòng dự phòng đường dẫn đầy đủ, nên vẫn chạy. Cài plugin ở scope user để có `scrum` trên PATH.
 - [`SANDBOX_RUNTIME` đổi tên hoặc biến mất ở bản Claude Code sau] → chỉ mất lời khuyên đúng về sandbox, như hiện nay.
 - [Người dùng sửa file rồi sửa ngược lại đúng bản đã sinh] → hash trùng, file được coi là chưa sửa và sẽ được cập nhật. Đúng vì nội dung không khác gì bản đã sinh.
 - [Hai người chạy `init` ở hai nhánh và commit hai bản ghi khác nhau] → xung đột merge ở `files.json`. Chạy lại `init` sau khi merge sẽ ghi lại bản đúng; ghi điều này trong tài liệu xử lý sự cố.

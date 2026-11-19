@@ -40,7 +40,7 @@ Hệ thống MUST kiểm tra cấu hình trước mọi thao tác ghi lên GitHu
 - **THEN** lệnh dừng và báo file không đọc được kèm vị trí lỗi do bộ đọc YAML trả về
 
 ### Requirement: Kiểm tra công cụ và đăng nhập
-Hệ thống MUST kiểm tra `gh`, `jq`, `yq` có trong PATH và `gh` đã đăng nhập trước khi chạy một lệnh, và dừng với thông báo nêu đúng công cụ thiếu cùng cách cài.
+Hệ thống MUST kiểm tra `gh`, `jq`, `yq` có trong PATH và `gh` đã đăng nhập trước khi chạy một lệnh, và dừng với thông báo nêu đúng công cụ thiếu cùng cách cài. Khi `gh` báo chưa đăng nhập trong lúc lệnh chạy bên trong sandbox của Claude Code, thông báo SHALL nói rằng sandbox có thể là nguyên nhân và dẫn tới `/scrum-github:doctor`.
 
 #### Scenario: Thiếu yq
 - **WHEN** người dùng chạy một lệnh trên máy không có `yq`
@@ -49,6 +49,10 @@ Hệ thống MUST kiểm tra `gh`, `jq`, `yq` có trong PATH và `gh` đã đăn
 #### Scenario: gh chưa đăng nhập
 - **WHEN** `gh auth status` báo token không hợp lệ
 - **THEN** lệnh dừng và hướng dẫn chạy `gh auth login`
+
+#### Scenario: gh báo lỗi trong sandbox
+- **WHEN** lệnh chạy bên trong sandbox của Claude Code và `gh auth status` báo token không hợp lệ
+- **THEN** lệnh dừng, nói sandbox có thể chặn `gh` đọc token, gợi ý chạy ngoài sandbox, và dẫn tới `/scrum-github:doctor`
 
 ### Requirement: Cấu hình planning
 Hệ thống SHALL đọc khối `planning` trong `scrum.yml` với các khoá: `dir` (thư mục chứa plan, mặc định `docs/plans`), `context_file` (tài liệu ngữ cảnh dự án, mặc định `docs/project-context.md`), `hours_per_point` (số giờ cho một điểm, mặc định không đặt), và `context_stale_commits` (mặc định 50). Cấu hình sai MUST bị từ chối: `dir` hoặc `context_file` rỗng, là đường dẫn tuyệt đối hoặc chứa `..`; `hours_per_point` không phải số dương; `context_stale_commits` không phải số nguyên dương.
