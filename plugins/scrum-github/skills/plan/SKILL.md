@@ -38,7 +38,10 @@ description. `--quick` skips the independent review (step 5).
 ## 3. Check that the input is clear enough
 
 Before splitting, check the input says: **who** uses it, the **outcome** wanted, and **when it
-counts as done**. A brief confirmed by `discover` passes. If something is missing (for example
+counts as done**. A brief confirmed by `discover` passes. A brief with `Status: draft` and an
+"Open questions" section does not pass on its own: list the open questions and who is to answer
+them, and ask whether to wait for the answers or to continue. If the user continues, write each
+open question as a concrete assumption in `assumptions`. If something is missing (for example
 "make the app faster"), name what is missing and suggest `/scrum-github:discover` first. The user
 may choose to continue: then write each missing part as a concrete assumption in `assumptions`.
 
@@ -54,7 +57,8 @@ expand-migrate-contract), with this adapter. **Where they differ, the adapter wi
   `points` from `points.scale` only; a task bigger than the largest value is split.
 - Blocking edges become `depends_on` (ids of tasks of this plan).
 - Each ticket becomes a task in `plan.json`: `id`, `title` (short, starts with a verb), `body`
-  (what it delivers, two or three sentences), `acceptance` (two to four checkable criteria),
+  (the behaviour now and the behaviour once it is done, two or three sentences), `acceptance`
+  (two to four criteria, each checkable on its own),
   optional `subtasks` (checklist items inside the issue, not issues), `points`, `depends_on`,
   `assignees` only if the user named people, `bug` for defects.
 - Several independent streams of work become several features under one `epic`; one stream is
@@ -68,10 +72,25 @@ expand-migrate-contract), with this adapter. **Where they differ, the adapter wi
   `ready-for-agent` label, do not run `/setup-matt-pocock-skills`, and do not write `.scratch/`
   files. The only output is `plan.json`.
 
+A task may wait in the backlog for weeks while the code moves, so write `body` and `acceptance`
+to last. Read `${CLAUDE_PLUGIN_ROOT}/vendor/pocock/triage/AGENT-BRIEF.md` and apply its four
+principles (durability over precision, behavioural not procedural, complete acceptance criteria,
+explicit scope boundaries), with this adapter. **Where they differ, the adapter wins.**
+
+**Adapter for `AGENT-BRIEF`:**
+
+- Use the principles, not the template: the content goes into the `body` and `acceptance` fields
+  of `plan.json`. Post no "Agent Brief" comment and apply no label.
+- Name behaviour, and where it helps a type, a function or a config shape. Leave file paths and
+  line numbers to the "Project fit" section of the brief, where they belong.
+- When something could be mistaken for part of a task, end its `body` with one sentence
+  "Out of scope: ...". What the whole plan leaves out stays in `out_of_scope`.
+
 ## 5. Independent review (skip with `--quick`)
 
 Spawn the agent `scrum-github:plan-critic`. Give it only: the brief path or the requirement text,
-the path of the draft `plan.json` (write it first, step 6), and the point scale. Do not give it
+the path of the draft `plan.json` (write it first, step 6), the point scale, and the path
+`${CLAUDE_PLUGIN_ROOT}/vendor/pocock/triage/AGENT-BRIEF.md` (resolved). Do not give it
 your reasoning or conclusions. Keep its findings for step 7; fix the obvious ones in the draft
 and say which.
 

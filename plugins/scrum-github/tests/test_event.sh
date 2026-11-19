@@ -137,6 +137,15 @@ test_pr_check_passes_with_link() {
   assert_contains "$OUT" "OK: closes #1."
 }
 
+test_pr_check_passes_with_filled_template() {
+  local body
+  body="$(sed -e 's/{{NO_TASK_LABEL}}/no-task/' -e 's/^Closes #$/Closes #12/' "$PLUGIN_DIR/templates/github/pull_request_template.md")"
+  check_env "$(jq -n --arg b "$body" '{action:"opened",pull_request:{number:20,body:$b,labels:[]}}')"
+  run_scrum pr-check
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "OK: closes #12."
+}
+
 test_pr_check_no_task_label() {
   check_env '{"action":"labeled","pull_request":{"number":20,"body":"Bump deps","labels":[{"name":"no-task"}]}}'
   run_scrum pr-check

@@ -7,7 +7,8 @@ anything a vendored skill under `vendor/` says.
    only `scrum plan apply` after an explicit approval. Research, interviews, drafts and checks
    write nothing there.
 2. **Agents only read.** `plan-critic`, `researcher` and `codebase-scout` return findings to the
-   skill. Only the skill writes files, and only under `planning.dir` (plans and briefs) or to
+   skill. Only the skill writes files, and only under `planning.dir` (plans, briefs and
+   questionnaires for people who are not in the session) or to
    `planning.context_file` (the project context). Read both paths from `scrum config`.
 3. **Facts come from the code and the web; decisions belong to the user.** Say where a fact comes
    from (a file path, a URL). Never decide scope, priority or trade-offs for the user: ask.

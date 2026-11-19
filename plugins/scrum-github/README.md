@@ -11,7 +11,7 @@ This plugin automates the six steps of the guide "Quản lý dự án theo Scrum
 | 1. Create a sprint | Create a milestone | `sprint-new` creates `Sprint {n}` with start/end dates |
 | 2. Task states | Create labels by hand | `scrum-init` syncs status, points and helper labels |
 | 3. Create a task | New issue, add labels | `task-new`, `plan` (AI breakdown into a plan file), task issue form |
-| 4. Link a PR | Write `Solve #1` | PR template with `Closes #`, a check that fails without a link |
+| 4. Link a PR | Write `Solve #1` | `task-pr` writes the description with `Closes #`; PR template; a check that fails without a link |
 | 5. Sprint review | Change labels, close issues | Status follows PR/issue events; `sprint-close` records velocity and carries over unfinished tasks |
 | 6. Track progress | Filter by label | `sprint-status`, `sprint-report` (HTML burndown), daily digest |
 
@@ -62,9 +62,11 @@ Every skill runs the same script, which also works on its own: `runtime/bin/scru
 | `/scrum-github:plan` | `scrum plan init`, `scrum plan check FILE`, `scrum plan apply FILE` | Break a requirement into an epic, features and tasks in a plan file; after approval create the issues |
 | `/scrum-github:task-new` | `scrum task new --title T [--points N] [--assignee LOGIN] [--bug]` | Create a task in the current sprint |
 | `/scrum-github:task-start` | `scrum task start N` | Assign yourself, set In progress, create branch `feat/N-slug` |
+| `/scrum-github:task-pr` | `gh pr create` / `gh pr edit`, after you approve | Write the pull request description for the task of the current branch |
 | `/scrum-github:sprint-status` | `scrum status [SPRINT]` | Table by person and status with points |
 | `/scrum-github:sprint-report` | `scrum report [SPRINT] [--out FILE]` | Self-contained HTML burndown and velocity |
 | `/scrum-github:sprint-close` | `scrum sprint close [SPRINT] [--yes] [--create-next]` | Record velocity, carry over open tasks, close the milestone |
+| `/scrum-github:project-setup` | `bash wizards/project-board.sh`, then `scrum project init` | Turn on the project board: a wizard for the steps only you can do |
 
 Plan files have their own commands too (all but `check` and `apply` work offline):
 
@@ -77,6 +79,11 @@ Plan files have their own commands too (all but `check` and `apply` work offline
 | `scrum plan apply FILE [--dry-run] [--update]` | Create the missing issues, link sub-issues and dependencies, record the numbers |
 | `scrum doc check FILE [--type brief\|context]` | Check the required sections of a brief or of the project context |
 
+> **New in 0.4.0:** `/scrum-github:task-pr` and `/scrum-github:project-setup`; `discover` can
+> write a questionnaire for someone who is not in the session; the pull request template has
+> "Evidence" and "Merge Danger" sections. A repository set up earlier keeps its old template:
+> run `scrum init --force-file .github/pull_request_template.md` to replace it.
+>
 > **Renamed in 0.3.0:** `/scrum-github:sprint-plan` is now `/scrum-github:plan`. Old plan files
 > (no `version` key) still apply as before.
 
@@ -137,6 +144,7 @@ when it needs them.
 ```
 project-scan ──► docs/project-context.md          what the existing code is (optional)
 discover     ──► docs/plans/<slug>/brief.md       what to build, confirmed scope (optional)
+             ──► docs/plans/<slug>/questionnaire-<who>.md   only for decisions someone else owns
 plan         ──► docs/plans/<slug>/plan.json      epic → features → tasks, points, dependencies
              ──► docs/plans/<slug>/plan.md        generated view with estimates
 plan apply   ──► GitHub issues                    after you approve; numbers written back
@@ -156,14 +164,22 @@ facts itself (code through `codebase-scout`, the web through the read-only agent
 and asks you only for decisions, in numbered rounds with a suggested answer each. It covers users,
 main flow, data, edge cases, non-functional needs, integrations, constraints and scope. On a
 repository with code it checks how the feature fits (fits / fits with changes / conflicts: you
-decide) and estimates the size (one task, one feature, or an epic). Depth: `--quick` (no agents,
+decide) and estimates the size (one task, one feature, or an epic). It holds your words against
+the glossary of the project context: a term used in another sense, or one word for two things,
+becomes a question, and the settled term goes into the brief. When a decision belongs to someone
+who is not in the session (the product owner, a customer), it offers to write a questionnaire
+for that person next to the brief. The brief then stays `Status: draft` with an "Open questions"
+section; run the command again on the same folder once the answers are in the file. Depth: `--quick` (no agents,
 one round), standard (default), `--deep` (web research and an independent review of the brief).
 
 **`/scrum-github:plan <brief | requirement> [--quick]`** splits the requirement into vertical-slice
 tasks with acceptance criteria, points from your scale, subtasks and dependencies. An input that
 does not say who, what outcome and when it is done gets a suggestion to run `discover` first. The
 read-only agent `plan-critic` reviews the draft (missing, out of scope, too large, dependencies,
-untestable criteria) before you see it, unless `--quick`. You review the table, the findings, the
+untestable criteria, fragile descriptions) before you see it, unless `--quick`. Task descriptions
+are written to last in a backlog: the behaviour wanted, not the files and lines to edit, and
+what is out of scope for the task. A draft brief with open questions is planned only if you
+agree to turn each open question into an assumption. You review the table, the findings, the
 estimate and what `apply` would do; edit until you approve. Running it again on the same folder
 continues the existing plan and keeps its ids and issue numbers.
 
@@ -238,6 +254,17 @@ PR automation keep working as before.
 | `points: N` label | Copied to the Points field (one way: editing Points on the board is undone) |
 
 ### Turn it on
+
+The quick way: `/scrum-github:project-setup`, or run the wizard yourself in a terminal, from the
+root of the repository:
+
+```
+bash <plugin>/wizards/project-board.sh
+```
+
+It walks through steps 1 to 4 below and the `gh auth refresh` of step 6: it opens each page,
+takes the token without showing it, sets the secret, and writes the `project:` block after
+asking. It keeps the token in no file. Steps 5 to 7 are printed at the end. The same steps by hand:
 
 1. Create a project from the **Board** template, and link it to the repository.
 2. In the project, open **Workflows** and turn off: *Item added to project*, *Item closed*,
@@ -322,12 +349,21 @@ bash tests/run.sh config     # only tests/test_config.sh
 Calculations are pure jq programs in `runtime/lib/jq/` and are tested with JSON fixtures.
 GitHub calls go through `ghx`, which tests replace with `tests/fake-gh` via `SCRUM_GH`.
 
-Four skills of [mattpocock/skills](https://github.com/mattpocock/skills) (MIT) are vendored
-verbatim in `vendor/pocock/` (`grilling`, `to-spec`, `domain-modeling`, `to-tickets`), taken
-through the `aidw` plugin; `vendor/pocock/UPSTREAM.md` records the commit. The plugin's skills read
-them and override what does not fit in an "adapter" section. They are outside `skills/` so they
-never show up as commands, and `scrum init` does not copy them into target repos. To update:
-`scripts/vendor-sync.sh <aidw>/vendor/pocock`, then review `git diff`.
+Seven skills and one reference file of [mattpocock/skills](https://github.com/mattpocock/skills)
+(MIT) are vendored verbatim in `vendor/pocock/`: `grilling`, `to-spec`, `domain-modeling`,
+`to-tickets`, `to-questionnaire`, `pr`, `wizard`, and `triage/AGENT-BRIEF.md`. They are copied
+straight from the upstream repository; `vendor/pocock/UPSTREAM.md` records the commit. The
+plugin's skills read them and override what does not fit in an "adapter" section. They are
+outside `skills/` so they never show up as commands, and `scrum init` does not copy them into
+target repos. To update:
+
+```
+scripts/vendor-sync.sh                  # clones the upstream repository, then removes the clone
+scripts/vendor-sync.sh ~/src/skills     # or: use a clone you already have
+git diff vendor/                        # review what changed, and the adapters that depend on it
+```
+
+The list of what is vendored is the `ITEMS` table at the top of the script.
 
 ### End-to-end tests
 

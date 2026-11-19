@@ -40,6 +40,19 @@ test_brief_optional_sections_not_required() {
   assert_status 0 "$STATUS" "$ERR"
 }
 
+test_brief_open_questions_is_optional() {
+  assert_eq "true" "$(jq '.brief.optional | index("Open questions") != null' "$SECTIONS")"
+  { doc_of brief; printf '## Open questions\n\n- Fee rate? (product owner, questionnaire-product-owner.md)\n'; } > "$T/brief.md"
+  run_scrum doc check "$T/brief.md"
+  assert_status 0 "$STATUS" "$ERR"
+}
+
+test_brief_unknown_section_is_ignored() {
+  { doc_of brief; printf '## Something from a later version\n\nText.\n'; } > "$T/brief.md"
+  run_scrum doc check "$T/brief.md"
+  assert_status 0 "$STATUS" "$ERR"
+}
+
 test_brief_nine_required_sections() {
   assert_eq "9" "$(jq '.brief.required | length' "$SECTIONS")"
 }

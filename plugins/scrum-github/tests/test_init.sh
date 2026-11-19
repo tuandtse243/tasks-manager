@@ -217,8 +217,30 @@ test_init_old_status_sync_is_a_conflict() {
   assert_contains "$(cat "$wf")" "SCRUM_PROJECT_TOKEN"
 }
 
+test_init_copies_no_vendored_skill() {
+  init_env
+  run_scrum init
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "" "$(find "$SCRUM_REPO_DIR" -path '*pocock*')" "vendored skills stay in the plugin"
+  assert_eq "" "$(find "$SCRUM_REPO_DIR" -name 'project-board.sh')" "the wizard stays in the plugin"
+}
+
+test_pr_template_has_four_sections() {
+  init_env
+  run_scrum init
+  assert_status 0 "$STATUS" "$ERR"
+  local body; body="$(cat "$SCRUM_REPO_DIR/.github/pull_request_template.md")"
+  assert_eq "## Summary
+## Evidence
+## Merge Danger
+## Task" "$(printf '%s\n' "$body" | grep -E '^## ')"
+  assert_contains "$body" "Closes #"
+  assert_contains "$body" '"no-task" label'
+  assert_not_contains "$body" "{{"
+}
+
 test_version_matches_plugin_json() {
   run_scrum --version
-  assert_eq "0.3.0" "$OUT"
+  assert_eq "0.4.0" "$OUT"
   assert_eq "$(jq -r .version "$PLUGIN_DIR/.claude-plugin/plugin.json")" "$OUT"
 }

@@ -1,14 +1,15 @@
 ---
 name: discover
-description: Clarify a vague idea or requirement before planning - research it, interview the user in rounds with suggested answers, check how it fits an existing codebase, settle the scope, and write a confirmed brief to docs/plans/<slug>/brief.md. Writes nothing to GitHub. Use when the user has an idea or a fuzzy request ("let users comment", "make the app faster") and wants it turned into a clear scope, or when /scrum-github:plan says the input is not clear enough. --quick for a small request, --deep for web research and an independent review.
+description: Clarify a vague idea or requirement before planning - research it, interview the user in rounds with suggested answers, keep its terms in line with the project glossary, check how it fits an existing codebase, settle the scope, and write a confirmed brief to docs/plans/<slug>/brief.md. A decision that belongs to someone who is not in the session becomes a questionnaire for that person. Writes nothing to GitHub. Use when the user has an idea or a fuzzy request ("let users comment", "make the app faster") and wants it turned into a clear scope, or when /scrum-github:plan says the input is not clear enough. --quick for a small request, --deep for web research and an independent review.
 argument-hint: "<idea | path to a requirement> [--quick | --deep]"
 ---
 
 # Clarify a requirement into a brief
 
 `scrum` below means `bash "${CLAUDE_PLUGIN_ROOT}/runtime/bin/scrum"`, run from the root of the
-target repository. The only file this skill writes is `brief.md` in the plan folder. It writes
-nothing to GitHub and changes no other file.
+target repository. This skill writes `brief.md` in the plan folder and, when a decision belongs
+to someone who is not in the session, a `questionnaire-<recipient>.md` next to it. It writes
+nothing to GitHub and changes no file outside the plan folder.
 
 Depth (argument; default `standard`):
 
@@ -24,7 +25,11 @@ Depth (argument; default `standard`):
 2. `scrum config` (offline): `planning.dir`, `planning.context_file`. If there is no
    `.github/scrum.yml`, the defaults apply.
 3. `scrum plan init "<title>" --slug <slug>`: write the slug yourself in lowercase ASCII with dashes
-   (drop accents). If `brief.md` already exists there, read it and continue from it.
+   (drop accents). If `brief.md` already exists there, read it and continue from it. Read every
+   `questionnaire-*.md` in the folder too: an answer written under a question settles that
+   question. Move it from "Open questions" to "Decisions", record it in the appendix as a round
+   (the question, "Suggested: none (asked by questionnaire)", the answer and who gave it), and do
+   not ask it again.
 4. `scrum context inventory`: does the repository have code (`has_code`)?
 5. If it has code, `scrum context status`:
    - the project context exists: read it. If `stale` is true, say "the project context is
@@ -51,7 +56,8 @@ these in parallel and do not wait on them for questions that do not depend on th
 ## 3. Interview in rounds
 
 Read `${CLAUDE_PLUGIN_ROOT}/vendor/pocock/grilling/SKILL.md` and follow it, with this adapter.
-**Where they differ, the adapter wins.**
+Read `${CLAUDE_PLUGIN_ROOT}/vendor/pocock/domain-modeling/SKILL.md` too and apply it during the
+interview, with its adapter below. **Where they differ, the adapters win.**
 
 **Adapter for `grilling`:**
 
@@ -71,8 +77,39 @@ Read `${CLAUDE_PLUGIN_ROOT}/vendor/pocock/grilling/SKILL.md` and follow it, with
   assumptions.
 - Scope, priority and solution choices are the user's. What nobody can answer becomes an
   assumption with a concrete value ("At most 200 concurrent users").
+- **A decision that belongs to someone who is not here** (the product owner, a customer, legal):
+  when the user says they cannot decide it, offer a questionnaire for that person instead of an
+  assumption. Keep interviewing on everything else; collect these questions per recipient.
+  - They accept: read `${CLAUDE_PLUGIN_ROOT}/vendor/pocock/to-questionnaire/SKILL.md` and follow
+    its three steps, with the adapter below.
+  - They decline: write the point as an assumption with a concrete value, as above.
 - If the user stops during the interview, ask whether to save a draft. Write `brief.md` (with
   `Status: draft`) only if they agree; otherwise write nothing.
+
+**Adapter for `domain-modeling`:**
+
+- Use three of its moves: challenge a term against the glossary, sharpen fuzzy or overloaded
+  language, and cross-reference what the user says with the code (through the scout's findings).
+- The glossary is the "Glossary" section of `planning.context_file`. With no project context,
+  there is nothing to challenge against: still sharpen fuzzy terms with the user.
+- A term used in another sense than the glossary gives it is a question for the current round:
+  quote the glossary, say what the user seems to mean, and ask which holds.
+- Write each settled term, with its one meaning, under "Decisions" in the brief, and use that
+  term in the rest of the brief.
+- Write only the brief: no `GLOSSARY.md`, no ADR, and leave `planning.context_file` as it is.
+  A new term reaches the glossary at the next `/scrum-github:project-scan`, or the team adds it
+  to "Team notes".
+
+**Adapter for `to-questionnaire`:**
+
+- Write the file to `<plan folder>/questionnaire-<recipient-slug>.md` (lowercase ASCII with
+  dashes, for example `questionnaire-product-owner.md`), one file per recipient. If it exists,
+  add the new questions to it and keep the answers already there.
+- Write it in the user's language, with the terms settled in this interview and in the glossary.
+- Its questions are the ones collected for that recipient; "How your answers will be used"
+  names the brief.
+- Tell the user the path, and that running `/scrum-github:discover` on this folder again reads
+  the answers.
 
 ## 4. Fit and size (repository with code)
 
@@ -113,3 +150,12 @@ in scope, out of scope, assumptions, risks, size, and the fit conclusion. Ask th
   again, show the summary again, and wait.
 - They confirm: set `Status: confirmed on <date>`, and print the next step exactly:
   `/scrum-github:plan <planning.dir>/<slug>/brief.md`
+
+**While a questionnaire is waiting for answers**, the brief cannot be confirmed:
+
+- Keep `Status: draft`, and write the section "Open questions": one line per question with who
+  answers it and the questionnaire file. Delete the section once it is empty.
+- Show the summary as above, plus the open questions and the files to send. Ask the user to
+  confirm the rest of the brief, save it, and stop there. Do not print the `/scrum-github:plan`
+  step: say instead that the brief is finished by running this skill again on the same folder
+  once the answers are in.
