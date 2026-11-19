@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- scrum-github icon: a three-column sprint board (New, In progress, Done). -->
+  <rect width="1024" height="1024" rx="224" fill="#161b22"/>
+  <g transform="translate(0,56)">
+  <!-- columns -->
+  <g fill="#ffffff" fill-opacity="0.06">
+    <rect x="152" y="176" width="216" height="560" rx="36"/>
+    <rect x="404" y="176" width="216" height="560" rx="36"/>
+    <rect x="656" y="176" width="216" height="560" rx="36"/>
+  </g>
+  <!-- column headers -->
+  <g>
+    <rect x="188" y="212" width="144" height="24" rx="12" fill="#8b949e"/>
+    <rect x="440" y="212" width="144" height="24" rx="12" fill="#d29922"/>
+    <rect x="692" y="212" width="144" height="24" rx="12" fill="#3fb950"/>
+  </g>
+  <!-- cards -->
+  <g fill="#30363d">
+    <rect x="180" y="276" width="160" height="96" rx="20"/>
+    <rect x="180" y="396" width="160" height="96" rx="20"/>
+    <rect x="180" y="516" width="160" height="96" rx="20"/>
+    <rect x="432" y="276" width="160" height="96" rx="20"/>
+    <rect x="432" y="396" width="160" height="96" rx="20"/>
+  </g>
+  <g fill="#238636">
+    <rect x="684" y="276" width="160" height="96" rx="20"/>
+    <rect x="684" y="396" width="160" height="96" rx="20"/>
+    <rect x="684" y="516" width="160" height="96" rx="20"/>
+    <rect x="684" y="636" width="160" height="72" rx="20"/>
+  </g>
+  </g>
+</svg>

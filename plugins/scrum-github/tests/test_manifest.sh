@@ -38,3 +38,16 @@ test_changelog_has_the_current_version() {
   assert_eq "$v" "$(grep -m1 -o '^## \[[0-9][^]]*\]' "$PLUGIN_DIR/CHANGELOG.md" | tr -d '#[] ')" \
     "the newest CHANGELOG entry is not the current version"
 }
+
+# The listing icon: a square PNG of 512 to 2048 px (SVG and WebP are not accepted).
+test_plugin_icon_is_a_square_png() {
+  local icon="$PLUGIN_DIR/.claude-plugin/icon.png" sig w h
+  [ -f "$icon" ] || _fail "no .claude-plugin/icon.png"
+  sig="$(od -An -tx1 -N8 "$icon" | tr -d ' \n')"
+  assert_eq "89504e470d0a1a0a" "$sig" "icon.png is not a PNG"
+  w=$((16#$(od -An -tx1 -j16 -N4 "$icon" | tr -d ' \n')))
+  h=$((16#$(od -An -tx1 -j20 -N4 "$icon" | tr -d ' \n')))
+  assert_eq "$w" "$h" "icon.png is not square"
+  [ "$w" -ge 512 ] && [ "$w" -le 2048 ] || _fail "icon.png is ${w}px, not 512 to 2048"
+  [ "$(wc -c < "$icon")" -lt 2097152 ] || _fail "icon.png is 2 MB or more"
+}
