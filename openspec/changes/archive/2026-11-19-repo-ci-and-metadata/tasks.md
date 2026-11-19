@@ -27,7 +27,7 @@
 
 - [x] 5.1 Tạo `.github/workflows/ci.yml`: kích hoạt `pull_request` và `push` vào `main`, `permissions: contents: read`, `concurrency` theo ref; job `test` trên ma trận `ubuntu-latest` và `macos-latest` (cài `yq` bằng brew trên macOS) chạy `bash plugins/scrum-github/tests/run.sh`; job `lint` trên `ubuntu-latest` chạy đúng lệnh `shellcheck` đã ghi ở 3.3. Kiểm tra: `yq '.jobs | keys' .github/workflows/ci.yml` in `lint` và `test`; file không chứa `pull_request_target` hay `secrets.`
 - [x] 5.2 Đẩy nhánh và mở pull request cho change này. Kiểm tra: cả ba lần chạy (test Ubuntu, test macOS, lint) xanh trên GitHub; nếu job macOS lộ lỗi thật trong mã hiện có thì xử lý theo design mục Risks và ghi lại trong mô tả PR
-- [ ] 5.3 Thêm huy hiệu trạng thái CI vào đầu `README.md` và một câu trong mục "Phát triển" rằng CI chạy cùng hai lệnh đó. Kiểm tra: huy hiệu hiện trạng thái của `main` sau khi merge
+- [x] 5.3 Thêm huy hiệu trạng thái CI vào đầu `README.md` và một câu trong mục "Phát triển" rằng CI chạy cùng hai lệnh đó. Kiểm tra: huy hiệu hiện trạng thái của `main` sau khi merge
 
 ## Workflow follow-up
 
