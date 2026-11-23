@@ -57,7 +57,9 @@ def nonempty_string: type == "string" and length > 0;
          (if $pl.hours_per_point == null or (($pl.hours_per_point | type) == "number" and $pl.hours_per_point > 0) then empty
           else "planning.hours_per_point: must be a number greater than 0, or null (got \($pl.hours_per_point | tojson))" end),
          (if ($pl.context_stale_commits | is_int) and $pl.context_stale_commits > 0 then empty
-          else "planning.context_stale_commits: must be a whole number greater than 0 (got \($pl.context_stale_commits | tojson))" end)
+          else "planning.context_stale_commits: must be a whole number greater than 0 (got \($pl.context_stale_commits | tojson))" end),
+         (if ($pl.merge_minutes | is_int) and $pl.merge_minutes >= 0 then empty
+          else "planning.merge_minutes: must be a whole number of minutes, 0 or more (got \($pl.merge_minutes | tojson))" end)
      end),
 
     # misc
@@ -107,7 +109,10 @@ def nonempty_string: type == "string" and length > 0;
              else "team[\($i)].areas: must be a list of non-empty texts (\($m.login // "?"))" end),
             (if $m.capacity == null then empty
              elif ($m.capacity | type) == "number" and $m.capacity > 0 then empty
-             else "team[\($i)].capacity: must be a number of points greater than 0 (\($m.login // "?"): got \($m.capacity | tojson))" end)
+             else "team[\($i)].capacity: must be a number of points greater than 0 (\($m.login // "?"): got \($m.capacity | tojson))" end),
+            (if $m.review_hours == null then empty
+             elif ($m.review_hours | type) == "number" and $m.review_hours > 0 then empty
+             else "team[\($i)].review_hours: must be a number of hours greater than 0 (\($m.login // "?"): got \($m.review_hours | tojson))" end)
           end),
        ([$c.team[] | objects | .login | strings | ascii_downcase] | group_by(.) | map(select(length > 1) | .[0])[]
         | "team: the login \(tojson) is listed more than once (logins are not case-sensitive)")

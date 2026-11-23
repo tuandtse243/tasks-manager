@@ -179,7 +179,7 @@ test_planning_defaults_when_not_declared() {
   setup_repo 'version: 1'
   run_scrum config
   assert_status 0 "$STATUS" "$ERR"
-  assert_json_eq '{"dir":"docs/plans","context_file":"docs/project-context.md","hours_per_point":null,"context_stale_commits":50}' \
+  assert_json_eq '{"dir":"docs/plans","context_file":"docs/project-context.md","hours_per_point":null,"context_stale_commits":50,"merge_minutes":5}' \
     "$(printf '%s' "$OUT" | jq -c .planning)"
   assert_eq "type: epic" "$(printf '%s' "$OUT" | jq -r .labels.epic)"
 }
@@ -378,4 +378,40 @@ test_template_team_example_is_valid() {
   assert_status 0 "$STATUS" "$ERR"
   assert_eq "tuandt,an-nguyen" "$(printf '%s' "$OUT" | jq -r '[.team[].login] | join(",")')"
   assert_eq "10" "$(printf '%s' "$OUT" | jq -r '.team[0].capacity')"
+}
+
+# ---------- time estimates (delta scrum-config) ----------
+
+test_merge_minutes_defaults_to_5() {
+  setup_fake_gh
+  setup_repo 'version: 1'
+  run_scrum config
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "5" "$(printf '%s' "$OUT" | jq -r .planning.merge_minutes)"
+}
+
+test_merge_minutes_text_rejected() {
+  assert_contains "$(config_error 'planning:
+  merge_minutes: "x"')" "planning.merge_minutes"
+}
+
+test_merge_minutes_values() {
+  assert_eq "" "$(errors_with '.planning.merge_minutes = 0')"
+  assert_contains "$(errors_with '.planning.merge_minutes = -1')" "planning.merge_minutes"
+  assert_contains "$(errors_with '.planning.merge_minutes = 2.5')" "planning.merge_minutes"
+  assert_contains "$(errors_with '.planning.merge_minutes = null')" "planning.merge_minutes"
+}
+
+test_team_review_hours_negative_rejected() {
+  local e
+  e="$(config_error 'team:
+  - login: an-nguyen
+    review_hours: -1')"
+  assert_contains "$e" "team[0].review_hours"
+}
+
+test_team_review_hours_values() {
+  assert_eq "" "$(errors_with '.team = [{"login": "a", "review_hours": 1.5}]')"
+  assert_contains "$(errors_with '.team = [{"login": "a", "review_hours": 0}]')" "team[0].review_hours"
+  assert_contains "$(errors_with '.team = [{"login": "a", "review_hours": "2"}]')" "team[0].review_hours"
 }

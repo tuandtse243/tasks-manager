@@ -4,11 +4,11 @@
 
 ## 1. Cấu hình (design 6; spec scrum-config)
 
-- [ ] 1.1 Thêm `team[].review_hours` và `planning.merge_minutes` vào `defaults.json`, `validate-config.jq`, ví dụ trong `templates/scrum.yml` và bảng cấu hình trong README. Kiểm tra: test trong `test_config.sh` cho mặc định 5 và các giá trị sai; `bash tests/run.sh config` xanh
+- [x] 1.1 Thêm `team[].review_hours` và `planning.merge_minutes` vào `defaults.json`, `validate-config.jq`, ví dụ trong `templates/scrum.yml` và bảng cấu hình trong README. Kiểm tra: test trong `test_config.sh` cho mặc định 5 và các giá trị sai; `bash tests/run.sh config` xanh
 
 ## 2. Khối ước lượng và thời lượng (design 1, 2; spec time-estimate)
 
-- [ ] 2.1 Thêm `parse_duration`, `fmt_duration`, `issue_estimate`, `estimate_block` vào `scrum.jq`, gắn `._est` trong `report_tasks`, chuỗi en và vi. Test jq trong `tests/test_estimate.sh`: các định dạng, 0, `abc`, đọc khối, khối hỏng, ghi đè giữ phần thân còn lại. Kiểm tra: `bash tests/run.sh estimate` xanh
+- [x] 2.1 Thêm `parse_duration`, `fmt_duration`, `issue_estimate`, `estimate_block` vào `scrum.jq`, gắn `._est` trong `report_tasks`, chuỗi en và vi. Test jq trong `tests/test_estimate.sh`: các định dạng, 0, `abc`, đọc khối, khối hỏng, ghi đè giữ phần thân còn lại. Kiểm tra: `bash tests/run.sh estimate` xanh
 
 ## 3. Lệnh task (design 3; spec time-estimate)
 

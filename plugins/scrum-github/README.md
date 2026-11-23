@@ -163,6 +163,7 @@ planning:
   context_file: docs/project-context.md   # written by project-scan
   hours_per_point: null            # e.g. 4: plan.md then shows hours next to points
   context_stale_commits: 50        # the project context counts as stale after this many commits
+  merge_minutes: 5                 # merge and test time between two waves, in time estimates
 project:                           # optional board, see "Project board" below
   enabled: false
   owner: null                      # user or organization that owns the project
@@ -178,19 +179,21 @@ team: []                           # members, see "Team" below; empty = the repo
 ### Team
 
 `team` lists who works on the repository. Each member has a `login` and, optionally, `areas`
-(what they usually work on) and `capacity` (points per sprint):
+(what they usually work on), `capacity` (points per sprint) and `review_hours` (hours of
+review and manual testing per sprint, see "Time estimates"):
 
 ```yaml
 team:
   - login: tuandt
     areas: [backend, api]
     capacity: 10
+    review_hours: 6
   - login: an-nguyen
     areas: [frontend]
 ```
 
 Logins are compared without case, and a leading `@` is dropped. Two members with the same login,
-an empty login, `areas` that is not a list of texts, or a `capacity` of 0 or less stop every
+an empty login, `areas` that is not a list of texts, or a `capacity` or `review_hours` of 0 or less stop every
 command with an error. When `team` is empty, the list is the people GitHub lets you assign
 issues to in the repository (no areas, no capacity), and commands say so.
 

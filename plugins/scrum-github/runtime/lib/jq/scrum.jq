@@ -77,6 +77,73 @@ def set_scrum_block($name; $content):
     else ($rest | if . == "" then "" else . + "\n\n" end)
          + "<!-- scrum:\($name) -->\n\($content)\n<!-- /scrum:\($name) -->" end;
 
+# ---------- time estimates (spec time-estimate) ----------
+# A duration from the command line: 90, 25m, 2h, 1h30m -> whole minutes (> 0), or null.
+def parse_duration:
+  if type == "number" then (if . == floor and . > 0 then . else null end)
+  elif type != "string" then null
+  else ([gsub("^\\s+|\\s+$"; "") | capture("^(?:(?<h>[0-9]+)h)?(?:(?<m>[0-9]+)m?)?$")] | .[0]) as $c
+    | if $c == null or ($c.h == null and $c.m == null) then null
+      else ((($c.h // "0") | tonumber) * 60 + (($c.m // "0") | tonumber)) | if . > 0 then . else null end end
+  end;
+def duration_formats: "minutes (90), minutes with m (25m), hours (2h) or both (1h30m)";
+# Minutes -> 25m, 2h, 1h30m.
+def fmt_duration:
+  (. / 60 | floor) as $h | (. - $h * 60) as $m
+  | if $h == 0 then "\($m)m" elif $m == 0 then "\($h)h" else "\($h)h\($m)m" end;
+def is_minutes: type == "number" and . == floor and . > 0;
+
+# An estimate with only its valid fields: {work_minutes?, review_minutes?, by}; null when it has
+# neither time. "by" is "ai" unless it says "human".
+def clean_estimate:
+  if type != "object" then null
+  else {work_minutes: (.work_minutes | if is_minutes then . else null end),
+        review_minutes: (.review_minutes | if is_minutes then . else null end),
+        by: (if .by == "human" then "human" else "ai" end)}
+    | if .work_minutes == null and .review_minutes == null then null
+      else with_entries(select(.value != null)) end
+  end;
+
+# Input: an issue. Its estimate from the "estimate" block of its body; null when the block is
+# missing or its data cannot be read (design 1: a broken block never stops a command).
+def issue_estimate:
+  ((.body // "") | if type == "string" then . else "" end) as $b
+  | ([$b | capture("<!-- scrum:estimate -->[\\s\\S]*?<!-- (?<j>\\{[\\s\\S]*?\\}) -->[\\s\\S]*?<!-- /scrum:estimate -->")] | .[0].j) as $j
+  | if $j == null then null else (try ($j | fromjson) catch null) | clean_estimate end;
+
+# The line people read: "AI ~25m · Review ~20m" ($s: strings of the configured language).
+def estimate_line($e; $s):
+  [ (if $e.work_minutes != null
+       then tr($s; "est_work"; {by: tr($s; "est_by_\($e.by // "ai")"), d: ($e.work_minutes | fmt_duration)}) else empty end),
+    (if $e.review_minutes != null then tr($s; "est_review"; {d: ($e.review_minutes | fmt_duration)}) else empty end)
+  ] | join(" · ");
+# Content of the "estimate" block: the line, then the data in an HTML comment (hidden on GitHub).
+def estimate_block($e; $s):
+  ($e | clean_estimate) as $c
+  | if $c == null then ""
+    else estimate_line($c; $s) + "\n<!-- " + ($c | {work_minutes, review_minutes, by} | with_entries(select(.value != null)) | tojson) + " -->" end;
+# Input: a body. The body with its "estimate" block replaced by $e (removed when $e is null).
+def set_estimate($e; $s): set_scrum_block("estimate"; estimate_block($e; $s));
+
+# Done time of tasks worked in waves (design 4): for each wave with at least one estimated task,
+# the longest work time plus $merge; review is the sum of the review times.
+# Input: [{wave, estimate}]; tasks without a wave or an estimate are left out.
+def eta_by_waves($merge):
+  [.[] | select(.wave != null) | . as $t | (.estimate | clean_estimate) as $e | select($e != null) | {wave: $t.wave, e: $e}] as $xs
+  | ($xs | group_by(.wave) | map({wave: .[0].wave, work: ([.[].e.work_minutes // 0] | max)})) as $waves
+  | {work_minutes: ([$waves[] | .work + $merge] | add // 0),
+     review_minutes: ([$xs[].e.review_minutes // 0] | add // 0),
+     waves: [$waves[] | {wave, work}],
+     estimated: ($xs | length)};
+
+# Sums of the estimates of a list of tasks ({estimate} each): work, review and how many have none.
+def estimate_totals:
+  [.[] | .estimate | clean_estimate] as $es
+  | {work_minutes: ([$es[] | select(. != null) | .work_minutes // 0] | add // 0),
+     review_minutes: ([$es[] | select(. != null) | .review_minutes // 0] | add // 0),
+     estimated: ([$es[] | select(. != null)] | length),
+     missing: ([$es[] | select(. == null)] | length)};
+
 def is_pr: has("pull_request");
 # Features, epics and meta issues are not tasks: they never count in points, velocity or status sync.
 def is_task($cfg):
@@ -160,7 +227,7 @@ def bucket: {count: length, points: ([.[]._pts // 0] | add // 0)};
 # Tasks of a sprint that count in reports (no PRs, features, meta, not-planned), annotated.
 def report_tasks($cfg):
   [.[] | select(is_task($cfg)) | select(is_not_planned | not)
-   | . + {_role: task_role($cfg), _pts: task_points($cfg), _who: assignee_logins}];
+   | . + {_role: task_role($cfg), _pts: task_points($cfg), _who: assignee_logins, _est: issue_estimate}];
 
 def progress($cfg; $sprint; $issues; $today):
   ($sprint | sprint_info) as $s

@@ -164,7 +164,11 @@
     "plan_confirm_say": "\"approve\"  ·  \"put T6 into the sprint\"  ·  \"give T3 to @someone\"  ·  \"drop T5\"",
     "plan_confirm_note": "After each change the page is generated again, and the Changes section shows what changed.",
     "plan_act_issues_done": "issues created: {detail}",
-    "plan_load_unreadable": "Could not read the sprints or their tasks from GitHub, so load and capacity are not shown. Run scrum plan check again when GitHub answers."
+    "plan_load_unreadable": "Could not read the sprints or their tasks from GitHub, so load and capacity are not shown. Run scrum plan check again when GitHub answers.",
+    "est_by_ai": "AI",
+    "est_by_human": "Human",
+    "est_work": "{by} ~{d}",
+    "est_review": "Review ~{d}"
   },
   "vi": {
     "assignee": "Người nhận",
@@ -320,6 +324,10 @@
     "plan_confirm_say": "\"duyệt\"  ·  \"đưa T6 vào sprint\"  ·  \"T3 cho @ai-đó\"  ·  \"bỏ T5\"",
     "plan_confirm_note": "Sau mỗi lần sửa, trang được sinh lại và mục Thay đổi hiện những gì đã đổi.",
     "plan_act_issues_done": "issue đã tạo: {detail}",
-    "plan_load_unreadable": "Không đọc được sprint hoặc task của sprint từ GitHub, nên chưa hiện tải và capacity. Chạy lại scrum plan check khi GitHub trả lời."
+    "plan_load_unreadable": "Không đọc được sprint hoặc task của sprint từ GitHub, nên chưa hiện tải và capacity. Chạy lại scrum plan check khi GitHub trả lời.",
+    "est_by_ai": "AI",
+    "est_by_human": "Người",
+    "est_work": "{by} ~{d}",
+    "est_review": "Review ~{d}"
   }
 }
