@@ -5,8 +5,11 @@ description: Close a Scrum sprint on GitHub - show velocity, done tasks and unfi
 
 # Close a sprint
 
-`scrum` is on the PATH while this plugin is enabled. If `scrum` is not found, or `scrum --version`
-does not print the plugin's version, run `bash "${CLAUDE_PLUGIN_ROOT}/runtime/bin/scrum"` instead.
+Every `scrum ...` command below means `bash "${CLAUDE_PLUGIN_ROOT}/bin/scrum" ...`. Use that full form from
+the first call: a bare `scrum` is only on the PATH when the plugin is installed for the user and was loaded
+at session start, so it fails right after an install or with a local-scope install. `gh` reads its token
+from the keychain and talks to GitHub, which the Claude Code sandbox blocks, so run commands that reach
+GitHub outside the sandbox from the start (the user approves it) instead of failing inside it first.
 Run it from the root of the target repository.
 
 1. **Plan.** Run `scrum sprint close [SPRINT]`

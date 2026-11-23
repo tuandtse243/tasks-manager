@@ -72,7 +72,7 @@ Plugin skills are namespaced, so each command is typed as `/scrum-github:<name>`
 Every skill runs the same script. With the plugin installed for your user, it is on the PATH of
 Claude Code's shell as `scrum` (observed in Claude Code 2.1.328: a plugin installed with local
 scope or loaded with `--plugin-dir` does not get its `bin/` on the PATH; skills then fall back to
-the full path). Elsewhere run `runtime/bin/scrum <command>` (or `bin/scrum`).
+the full path, and the skills now use the full path from the first call). Elsewhere run `runtime/bin/scrum <command>` (or `bin/scrum`).
 
 | Claude Code | Script | What it does |
 |---|---|---|

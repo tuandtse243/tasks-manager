@@ -4,6 +4,16 @@ All notable changes to the `scrum-github` plugin. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the plugin uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.3] - 2026-11-22
+
+### Fixed
+
+- Skills failed their first command with `scrum: command not found` when the plugin was installed
+  with local scope or right after an install, because `bin/` was not on the PATH yet. Every skill
+  now calls `bash "${CLAUDE_PLUGIN_ROOT}/bin/scrum"` from the first call, and says to run commands
+  that reach GitHub outside the sandbox from the start, since `gh` cannot read its keychain token
+  or reach GitHub inside it.
+
 ## [0.8.2] - 2026-11-20
 
 ### Fixed
