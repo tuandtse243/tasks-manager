@@ -137,3 +137,23 @@ that is not merged anywhere"
   assert_contains "$a" '"started_at"'
   assert_contains "$a" "Never push"
 }
+
+# spec release "Preview and confirmation": preview, why this version, edits, then --yes after a yes.
+test_release_skill() {
+  local f="$PLUGIN_DIR/skills/release/SKILL.md" s
+  [ -f "$f" ] || _fail "no skills/release/SKILL.md"
+  assert_eq "name: release" "$(sed -n 2p "$f")"
+  s="$(cat "$f")"
+  assert_contains "$s" '`scrum release [VERSION] [--sprint S]… [--since TAG] [--draft] --json`'
+  assert_contains "$s" "why this one"
+  assert_contains "$s" "--notes-file FILE"
+  assert_contains "$s" "Never put the notes or any text taken from an issue on a command line."
+  assert_contains "$s" 'where `<version>` is the `version` of the last preview'
+  assert_contains "$s" 'write the `notes` of the last preview, unchanged, to a file'
+  assert_contains "$s" "run that same command again, with the
+same options"
+  assert_contains "$s" "Never pass \`--yes\` without the user's confirmation in this conversation."
+  # the confirmation comes before publishing
+  [ "$(grep -n "Wait for the user's answer" "$f" | cut -d: -f1)" -lt "$(grep -n '\*\*Publish exactly what was previewed.\*\*' "$f" | cut -d: -f1)" ] \
+    || _fail "the skill publishes before the user confirms"
+}

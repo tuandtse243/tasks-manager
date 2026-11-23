@@ -4,7 +4,7 @@
 
 Run Scrum on GitHub itself, without Jira or Trello. This repository is a **Claude Code plugin
 marketplace**. It currently holds one plugin, [`scrum-github`](plugins/scrum-github/README.md)
-(version 0.11.0, see the [releases](https://github.com/tuandtse243/tasks-manager/releases)).
+(version 0.12.0, see the [releases](https://github.com/tuandtse243/tasks-manager/releases)).
 
 | Scrum | On GitHub |
 |---|---|
@@ -15,6 +15,7 @@ marketplace**. It currently holds one plugin, [`scrum-github`](plugins/scrum-git
 | Team | A `team` block in `.github/scrum.yml`: who works here, their areas and capacity |
 | Planning | Claude splits a requirement into epic → features → tasks with suggested assignees and sprint; you approve once, then the issues are created |
 | AI work | Tasks labelled `ai-ready` are worked by agents in local worktrees and come back as one pull request to review |
+| Release | A tag and a GitHub Release with notes written from the Done tasks and their pull requests, the version suggested by semver |
 | Tracking | A progress table with a "Needs attention" section, an HTML report with a burndown, a digest every morning (also on Slack or Telegram if you want) |
 
 ## Install in three steps
@@ -50,6 +51,10 @@ Not sure what to do next? Ask `/scrum-github:next`. Tasks labelled `ai-ready` ca
 agents, which work them in parallel in local git worktrees and open one pull request for review:
 `/scrum-github:run` (it shows the plan and asks before anything starts; see the
 [adoption guide](docs/adoption-guide.md)).
+
+After closing a sprint, `/scrum-github:release` publishes a version: it suggests the number
+(major, minor or patch from the tasks' labels), writes the release notes, and creates the tag and
+the GitHub Release once you agree.
 
 ![One sprint with scrum-github](docs/diagrams/sprint-flow.png)
 

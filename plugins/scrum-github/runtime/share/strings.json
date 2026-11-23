@@ -214,7 +214,11 @@
     "run_pr_failed": "#{number} {title}: the agent could not finish it ({reason}); back in {status}",
     "run_pr_left_out": "#{number} {title}: left out ({reason})",
     "run_pr_totals": "Time of the merged tasks: estimate {estimate}, actual {actual}.",
-    "run_pr_totals_review": "Review time of the merged tasks: estimate {estimate}. Actual time of the work: {actual}."
+    "run_pr_totals_review": "Review time of the merged tasks: estimate {estimate}. Actual time of the work: {actual}.",
+    "release_breaking": "Breaking changes",
+    "release_features": "Features",
+    "release_fixes": "Bug fixes",
+    "release_full_changelog": "Full changelog"
   },
   "vi": {
     "assignee": "Người nhận",
@@ -416,6 +420,10 @@
     "run_pr_failed": "#{number} {title}: agent không làm xong ({reason}); đã về {status}",
     "run_pr_left_out": "#{number} {title}: bị loại ({reason})",
     "run_pr_totals": "Thời gian của các task đã merge: ước lượng {estimate}, thực tế {actual}.",
-    "run_pr_totals_review": "Thời gian review của các task đã merge: ước lượng {estimate}. Thời gian làm thực tế: {actual}."
+    "run_pr_totals_review": "Thời gian review của các task đã merge: ước lượng {estimate}. Thời gian làm thực tế: {actual}.",
+    "release_breaking": "Thay đổi không tương thích",
+    "release_features": "Tính năng",
+    "release_fixes": "Sửa lỗi",
+    "release_full_changelog": "Toàn bộ thay đổi"
   }
 }

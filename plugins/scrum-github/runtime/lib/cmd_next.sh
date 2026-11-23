@@ -2,8 +2,26 @@
 # scrum next: the one next step for the person running it (next-step.jq decides). Read-only.
 # Stops as early as the priority order allows, so a repo that is not set up needs no gh call.
 
+# next_release_info REPO MILESTONES  For the release step: {sprint, tag, since, issues} of the most
+# recently closed sprint and the latest version tag on the default branch, with the time the tag
+# was made (release_tag_time); null when no sprint is closed or GitHub cannot be read (the step is
+# then skipped).
+next_release_info() {
+  local repo="$1" last branch vtags prev issues
+  last="$(printf '%s' "$2" | jq -c '[.[] | select(.state == "closed")] | sort_by(.closed_at // "") | .[-1] // null')"
+  [ "$last" != null ] || { printf 'null'; return 0; }
+  . "$SCRUM_ROOT/lib/cmd_release.sh"
+  branch="$(release_default_branch "$repo" 2>/dev/null)" || { printf 'null'; return 0; }
+  vtags="$(release_version_tags "$repo" 2>/dev/null)" || { printf 'null'; return 0; }
+  # Version tags that cannot be confirmed on the branch: whether the sprint is released is unknown.
+  prev="$(release_latest_tag "$repo" "$branch" "$vtags")" || { printf 'null'; return 0; }
+  issues="$(fetch_milestone_issues "$repo" "$(printf '%s' "$last" | jq -r .number)" 2>/dev/null)" || { printf 'null'; return 0; }
+  jq -nc --argjson m "$last" --argjson p "$prev" --argjson i "$issues" \
+    '{sprint: $m.title, tag: ($p.name // null), since: ($p.date // null), issues: $i}'
+}
+
 cmd_next() {
-  local json=0 init=true pushed=true sprint=null issues='[]' me="" remote result ms waiting=0 run_open=null ai_blocked='{}' ai f
+  local json=0 init=true pushed=true sprint=null issues='[]' me="" remote result ms='[]' waiting=0 run_open=null ai_blocked='{}' ai f release=null
   while [ $# -gt 0 ]; do
     case "$1" in
       --json) json=1 ;;
@@ -48,9 +66,20 @@ cmd_next() {
     fi
   fi
 
-  result="$(jqlib next-step -n --argjson init "$init" --argjson pushed "$pushed" --argjson sprint "$sprint" \
-    --argjson issues "$issues" --arg me "$me" --arg today "$(today)" --argjson cfg "$CONFIG_JSON" \
-    --argjson backlog_count "${waiting:-0}" --argjson run_open "$run_open" --argjson ai_blocked "$ai_blocked")"
+  next_step() {
+    jqlib next-step -n --argjson init "$init" --argjson pushed "$pushed" --argjson sprint "$sprint" \
+      --argjson issues "$issues" --arg me "$me" --arg today "$(today)" --argjson cfg "$CONFIG_JSON" \
+      --argjson backlog_count "${waiting:-0}" --argjson run_open "$run_open" --argjson ai_blocked "$ai_blocked" \
+      --argjson release "$release"
+  }
+  result="$(next_step)"
+  # The release step reads tags and a sprint's issues, so only when no step above it applies:
+  # these are the steps it comes before (next-step.jq has the order).
+  case "$(printf '%s' "$result" | jq -r .step)" in
+    sprint-new|estimate|assign|run|start|done)
+      release="$(next_release_info "$REPO" "$ms")"
+      [ "$release" = null ] || result="$(next_step)" ;;
+  esac
   if [ "$json" = 1 ]; then
     printf '%s\n' "$result"
   else

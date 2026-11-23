@@ -93,6 +93,7 @@ skills call it by its full path instead. Once set up, the project repository als
 | `sprint-status` | Whole team, daily | `scrum status [SPRINT]` | `/scrum-github:sprint-status who has the most work left?` |
 | `sprint-report` | SM, for the review or for stakeholders | `scrum report [SPRINT] [--out FILE]` | `/scrum-github:sprint-report` |
 | `sprint-close` | SM, end of the sprint | `scrum sprint close [SPRINT] [--yes] [--create-next]` | `/scrum-github:sprint-close` |
+| `release` | SM or tech lead, after closing a sprint: publish a version (tag and GitHub Release) | `scrum release [VERSION] [--sprint S] [--since TAG] [--draft] [--notes-file FILE] [--yes]` | `/scrum-github:release --sprint "Sprint 5"` |
 | `project-setup` | SM, once: turn on the kanban board (optional) | `bash wizards/project-board.sh`, `scrum project init` | `/scrum-github:project-setup` |
 | (none) | SM, when the repo stops using the plugin | `scrum uninstall [--dry-run] [--yes]` | `scrum uninstall`, check, then add `--yes` |
 
@@ -257,6 +258,7 @@ GitHub (labels, milestones, issues).
 | Daily | Whole team | [E. Track progress](#flow-e-track-progress) |
 | End of the sprint | SM | [F. Close the sprint](#flow-f-close-the-sprint) |
 | When you have `ai-ready` tasks | Dev | [G. Let AI agents work tasks](#flow-g-let-ai-agents-work-tasks) |
+| After closing a sprint, or whenever you ship | SM, tech lead | [H. Release a version](#flow-h-release-a-version) |
 
 ### Flow A: Open a new sprint
 
@@ -572,6 +574,9 @@ carry it out.
 The velocity of earlier sprints helps decide how many points to take into the next sprint, and helps
 `plan` estimate the number of sprints.
 
+When the sprint had Done tasks, the command ends by suggesting
+`/scrum-github:release --sprint "Sprint N"`: see [Flow H](#flow-h-release-a-version).
+
 ### Flow G: Let AI agents work tasks
 
 A task with the `ai-ready` label (added by hand, or by setting `"ai_ready": true` on the task in
@@ -642,6 +647,44 @@ default branch before merging (`Closes #N` only closes tasks when merged into th
 The command runs exactly the tasks you confirmed: if the list changed (a task was closed or got
 blocked), it stops and changes nothing. An agent's text never goes on a command line: the skill
 writes it to a file and passes the path.
+
+### Flow H: Release a version
+
+A release is a git tag (`v1.5.0`) on the head of the default branch and a GitHub Release whose
+notes list what was done. The plugin builds both from the Done tasks; you only decide the version
+and agree.
+
+**Step 1. Preview.**
+
+```
+/scrum-github:release --sprint "Sprint 5"
+```
+
+Without `--sprint`, the release holds every task closed as completed since the latest version tag
+on the default branch (tasks dropped as not planned, epics, features and pull requests are left
+out). The skill shows:
+- the previous version and the suggested one, with the reason: **major** when a task has the
+  `breaking` label (`release.breaking_label`), **minor** when a task is not a bug, **patch** when
+  every task is a bug, `release.first_version` (`0.1.0`) when there is no version tag yet;
+- the release notes: breaking changes, features grouped under their parent feature, bug fixes,
+  each line with the task and the pull requests that closed it, and a link comparing the two
+  versions.
+
+**Step 2. Adjust.** Ask for another version (`make it 2.0.0`) or change the notes in your own
+words; the skill shows the result again. Nothing is written yet.
+
+**Step 3. Publish.** When you agree, the skill creates the annotated tag and the GitHub Release
+(`--draft` makes a draft you publish by hand). Creating a tag needs `contents: write` on your
+token; if it fails with 403, run `/scrum-github:doctor`. If the tag was created but the release
+was not, run the same command again: it creates only the release.
+
+With the CLI: `scrum release` to see the version and notes, then publish that version with
+`scrum release 1.5.0 --yes` (`--yes` needs the version, so you publish what you saw; add
+`--notes-file notes.md` for your own notes). `scrum next` also suggests releasing when the
+last closed sprint has Done tasks that are in no version yet.
+
+The plugin does not edit version files (`package.json`, `VERSION`) or `CHANGELOG.md` in the
+repository, does not deploy and does not publish packages.
 
 ---
 
@@ -772,6 +815,8 @@ says how to fix each problem. The table below covers what `doctor` cannot see.
 - `/scrum-github:run` runs on your machine, not in CI or on a server; it has no token cost limit,
   does not foresee conflicts between tasks of the same wave, and only records the actual time
   without adjusting estimates on its own. It needs git 2.20 or later.
+- `scrum release` reads the pull requests of at most 100 tasks (the rest have no pull request
+  number in the notes), only tags of the form `v1.2.3` or `1.2.3`, and does not sign tags.
 - `scrum` is only on Claude Code's PATH when the plugin is installed with user scope (observed in
   Claude Code 2.1.328); the skills work with every kind of install.
 

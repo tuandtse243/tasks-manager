@@ -63,6 +63,17 @@ def nonempty_string: type == "string" and length > 0;
         else "run.branch_pattern: must be a non-empty branch name pattern, such as \"run/{sprint}-{login}\" (got \($c.run.branch_pattern | tojson))" end)
      end),
 
+    # release (spec scrum-config "Release configuration")
+    (if ($c.release | type) != "object" then "release: must be a mapping"
+     else
+       (if ($c.release.tag_prefix | type) == "string" and ($c.release.tag_prefix | test("^[A-Za-z0-9._/-]*$")) then empty
+        else "release.tag_prefix: must be text without spaces, such as \"v\", or \"\" for none (got \($c.release.tag_prefix | tojson))" end),
+       (if ($c.release.breaking_label | nonempty_string) then empty
+        else "release.breaking_label: must be a non-empty label name (got \($c.release.breaking_label | tojson))" end),
+       (if ($c.release.first_version | type) == "string" and ($c.release.first_version | test("^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$")) then empty
+        else "release.first_version: must be a version X.Y.Z, such as \"0.1.0\" (got \($c.release.first_version | tojson))" end)
+     end),
+
     # planning
     (if ($c.planning | type) != "object" then "planning: must be a mapping"
      else

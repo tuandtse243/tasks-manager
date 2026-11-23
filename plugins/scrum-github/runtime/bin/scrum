@@ -81,6 +81,12 @@ Progress
   report [SPRINT] [--out FILE]                    Self-contained HTML burndown report
   digest                                          Post the daily digest (used by the scheduled workflow)
 
+Releases
+  release [VERSION] [--since TAG] [--sprint S]... [--draft] [--notes-file FILE] [--json] [--yes]
+                                                  Version, tasks and release notes from the Done tasks
+                                                  since the last version tag (or of the sprints); with
+                                                  VERSION --yes create the tag and the GitHub Release
+
 Project board (GitHub Projects, optional: project.enabled in .github/scrum.yml)
   project init [--dry-run] [--allow-builtin-workflows]
                                                   Check the project, create its fields, add sprint tasks
@@ -208,6 +214,9 @@ case "$cmd" in
       status) cmd_run_status "$@" ;;
       *) die "unknown run command '${sub}'. Use: scrum run plan | start | record | merge | finish | status" ;;
     esac
+    ;;
+  release)
+    . "$SCRUM_ROOT/lib/cmd_release.sh"; cmd_release "$@"
     ;;
   status)
     . "$SCRUM_ROOT/lib/cmd_report.sh"; cmd_status "$@"
