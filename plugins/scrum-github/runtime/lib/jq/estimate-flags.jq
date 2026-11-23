@@ -1,6 +1,8 @@
 # The time flags of task new and task estimate (spec time-estimate). Pure: no network.
 # -n --arg work D --arg review D --arg by ai|human ("" = not given)
-#    [--argjson issue ISSUE --argjson strings STRINGS]   (task estimate: the issue to change)
+#    [--argjson strings STRINGS]
+# Input: the issue to change (task estimate), or nothing with -n (task new, or a check of the flags
+# before the issue is read). The issue comes on stdin: a body can be too long for one argument.
 #    [--argjson partial true]   (only check the flags: the issue is read later)
 # Output: {error} when a flag is wrong, otherwise
 #   {given: bool, estimate: the estimate after the change (null when none),
@@ -8,7 +10,7 @@
 # Fields not given keep the issue's value; "by" defaults to ai.
 include "scrum";
 
-($ARGS.named.issue // null) as $issue
+. as $issue
 | ($ARGS.named.strings // null) as $s
 | (if $issue == null then null else $issue | issue_estimate end) as $old
 | [ (if $work != "" and ($work | parse_duration) == null
@@ -27,7 +29,7 @@ include "scrum";
      + (if $by != "" then {by: $by} else {} end)
      | clean_estimate) as $new
     | if $new == null and $ARGS.named.partial == true then {given: true, estimate: null, changed: false}
-      elif $new == null then {error: "--by needs --work or --review: the task has no time estimate yet"}
+      elif $new == null then {error: ("--by needs --work or --review" + (if $issue == null then "" else ": the task has no time estimate yet" end))}
       else
         ($new != $old) as $changed
         | {given: true, estimate: $new, changed: $changed,

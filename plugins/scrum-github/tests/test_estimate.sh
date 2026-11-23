@@ -11,13 +11,12 @@ test_duration_formats() {
   assert_eq "25" "$(dur 25m)"
   assert_eq "120" "$(dur 2h)"
   assert_eq "90" "$(dur 1h30m)"
-  assert_eq "90" "$(dur 1h30)"
   assert_eq "5" "$(dur ' 5m ')"
 }
 
 test_duration_invalid_values() {
   local d
-  for d in 0 0m 0h0m abc -5 1.5h h m '' 1m30h 2x; do
+  for d in 0 0m 0h0m abc -5 1.5h h m '' 1m30h 2x 1h30 1h30h 99999999999999999999 10001h 600001; do
     assert_eq "null" "$(dur "$d")" "\"$d\" is not a duration"
   done
 }
@@ -123,4 +122,46 @@ test_two_estimate_blocks_read_first_write_one() {
   assert_eq "1" "$(printf '%s' "$out" | grep -c '<!-- scrum:estimate -->')"
   assert_contains "$out" "Middle"
   assert_json_eq '{"work_minutes":5,"by":"ai"}' "$(jq -n --arg b "$out" '{body: $b}' | ejq -c 'include "scrum"; issue_estimate')"
+}
+
+test_duration_upper_bound() {
+  assert_eq "600000" "$(dur 10000h)"
+  assert_eq "600000" "$(dur 600000)"
+  assert_eq "null" "$(dur 9999h61m)"
+}
+
+# A block whose end marker was deleted by hand: the next write leaves one clean block, and the
+# text after the broken paragraph is kept.
+test_set_estimate_repairs_an_orphan_start_marker() {
+  local body
+  body="$(ejq -nr --argjson s "$(strings_en)" 'include "scrum";
+    "Text\n\n<!-- scrum:estimate -->\nAI ~10m\n<!-- {\"work_minutes\":10} -->\n\nPart of #3"
+    | set_estimate({work_minutes: 30, review_minutes: 30}; $s)')"
+  assert_eq "1" "$(printf '%s' "$body" | grep -c '<!-- scrum:estimate -->')"
+  assert_eq "1" "$(printf '%s' "$body" | grep -c '<!-- /scrum:estimate -->')"
+  assert_contains "$body" "Part of #3"
+  assert_not_contains "$body" "AI ~10m"
+  assert_json_eq '{"work_minutes":30,"review_minutes":30,"by":"ai"}' \
+    "$(jq -n --arg b "$body" '{body: $b}' | ejq -c 'include "scrum"; issue_estimate')"
+}
+
+test_set_estimate_drops_an_orphan_end_marker() {
+  local body
+  body="$(ejq -nr --argjson s "$(strings_en)" 'include "scrum";
+    "Text\n\nAI ~10m\n<!-- /scrum:estimate -->" | set_estimate({review_minutes: 5}; $s)')"
+  assert_eq "1" "$(printf '%s' "$body" | grep -c '<!-- /scrum:estimate -->')"
+}
+
+# issue_estimate reads the block that is closed, not from an orphan start marker before it.
+test_issue_estimate_skips_an_orphan_start_marker() {
+  local b
+  b="$(printf 'x\n\n<!-- scrum:estimate -->\n<!-- {"work_minutes":10} -->\n\n<!-- scrum:estimate -->\nAI\n<!-- {"work_minutes":30} -->\n<!-- /scrum:estimate -->')"
+  assert_eq "30" "$(jq -n --arg b "$b" '{body: $b}' | ejq 'include "scrum"; issue_estimate.work_minutes')"
+}
+
+# A task with only a review time adds no wave and no merge to the work estimate.
+test_eta_by_waves_review_only_wave_adds_no_merge() {
+  assert_json_eq '{"work_minutes":25,"review_minutes":25,"waves":1,"estimated":2}' "$(jq -n '[
+      {wave: 1, estimate: {work_minutes: 20, review_minutes: 15}}, {wave: 2, estimate: {review_minutes: 10}}]' \
+    | ejq -c 'include "scrum"; eta_by_waves(5) | {work_minutes, review_minutes, waves: (.waves | length), estimated}')"
 }

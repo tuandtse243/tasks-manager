@@ -15,7 +15,7 @@ Task của team giờ chủ yếu do AI làm, nên câu hỏi "bao giờ xong" c
 - `scrum task new` và `scrum task estimate` nhận `--work 25m`, `--review 20m`, `--by ai|human`. `task estimate` không còn bắt buộc phải có điểm khi chỉ đổi thời gian.
 - `scrum mine` hiện thời gian từng task và ước tính cho phần việc còn lại của sprint đang mở.
 - Bảng tiến độ sprint (`sprint-status`) hiện phút làm và phút review còn lại theo từng người, và số task chưa có ước lượng thời gian.
-- Thành viên team có thể khai báo `review_hours` (số giờ review mỗi sprint). `sprint-fill` và `plan check` cảnh báo khi tổng phút review giao cho một người vượt mức này.
+- Thành viên team có thể khai báo `review_hours` (số giờ review mỗi sprint). `sprint-fill` cảnh báo khi tổng phút review giao cho một người vượt mức này.
 - Khoá mới `planning.merge_minutes` (mặc định 5): thời gian merge và chạy test giữa hai đợt, dùng cho ước tính.
 - Phiên bản plugin lên 0.10.0.
 

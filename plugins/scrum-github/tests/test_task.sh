@@ -661,3 +661,51 @@ AI ~99m
   assert_eq "1" "$(printf '%s' "$body" | grep -c '<!-- scrum:estimate -->')"
   assert_contains "$body" '{"work_minutes":25,"review_minutes":30,"by":"ai"}'
 }
+
+# "Khối hỏng" then "Ghi đè": a block whose end marker was deleted by hand reads as no estimate,
+# and writing a new estimate must leave exactly one block that reads back as the new values.
+test_cmd_task_estimate_over_a_block_without_its_end_marker() {
+  ops_env
+  est_issue 'Text
+
+<!-- scrum:estimate -->
+AI ~10m · Review ~10m
+<!-- {"work_minutes":10,"review_minutes":10,"by":"ai"} -->'
+  run_scrum task estimate 12 --work 30m --review 30m
+  assert_status 0 "$STATUS" "$ERR"
+  local body
+  body="$(gh_calls | sed -n 's/^STDIN //p' | jq -r .body)"
+  assert_eq "1" "$(printf '%s' "$body" | grep -c '<!-- scrum:estimate -->')" "exactly one estimate block"
+  assert_json_eq '{"work_minutes":30,"review_minutes":30,"by":"ai"}' \
+    "$(jq -n --arg b "$body" '{body: $b}' | jq -L "$PLUGIN_DIR/runtime/lib/jq" -c 'include "scrum"; issue_estimate')" \
+    "the new estimate is the one read back"
+}
+
+# Fix round: points given as a negative number, --by alone on task new, the issue on stdin.
+test_cmd_task_estimate_negative_points() {
+  ops_env
+  run_scrum task estimate 12 -3
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" 'points must be a whole number (got "-3")'
+  assert_eq "" "$(gh_writes)"
+}
+
+test_cmd_task_new_by_alone_refused() {
+  task_env
+  run_scrum task new --title x --by human
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "--by needs --work or --review"
+  assert_not_contains "$ERR" "the task has no time estimate yet"
+  assert_eq "" "$(gh_calls)"
+}
+
+test_cmd_task_estimate_long_body() {
+  ops_env
+  # 300 KB: more than Linux allows in one argument (128 KB), so it must not travel as one.
+  head -c 300000 /dev/zero | tr '\0' 'a' > "$T/body.txt"
+  jq -c --rawfile b "$T/body.txt" '.body = $b' "$FAKE_GH_DIR/i12.json" > "$FAKE_GH_DIR/i12b.json"
+  route_first 'api repos/acme/blog/issues/12' i12b.json
+  run_scrum task estimate 12 --review 30m
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$(gh_calls | sed -n 's/^STDIN //p' | jq -r .body)" '{"review_minutes":30,"by":"ai"}'
+}

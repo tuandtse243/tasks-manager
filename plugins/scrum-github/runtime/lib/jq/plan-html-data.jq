@@ -47,7 +47,8 @@ include "plan";
           missing_ids: [$tasks[] | select(.estimate == null) | .id],
           humans: any($tasks[]; .estimate.by == "human"),
           waves: $wl,
-          rows: [$tasks | to_entries | sort_by(.value.wave, .key)[] | .value | select(.estimate != null)
+          # Only tasks with a work time get a bar; a review-only task adds to the review bar alone.
+          rows: [$tasks | to_entries | sort_by(.value.wave, .key)[] | .value | select(.estimate.work_minutes != null)
                  | {id, title, wave, start: $start[.wave | tostring], work: (.estimate.work_minutes // 0),
                     review: (.estimate.review_minutes // 0), by: .estimate.by}] }
     end ) as $time

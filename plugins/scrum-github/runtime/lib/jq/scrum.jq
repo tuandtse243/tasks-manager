@@ -79,19 +79,23 @@ def set_scrum_block($name; $content):
 
 # ---------- time estimates (spec time-estimate) ----------
 # A duration from the command line: 90, 25m, 2h, 1h30m -> whole minutes (> 0), or null.
+# After "h" the minutes need their "m" (1h30 is refused). At most 10000 hours, so a long string of
+# digits is refused rather than stored as a float.
+def max_duration_minutes: 600000;
 def parse_duration:
-  if type == "number" then (if . == floor and . > 0 then . else null end)
-  elif type != "string" then null
-  else ([gsub("^\\s+|\\s+$"; "") | capture("^(?:(?<h>[0-9]+)h)?(?:(?<m>[0-9]+)m?)?$")] | .[0]) as $c
-    | if $c == null or ($c.h == null and $c.m == null) then null
-      else ((($c.h // "0") | tonumber) * 60 + (($c.m // "0") | tonumber)) | if . > 0 then . else null end end
-  end;
+  (if type == "number" then (if . == floor then . else null end)
+   elif type != "string" then null
+   else ([gsub("^\\s+|\\s+$"; "") | capture("^(?:(?<h>[0-9]{1,7})h(?:(?<hm>[0-9]{1,7})m)?|(?<m>[0-9]{1,9})m?)$")] | .[0]) as $c
+     | if $c == null then null
+       else (($c.h // "0") | tonumber) * 60 + (($c.hm // $c.m // "0") | tonumber) end
+   end)
+  | if . == null or . <= 0 or . > max_duration_minutes then null else . end;
 def duration_formats: "minutes (90), minutes with m (25m), hours (2h) or both (1h30m)";
 # Minutes -> 25m, 2h, 1h30m.
 def fmt_duration:
   (. / 60 | floor) as $h | (. - $h * 60) as $m
   | if $h == 0 then "\($m)m" elif $m == 0 then "\($h)h" else "\($h)h\($m)m" end;
-def is_minutes: type == "number" and . == floor and . > 0;
+def is_minutes: type == "number" and . == floor and . > 0 and . <= max_duration_minutes;
 
 # An estimate with only its valid fields: {work_minutes?, review_minutes?, by}; null when it has
 # neither time. "by" is "ai" unless it says "human".
@@ -108,7 +112,9 @@ def clean_estimate:
 # missing or its data cannot be read (design 1: a broken block never stops a command).
 def issue_estimate:
   ((.body // "") | if type == "string" then . else "" end) as $b
-  | ([$b | match("<!-- scrum:estimate -->[\\s\\S]*?<!-- /scrum:estimate -->").string] | .[0]) as $blk
+  # The block that is actually closed: no other start marker between its markers, so a start
+  # marker left without its end (edited by hand) never swallows a later block.
+  | ([$b | match("<!-- scrum:estimate -->(?:(?!<!-- scrum:estimate -->)[\\s\\S])*?<!-- /scrum:estimate -->").string] | .[0]) as $blk
   | (if $blk == null then null else [$blk | capture("<!-- (?<j>\\{[^\\n]*\\}) -->")] | .[0].j end) as $j
   | if $j == null then null else (try ($j | fromjson) catch null) | clean_estimate end;
 
@@ -130,14 +136,21 @@ def estimate_block($e; $s):
   | if $c == null then ""
     else estimate_line($c; $s) + "\n<!-- " + ($c | {work_minutes, review_minutes, by} | with_entries(select(.value != null)) | tojson) + " -->" end;
 # Input: a body. The body with its "estimate" block replaced by $e (removed when $e is null).
-def set_estimate($e; $s): set_scrum_block("estimate"; estimate_block($e; $s));
+# Leftovers of a block broken by hand go too: a start marker without its end (with the rest of
+# its paragraph) and an end marker without its start, so exactly one clean block remains.
+def set_estimate($e; $s):
+  (. // "") | gsub(scrum_block_re("estimate"); "")
+  | gsub("\n*<!-- scrum:estimate -->(?:(?!\n\n)[\\s\\S])*"; "")
+  | gsub("\n*<!-- /scrum:estimate -->"; "")
+  | set_scrum_block("estimate"; estimate_block($e; $s));
 
-# Done time of tasks worked in waves (design 4): for each wave with at least one estimated task,
-# the longest work time plus $merge; review is the sum of the review times.
+# Done time of tasks worked in waves (design 4): for each wave with at least one task that has a
+# work time, the longest work time plus $merge; review is the sum of the review times (a task
+# with only a review time adds no wave and no merge).
 # Input: [{wave, estimate}]; tasks without a wave or an estimate are left out.
 def eta_by_waves($merge):
   [.[] | select(.wave != null) | . as $t | (.estimate | clean_estimate) as $e | select($e != null) | {wave: $t.wave, e: $e}] as $xs
-  | ($xs | group_by(.wave) | map({wave: .[0].wave, work: ([.[].e.work_minutes // 0] | max)})) as $waves
+  | ([$xs[] | select(.e.work_minutes != null)] | group_by(.wave) | map({wave: .[0].wave, work: ([.[].e.work_minutes] | max)})) as $waves
   | {work_minutes: ([$waves[] | .work + $merge] | add // 0),
      review_minutes: ([$xs[].e.review_minutes // 0] | add // 0),
      waves: [$waves[] | {wave, work}],

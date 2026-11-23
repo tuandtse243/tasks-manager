@@ -1549,3 +1549,15 @@ test_html_timeline_vietnamese() {
   assert_contains "$page" 'Người ~15m'
   assert_contains "$page" 'làm xong, theo 3 đợt'
 }
+
+# A task with a review time only (not possible in a valid plan, but read defensively) gets no bar,
+# and its wave no merge gap.
+test_html_timeline_review_only_task_has_no_bar() {
+  local d tl
+  d="$(html_data "$(plan5_timed | jq -c '(.features[0].tasks[] | select(.id == "T4")) |= (.estimate = {review_minutes: 10})')" en)"
+  assert_eq "T1 T5 T2 T3" "$(printf '%s' "$d" | jq -r '[.time.rows[].id] | join(" ")')"
+  assert_eq "65 2" "$(printf '%s' "$d" | jq -r '"\(.time.work) \(.time.waves | length)"')"
+  assert_eq "65" "$(printf '%s' "$d" | jq -r .time.review)"
+  tl="$(printf '%s' "$d" | jqt plan-html -r --rawfile t "$PLUGIN_DIR/runtime/share/plan.html" | sed -n '/data-part="timeline"/,/<\/section>/p')"
+  assert_eq "2" "$(printf '%s' "$tl" | grep -o 'class="b-merge"' | wc -l | tr -d ' ')"
+}

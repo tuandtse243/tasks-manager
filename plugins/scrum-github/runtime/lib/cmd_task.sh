@@ -38,7 +38,9 @@ cmd_task_new() {
   if [ "$backlog" = 1 ] && [ -n "$sprint_name" ]; then die "use --sprint or --backlog, not both"; fi
   case "$points" in ""|*[!0-9]*) [ -z "$points" ] || die "points must be a whole number (got \"$points\")" ;; esac
 
-  # The time flags before anything else (spec time-estimate "Định dạng thời lượng").
+  # The time flags before anything else (spec time-estimate "Định dạng thời lượng"); jq first,
+  # gh later (require_tools nogh calls nothing).
+  require_tools nogh
   est="$(jqlib estimate-flags -n --arg work "$work" --arg review "$review" --arg by "$by")"
   err="$(printf '%s' "$est" | jq -r '.error // empty')"
   [ -z "$err" ] || die "$err"
@@ -245,6 +247,7 @@ cmd_task_estimate() {
       --work) work="${2:-}"; [ -n "$work" ] || die "--work needs a duration, for example 25m"; shift ;;
       --review) review="${2:-}"; [ -n "$review" ] || die "--review needs a duration, for example 20m"; shift ;;
       --by) by="${2:-}"; [ -n "$by" ] || die "--by needs ai or human"; shift ;;
+      -[0-9]*) die "points must be a whole number (got \"$1\")" ;;
       -*) die "unknown option for task estimate: $1" ;;
       *) if [ -z "$n" ]; then n="$(issue_number "$1")"
          elif [ -z "$p" ]; then p="$1"
@@ -257,6 +260,7 @@ cmd_task_estimate() {
     die "nothing to change: give points, or at least one of --work, --review, --by. $usage"
   fi
   case "$p" in *[!0-9]*) die "points must be a whole number (got \"$p\")" ;; esac
+  require_tools nogh
   est="$(jqlib estimate-flags -n --arg work "$work" --arg review "$review" --arg by "$by" --argjson partial true)"
   err="$(printf '%s' "$est" | jq -r '.error // empty')"
   [ -z "$err" ] || die "$err"
@@ -270,8 +274,9 @@ cmd_task_estimate() {
   repo="$(repo_slug)"
   issue="$(task_issue "$repo" "$n")"
   # A --by alone on a task without a time estimate is an error: check it before writing anything.
-  est="$(jqlib estimate-flags -n --arg work "$work" --arg review "$review" --arg by "$by" \
-    --argjson issue "$issue" --argjson strings "$(strings_json)")"
+  # The issue goes on stdin: its body can be longer than one command-line argument may be.
+  est="$(printf '%s' "$issue" | jqlib estimate-flags --arg work "$work" --arg review "$review" --arg by "$by" \
+    --argjson strings "$(strings_json)")"
   err="$(printf '%s' "$est" | jq -r '.error // empty')"
   [ -z "$err" ] || die "$err"
 
