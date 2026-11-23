@@ -40,8 +40,8 @@
 
 ## 7. Skill plan một lần duyệt (design 7, 11; spec task-management "Đề xuất người làm và sprint trong plan", "Một lần duyệt plan")
 
-- [ ] 7.1 Sửa `skills/plan/SKILL.md`: gọi `scrum team --json` và `plan check --json`, điền `assignees` và `sprint: "current"` đề xuất (giữ giá trị người dùng nêu, không đề xuất login ngoài team, không đề xuất khi nguồn GitHub dài hơn 15 người), ghi `review` từ plan-critic, mở `plan.html` (ngoài sandbox, sau khi người dùng cho phép), một câu duyệt, rồi `plan apply`; bỏ gợi ý `sprint-fill` sau apply. Kiểm tra: `claude plugin validate .` đạt; đọc lại skill thấy đúng một câu hỏi duyệt trước apply
-- [ ] 7.2 Cập nhật `reference/planning-rules.md` nếu nói tới việc để trống người làm hoặc sprint. Kiểm tra: `grep` không còn quy tắc mâu thuẫn với design 7
+- [x] 7.1 Sửa `skills/plan/SKILL.md`: gọi `scrum team --json` và `plan check --json`, điền `assignees` và `sprint: "current"` đề xuất (giữ giá trị người dùng nêu, không đề xuất login ngoài team, không đề xuất khi nguồn GitHub dài hơn 15 người), ghi `review` từ plan-critic, mở `plan.html` (ngoài sandbox, sau khi người dùng cho phép), một câu duyệt, rồi `plan apply`; bỏ gợi ý `sprint-fill` sau apply. Kiểm tra: `claude plugin validate .` đạt; đọc lại skill thấy đúng một câu hỏi duyệt trước apply
+- [x] 7.2 Cập nhật `reference/planning-rules.md` nếu nói tới việc để trống người làm hoặc sprint. Kiểm tra: `grep` không còn quy tắc mâu thuẫn với design 7
 
 ## 8. Phiên bản và tài liệu chung
 
