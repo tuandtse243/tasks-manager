@@ -683,3 +683,21 @@ test_cmd_run_resume_after_wave_1() {
   assert_status 1 "$STATUS"
   assert_contains "$ERR" "#102 is merged; it cannot be started"
 }
+
+# A task with a review time only adds review minutes but no wave of work (time-estimates fix),
+# and its pull request section shows the review estimate against the actual time.
+test_review_only_estimate_in_eta_and_pr_body() {
+  local issues out s body
+  issues="$(jq -s . <(ri 102 New ai-ready 5 open tuandt '{"work_minutes":20,"review_minutes":10}') \
+    <(ri 103 New ai-ready 5 open tuandt '{"review_minutes":15}'))"
+  out="$(select_jq "$issues" '{"102":[],"103":[102]}')"
+  assert_json_eq '{"work_minutes":25,"review_minutes":25,"estimated":2,"missing":0,"missing_numbers":[],"waves":2}' "$(printf '%s' "$out" | jq -c .eta)"
+  s="$(printf '%s' "$out" | st new --arg id R --arg branch b --arg base main --arg now 2026-11-23T10:00:00Z \
+        --arg max_parallel 3 --arg pr_per_wave false --arg test_command "" --arg repo acme/blog | jq .state \
+    | st started --arg n 103 --arg now 2026-11-23T10:00:00Z | jq .state \
+    | st "done" --arg n 103 --arg now 2026-11-23T10:12:00Z --arg branch x | jq .state \
+    | st merged --arg n 103 --arg now x --arg sha s | jq .state)"
+  body="$(pr_body "$s" "$(jq -n --argjson a "$(ri 103 New)" '{"103": $a}')" | jq -r .body)"
+  assert_contains "$body" "**Time**: estimate Review ~15m; actual 12m"
+  assert_contains "$body" "Time of the merged tasks: estimate no estimate, actual 12m."
+}
