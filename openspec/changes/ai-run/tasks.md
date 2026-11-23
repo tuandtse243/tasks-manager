@@ -4,14 +4,14 @@
 
 ## 1. Cấu hình và ai-ready (design 9; spec scrum-config, work-plan)
 
-- [ ] 1.1 Khối `run` và `labels.ai_ready` trong `defaults.json`, `validate-config.jq`, `templates/scrum.yml`, README. Kiểm tra: test `test_config.sh` cho mặc định và `max_parallel: 0`; `bash tests/run.sh config` xanh
-- [ ] 1.2 `label-plan.jq`: `init` tạo label `ai-ready`. Kiểm tra: `bash tests/run.sh init` xanh
-- [ ] 1.3 `ai_ready` trong `plan.schema.json`, `plan-validate.jq`, `plan-actions.jq` (gắn label khi tạo, thêm hoặc gỡ khi `--update`). Kiểm tra: test hai scenario của spec; `bash tests/run.sh plan` xanh
+- [x] 1.1 Khối `run` và `labels.ai_ready` trong `defaults.json`, `validate-config.jq`, `templates/scrum.yml`, README. Kiểm tra: test `test_config.sh` cho mặc định và `max_parallel: 0`; `bash tests/run.sh config` xanh
+- [x] 1.2 `label-plan.jq`: `init` tạo label `ai-ready`. Kiểm tra: `bash tests/run.sh init` xanh
+- [x] 1.3 `ai_ready` trong `plan.schema.json`, `plan-validate.jq`, `plan-actions.jq` (gắn label khi tạo, thêm hoặc gỡ khi `--update`). Kiểm tra: test hai scenario của spec; `bash tests/run.sh plan` xanh
 
 ## 2. Chọn task và chia đợt (design 3; spec ai-run "Chọn task để chạy", "Chia đợt và xem trước")
 
-- [ ] 2.1 `run-select.jq` và test jq: mặc định, danh sách số, bị chặn bởi task ngoài lần chạy, task đóng hoặc feature hoặc PR bị loại, hai đợt, ETA. Kiểm tra: `bash tests/run.sh run` xanh
-- [ ] 2.2 `runtime/lib/cmd_run.sh` với `scrum run plan [N,…] [--json]`, đăng ký trong `bin/scrum` và `--help`. Test với `fake-gh`, không có lời gọi ghi. Kiểm tra: `bash tests/run.sh run` xanh
+- [x] 2.1 `run-select.jq` và test jq: mặc định, danh sách số, bị chặn bởi task ngoài lần chạy, task đóng hoặc feature hoặc PR bị loại, hai đợt, ETA. Kiểm tra: `bash tests/run.sh run` xanh
+- [x] 2.2 `runtime/lib/cmd_run.sh` với `scrum run plan [N,…] [--json]`, đăng ký trong `bin/scrum` và `--help`. Test với `fake-gh`, không có lời gọi ghi. Kiểm tra: `bash tests/run.sh run` xanh
 
 ## 3. State, start, record, merge, status (design 1, 4, 5, 6; spec ai-run)
 

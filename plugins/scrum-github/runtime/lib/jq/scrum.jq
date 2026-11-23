@@ -156,6 +156,16 @@ def eta_by_waves($merge):
      waves: [$waves[] | {wave, work}],
      estimated: ($xs | length)};
 
+# Waves of a blocking graph. Input: [{number, deps: [numbers of the same list]}].
+# Output: {"N": wave}, 1 for a task that depends on none of the list. Rounds are capped at the
+# list's length, so a cycle ends with large waves instead of looping.
+def wave_map:
+  . as $items
+  | reduce range(0; ($items | length) + 1) as $_
+      ([$items[] | {key: (.number | tostring), value: 1}] | from_entries;
+       . as $w
+       | reduce $items[] as $t (.; .[$t.number | tostring] = 1 + ([0] + [$t.deps[] | $w[tostring] // 0] | max)));
+
 # Sums of the estimates of a list of tasks ({estimate} each): work, review and how many have none.
 def estimate_totals:
   [.[] | .estimate | clean_estimate] as $es
