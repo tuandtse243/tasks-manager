@@ -15,8 +15,8 @@
 
 ## 3. `task new` về backlog (design 3; spec task-management "Tạo task")
 
-- [ ] 3.1 Cho `task-payload.jq` nhận milestone `null`; `cmd_task_new` thêm `--backlog`, không có sprint mở thì về backlog, `--backlog` cùng `--sprint` thì báo lỗi; dòng in "in Sprint N" hoặc "in the backlog". Test: không có sprint mở, có sprint mở, `--backlog`, cả hai cờ, sprint không tồn tại. Kiểm tra: `bash tests/run.sh task` xanh
-- [ ] 3.2 Sửa `skills/task-new/SKILL.md` (cờ `--backlog`, nói task đã vào đâu) và dòng `task new` trong README. Kiểm tra: `claude plugin validate .` đạt
+- [x] 3.1 Cho `task-payload.jq` nhận milestone `null`; `cmd_task_new` thêm `--backlog`, không có sprint mở thì về backlog, `--backlog` cùng `--sprint` thì báo lỗi; dòng in "in Sprint N" hoặc "in the backlog". Test: không có sprint mở, có sprint mở, `--backlog`, cả hai cờ, sprint không tồn tại. Kiểm tra: `bash tests/run.sh task` xanh
+- [x] 3.2 Sửa `skills/task-new/SKILL.md` (cờ `--backlog`, nói task đã vào đâu) và dòng `task new` trong README. Kiểm tra: `claude plugin validate .` đạt
 
 ## 4. Việc của tôi (design 5; spec my-work)
 

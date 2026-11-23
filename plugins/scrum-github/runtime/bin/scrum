@@ -29,7 +29,8 @@ Backlog and sprints
                                                   Capacity from velocity, the backlog, and adding tasks to the sprint
 
 Tasks
-  task new --title T [--body B] [--points N] [--assignee LOGIN]... [--sprint S] [--bug]
+  task new --title T [--body B] [--points N] [--assignee LOGIN]... [--sprint S | --backlog] [--bug]
+                                                  In the open sprint, or the backlog when none is open
   task start NUMBER
   task list [--mine] [--sprint S | --backlog] [--status new|in_progress|in_review|done] [--json]
   task move N... --sprint S | --backlog           Move tasks between sprints and the backlog (with a comment)

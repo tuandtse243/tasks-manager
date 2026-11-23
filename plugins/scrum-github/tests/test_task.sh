@@ -84,12 +84,50 @@ test_cmd_task_new_invalid_points_no_call() {
   assert_not_contains "$(gh_calls)" "milestones" "fails before reading GitHub"
 }
 
-test_cmd_task_new_without_open_sprint() {
+# delta task-management "Tạo task": no open sprint -> the backlog (it was an error before 0.9.0).
+test_cmd_task_new_without_open_sprint_goes_to_the_backlog() {
   task_env
   jq '.[0].state = "closed"' "$FIXTURES/milestones.json" > "$FAKE_GH_DIR/milestones.json"
-  run_scrum task new --title "x"
+  route_json 'api -X POST repos/acme/blog/issues --input -' '{"number":3,"title":"Fix login","html_url":"u3"}'
+  run_scrum task new --title "Fix login"
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "Created #3 Fix login in the backlog"
+  assert_contains "$OUT" "/scrum-github:sprint-new"
+  assert_contains "$(gh_calls)" 'STDIN {"title":"Fix login","body":"","labels":["status: New"],"assignees":[]}'
+}
+
+test_cmd_task_new_with_open_sprint_goes_into_it() {
+  task_env
+  route_json 'api -X POST repos/acme/blog/issues --input -' '{"number":3,"title":"Fix login","html_url":"u3"}'
+  run_scrum task new --title "Fix login"
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "Created #3 Fix login in Sprint 1"
+  assert_contains "$(gh_calls)" '"milestone":1}'
+}
+
+test_cmd_task_new_backlog_flag() {
+  task_env
+  route_json 'api -X POST repos/acme/blog/issues --input -' '{"number":3,"title":"Fix login","html_url":"u3"}'
+  run_scrum task new --title "Fix login" --backlog
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "Created #3 Fix login in the backlog"
+  assert_not_contains "$OUT" "no open sprint"
+  assert_not_contains "$(gh_calls)" '"milestone"'
+}
+
+test_cmd_task_new_backlog_and_sprint_refused() {
+  task_env
+  run_scrum task new --title "Fix login" --backlog --sprint "Sprint 1"
   assert_status 1 "$STATUS"
-  assert_contains "$ERR" "/scrum-github:sprint-new"
+  assert_contains "$ERR" "use --sprint or --backlog, not both"
+  assert_eq "" "$(gh_calls)" "nothing read or written"
+}
+
+test_cmd_task_new_unknown_sprint_refused() {
+  task_env
+  run_scrum task new --title "Fix login" --sprint "Sprint 9"
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" 'no sprint named "Sprint 9"'
   assert_eq "" "$(gh_writes)"
 }
 

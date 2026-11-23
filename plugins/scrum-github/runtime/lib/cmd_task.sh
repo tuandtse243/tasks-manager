@@ -15,10 +15,11 @@ create_task() {
 }
 
 cmd_task_new() {
-  local title="" body="" points="" assignees="" sprint_name="" bug=false
+  local title="" body="" points="" assignees="" sprint_name="" bug=false backlog=0
   while [ $# -gt 0 ]; do
     case "$1" in
       --title) title="${2:-}"; shift ;;
+      --backlog) backlog=1 ;;
       --body) body="${2:-}"; shift ;;
       --points) points="${2:-}"; shift ;;
       --assignee) assignees="$assignees${2:-}
@@ -30,6 +31,7 @@ cmd_task_new() {
     shift
   done
   [ -n "$title" ] || die "a task needs a title: scrum task new --title \"...\""
+  if [ "$backlog" = 1 ] && [ -n "$sprint_name" ]; then die "use --sprint or --backlog, not both"; fi
   case "$points" in ""|*[!0-9]*) [ -z "$points" ] || die "points must be a whole number (got \"$points\")" ;; esac
 
   require_tools
@@ -47,13 +49,28 @@ cmd_task_new() {
   # shellcheck disable=SC2046  # one login per word
   warn_unknown_logins $(printf '%s' "$task" | jq -r '.assignees[]')
 
-  ms="$(fetch_milestones "$repo")"
-  sprint="$(resolve_sprint "$ms" "$sprint_name")"
-  [ "$(printf '%s' "$sprint" | jq -r .state)" = "open" ] || die "$(printf '%s' "$sprint" | jq -r .title) is closed"
-  number="$(printf '%s' "$sprint" | jq -r .number)"
+  # --sprint S: that sprint (an unknown or closed one is an error). Neither flag: the open sprint,
+  # or the backlog when no sprint is open. --backlog: the backlog (design 3).
+  local where="the backlog"
+  number=null
+  if [ "$backlog" = 0 ]; then
+    ms="$(fetch_milestones "$repo")"
+    if [ -n "$sprint_name" ]; then
+      sprint="$(resolve_sprint "$ms" "$sprint_name")"
+    else
+      sprint="$(jqlib sprint-resolve -n --argjson ms "$ms" --argjson cfg "$CONFIG_JSON" --arg title "" --arg today "$(today)")"
+    fi
+    if [ "$sprint" != null ]; then
+      [ "$(printf '%s' "$sprint" | jq -r .state)" = "open" ] || die "$(printf '%s' "$sprint" | jq -r .title) is closed"
+      number="$(printf '%s' "$sprint" | jq -r .number)"
+      where="$(printf '%s' "$sprint" | jq -r .title)"
+    fi
+  fi
   created="$(create_task "$repo" "$task" "$number")"
-  printf '%s' "$created" | jq -r --arg s "$(printf '%s' "$sprint" | jq -r .title)" \
-    '"Created #\(.number) \(.title) in \($s): \(.html_url // "")"'
+  printf '%s' "$created" | jq -r --arg s "$where" '"Created #\(.number) \(.title) in \($s): \(.html_url // "")"'
+  if [ "$backlog" = 0 ] && [ "$number" = null ]; then
+    info "There is no open sprint, so the task is in the backlog. Create a sprint with /scrum-github:sprint-new, then move it: scrum task move $(printf '%s' "$created" | jq -r .number) --sprint SPRINT"
+  fi
   project_touch "$repo" "$(printf '%s' "$created" | jq -r .number)"
 }
 
