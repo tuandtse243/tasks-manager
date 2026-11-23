@@ -36,7 +36,9 @@ git push -u origin feat/12-dang-nhap-bang-email      # Dev: code xong thì push
 /scrum-github:sprint-status                          # Cả team: tiến độ và mục "Cần chú ý"
 ```
 
-Không biết làm gì tiếp thì hỏi `/scrum-github:next`.
+Không biết làm gì tiếp thì hỏi `/scrum-github:next`. Task gắn label `ai-ready` thì để agent AI
+làm song song, gộp thành một PR để review: `/scrum-github:run` (xem Flow G trong
+[hướng dẫn](docs/huong-dan-ap-dung.md#flow-g-để-agent-ai-làm-task)).
 
 ![Một sprint với scrum-github](docs/diagrams/sprint-flow.png)
 

@@ -34,7 +34,7 @@
 
 ## 6. Phiên bản và tài liệu
 
-- [ ] 6.1 Phiên bản 0.11.0, CHANGELOG, README (lệnh `run`, agent, cấu hình, cảnh báo an toàn), `docs/huong-dan-ap-dung.md`. Kiểm tra: `bash tests/run.sh manifest init` xanh
+- [x] 6.1 Phiên bản 0.11.0, CHANGELOG, README (lệnh `run`, agent, cấu hình, cảnh báo an toàn), `docs/huong-dan-ap-dung.md`. Kiểm tra: `bash tests/run.sh manifest init` xanh
 
 ## 7. Kiểm tra tích hợp
 

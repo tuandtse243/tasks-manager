@@ -91,6 +91,7 @@ the full path, and the skills now use the full path from the first call). Elsewh
 | `/scrum-github:task-new` | `scrum task new --title T [--points N] [--assignee LOGIN] [--sprint S \| --backlog] [--bug] [--work D] [--review D] [--by ai\|human]` | Create a task in the open sprint, or in the backlog when none is open (or with `--backlog`); says where it went. Optional time estimate, see "Time estimates" |
 | `/scrum-github:my-tasks` | `scrum mine [--user LOGIN] [--json]` | Every open task of one person in every sprint and the backlog, what blocks them, their time estimates and the time left in the open sprint, pull requests waiting for their review, and the task to do next; offers to start it. Read-only |
 | `/scrum-github:task-start` | `scrum task start N` | Assign yourself, set In progress, create branch `feat/N-slug` |
+| `/scrum-github:run` | `scrum run plan [N,…]`, `scrum run start`, `scrum run record`, `scrum run merge N`, `scrum run finish [--wave W]`, `scrum run status [ID]` | Work your `ai-ready` tasks with AI agents, one local git worktree each, wave by wave, into one pull request ready for review; `--dry-run` shows the plan only. See "Running tasks with agents" |
 | `/scrum-github:task` | `scrum task list [--mine] [--sprint S \| --backlog] [--status ROLE]`, `scrum task move N… --sprint S \| --backlog`, `scrum task estimate N [P] [--work D] [--review D] [--by ai\|human]`, `scrum task assign N LOGIN… [--unassign]`, `scrum task drop N [--reason T]` | See tasks; move, re-estimate, assign or drop them without editing labels by hand |
 | `/scrum-github:task-pr` | `gh pr create` / `gh pr edit`, after you approve | Write the pull request description for the task of the current branch |
 | `/scrum-github:sprint-status` | `scrum status [SPRINT]` | Table by person and status with points; work and review minutes left when tasks have time estimates |
@@ -264,6 +265,84 @@ To send the digest to a chat as well, add a repository secret `SCRUM_DIGEST_WEBH
 A webhook that fails only warns; the digest comment is always posted. Run `/scrum-github:init`
 after updating to 0.7.0 so the digest workflow passes the secret.
 
+## Running tasks with agents
+
+`/scrum-github:run` lets AI agents work your tasks, several at once, and gives a person one pull
+request to review instead of a pile of branches.
+
+> **Safety.** The agents run code on your machine with your permissions: they edit files, install
+> what the tests need and run the repository's tests. Each works in its own git worktree of the
+> repository and commits only locally. The skill says this and waits for your yes before every
+> run. Nothing is pushed but the integration branch, at the end, after its tests pass; the
+> branches and worktrees of the tasks are never pushed.
+
+What it does, in order:
+
+1. **Choose.** `scrum run plan` (read-only) picks your open tasks in the open sprint with status
+   New and the label `ai-ready` (`labels.ai_ready`), or exactly the numbers you give
+   (`scrum run plan 102,107`). It leaves out, each with its reason, a task blocked by an open task
+   that is not in the run (and what that task blocks in turn), a closed issue, a feature, epic or
+   meta issue, and a pull request. It splits the rest into **waves** by "blocked by": the tasks of
+   a wave do not block each other. It prints the waves, what is left out, and the time estimate
+   by waves when the tasks have one. `--dry-run` stops here.
+2. **Confirm.** The skill shows this with the safety warning and waits for your answer.
+3. **Start.** `scrum run start` stops when the working tree has uncommitted changes. It creates
+   the **integration branch** `run.branch_pattern` (`run/{sprint}-{login}`, for example
+   `run/sprint-5-tuandt`) from the latest default branch, saves the run in
+   `.scrum/run/<id>.json` (the id is `YYYYMMDD-HHMM-<login>`, UTC; `.scrum/` is added to
+   `.git/info/exclude`, so `.gitignore` is not touched), assigns you the tasks nobody has, and
+   sets every task In progress.
+4. **Each wave.** The skill checks out the integration branch and starts the agent
+   `scrum-github:implementer` for each task, in a new worktree made by Claude Code from that
+   branch, at most `--max-parallel` (`run.max_parallel`, 3) at a time. The agent follows the
+   issue's acceptance criteria, writes and runs tests, commits with `#N`, never pushes, stays in
+   the task's scope, and reports `{result, reason, manual_test, look_closely}`.
+   `scrum run record N --started` / `--done --branch B --notes FILE` / `--failed --reason R`
+   keeps what happened and the **actual time** (from start to done or failed), posted on the
+   issue as an `actual` block next to the estimate:
+
+   ```
+   <!-- scrum:actual -->
+   Actual time: 41m · done
+   Estimate: AI ~20m · Review ~10m
+   <!-- {"minutes":41,"result":"done","run":"20261123-1000-tuandt",...} -->
+   <!-- /scrum:actual -->
+   ```
+
+   `scrum run merge N` merges each done task into the integration branch with
+   `git merge --no-ff` (one merge commit per task). Then the skill runs `run.test_command` (or the
+   repository's tests it finds) on the integration branch before the next wave.
+5. **Finish.** `scrum run finish` pushes the integration branch only and opens one pull request
+   into the default branch, the **review pack**: for each merged task its acceptance criteria as
+   checkboxes (from the issue), the estimate against the actual time, how to test it by hand and
+   what to look at closely (from the agent), and `Closes #N`; then the tasks that failed or were
+   left out, with their reasons. The status workflow moves the tasks when it opens and when it is
+   merged, as for any pull request. When no task was merged, nothing is pushed.
+
+When things go wrong:
+
+- **A task fails** (its tests fail, or the agent cannot do it, or changed nothing): it gets a
+  comment with the reason and the actual time, goes back to New and stays out of the pull
+  request. The tasks it blocks are left out (with a comment, back to New); the others go on.
+- **A merge conflicts**: the merge is undone, the integration branch is unchanged, the task is
+  recorded as `conflict`, and the skill asks you: leave it out, or fix the conflict on the task's
+  branch and run `scrum run merge N` again.
+- **The tests fail** after a wave: the skill stops before the next wave and asks you.
+- **The run stops** (you close the session, a conflict waits): `/scrum-github:run` finds the
+  unfinished run and offers to continue it. Merged, failed and left-out tasks are skipped, done
+  tasks are merged, and the tasks that had not finished run again. `scrum run status [ID]` shows
+  each task of a run at any time.
+
+`--pr-per-wave` opens one pull request per wave instead, right after the wave is merged and
+tested: `scrum run finish --wave W` pushes the integration branch at that point as
+`<branch>-wave-W`, based on the branch of the previous wave's pull request, and says that one
+must be merged first.
+
+Mark tasks for agents with the `ai-ready` label (`scrum init` creates it), or with
+`"ai_ready": true` on a plan task (`plan apply` adds the label, `plan apply --update` adds or
+removes it to match). `scrum mine` and `scrum next` point to `/scrum-github:run` when you have
+such tasks in the open sprint. Needs git 2.20 or later.
+
 ## Plans: from a requirement to issues
 
 Three skills form one pipeline. Each can be used alone; `/scrum-github:plan` points to the others
@@ -345,7 +424,7 @@ continues the existing plan and keeps its ids and issue numbers.
       "tasks": [
         { "id": "T1", "title": "Store comments", "acceptance": ["…"], "subtasks": ["Migration", "API"],
           "points": 3, "estimate": {"work_minutes": 20, "review_minutes": 15, "by": "ai"},
-          "depends_on": [], "issue": null },
+          "depends_on": [], "ai_ready": true, "issue": null },
         { "id": "T2", "title": "Show comments", "points": 3, "depends_on": ["T1"], "issue": null }
       ] }
   ],
@@ -373,6 +452,9 @@ continues the existing plan and keeps its ids and issue numbers.
   above 0) and `by` (`ai` or `human`, `ai` when left out). `apply` writes them into the issue body
   and `apply --update` updates them; `plan.md` and `plan.html` add them up (see "Time
   estimates"), and `plan.html` draws the timeline.
+- **AI ready** (`ai_ready`, optional, `true` or `false`): `apply` gives the issue of a task with
+  `true` the label `ai-ready` (`labels.ai_ready`), so `/scrum-github:run` picks it up;
+  `apply --update` adds or removes the label to match. Left out, the label is left as it is.
 - Version 1 files (`{"feature": {...}, "tasks": [...]}`, no `version`) are read as one feature
   `F1` with tasks `T1…Tn` in the current sprint, and rewritten as version 2 when numbers are
   recorded.
@@ -513,6 +595,9 @@ branch needs `.github/` from `scrum init`.
   split. After `apply`, GitHub holds the live status.
 - **Done** = closed as completed. Issues closed as "not planned" count nowhere.
 - **Velocity** = points of tasks closed as completed in the sprint.
+- **Run** (`/scrum-github:run`) = `.scrum/run/<id>.json` in the working tree, never committed
+  (`.scrum/` is in `.git/info/exclude`): the tasks, waves, branches and actual times of one run.
+  The actual time of a task is also posted on its issue in a `<!-- scrum:actual -->` comment.
 - **Generated files** = `.github/scrum/files.json` holds the git hash of each file `init` wrote,
   so a later `init` can tell a file edited by hand from one that is only out of date.
 - **Board** (optional) = a GitHub Projects card per task. Its Status mirrors the label; the text

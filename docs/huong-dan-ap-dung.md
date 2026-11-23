@@ -16,6 +16,7 @@ tra [bảng lệnh](#2-bảng-lệnh) và [các flow](#5-các-flow-sử-dụng).
    - [Flow D: Thêm task lẻ hoặc bug](#flow-d-thêm-task-lẻ-hoặc-bug)
    - [Flow E: Theo dõi tiến độ](#flow-e-theo-dõi-tiến-độ)
    - [Flow F: Đóng sprint](#flow-f-đóng-sprint)
+   - [Flow G: Để agent AI làm task](#flow-g-để-agent-ai-làm-task)
 6. [Quy ước team](#6-quy-ước-team)
 7. [Board kanban (tuỳ chọn)](#7-board-kanban-tuỳ-chọn)
 8. [Xử lý sự cố](#8-xử-lý-sự-cố)
@@ -83,6 +84,7 @@ khi thiết lập, repo dự án có sẵn script tại `.github/scrum/bin/scrum
 | `task-new` | Bất kỳ ai: thêm một task hay bug (vào sprint đang mở, hoặc backlog khi chưa có sprint mở) | `scrum task new --title T [--points N] [--assignee LOGIN] [--sprint S \| --backlog] [--bug] [--work D] [--review D] [--by ai\|human]` | `/scrum-github:task-new bug: nút Lưu không phản hồi trên Safari, 2 điểm, giao cho an-nguyen` |
 | `my-tasks` | Dev: xem hết việc của mình và nên làm gì tiếp | `scrum mine [--user LOGIN]` | `/scrum-github:my-tasks` |
 | `task-start` | Dev: nhận task | `scrum task start N` | `/scrum-github:task-start 12` |
+| `run` | Dev: để agent AI làm các task `ai-ready` của mình, song song, gộp thành một PR để review | `scrum run plan\|start\|record\|merge\|finish\|status` | `/scrum-github:run --dry-run`, `/scrum-github:run 102,107` |
 | `task` | Bất kỳ ai: xem, chuyển sprint, đổi điểm hoặc thời gian, giao, bỏ task | `scrum task list\|move\|estimate\|assign\|drop` | `/scrum-github:task đổi #12 thành 3 điểm`, `scrum task estimate 12 --review 30m` |
 | `task-pr` | Dev: viết mô tả PR và mở PR | (dùng `gh pr create`) | `/scrum-github:task-pr` |
 | `sprint-status` | Cả team, hằng ngày | `scrum status [SPRINT]` | `/scrum-github:sprint-status ai còn nhiều việc nhất?` |
@@ -522,6 +524,67 @@ Bằng CLI: `scrum sprint close` để xem kế hoạch, rồi `scrum sprint clo
 Velocity của các sprint trước giúp quyết định nhận bao nhiêu điểm cho sprint sau, và giúp `plan` ước
 lượng số sprint.
 
+### Flow G: Để agent AI làm task
+
+Task được gắn label `ai-ready` (gắn tay, hoặc đặt `"ai_ready": true` cho task trong `plan.json` rồi
+`plan apply`) là task agent AI làm một mình được: tiêu chí nghiệm thu kiểm được bằng test hoặc bằng
+tay, không cần ai quyết định thêm. `/scrum-github:my-tasks` và `/scrum-github:next` sẽ gợi ý
+`/scrum-github:run` khi bạn có task như vậy trong sprint đang mở.
+
+> **An toàn.** Agent chạy mã trên máy bạn, với quyền của bạn: sửa file, cài thứ test cần, chạy test
+> của repo. Mỗi agent làm trong một git worktree riêng và chỉ commit ở local. Skill nói rõ điều này
+> và chờ bạn đồng ý trước mỗi lần chạy. Không có gì được push ngoài nhánh tích hợp, ở cuối, sau khi
+> test qua; nhánh và worktree của từng task không bao giờ được push.
+
+```mermaid
+sequenceDiagram
+    actor Dev
+    participant CC as Claude Code
+    participant AG as Agent (worktree riêng)
+    participant GH as GitHub
+    Dev->>CC: /scrum-github:run
+    CC-->>Dev: các đợt, task bị loại, ước tính thời gian, cảnh báo
+    Dev->>CC: đồng ý
+    CC->>GH: task In progress (scrum run start)
+    loop mỗi đợt
+        CC->>AG: tối đa K agent cùng lúc
+        AG-->>CC: commit ở local, kết quả JSON
+        CC->>GH: comment thời gian thật (scrum run record)
+        Note over CC: merge từng task vào nhánh tích hợp, chạy test
+    end
+    CC->>GH: push nhánh tích hợp, mở một PR (scrum run finish)
+    Dev->>GH: review theo gói review, merge
+```
+
+**Bước 1. Xem trước.** `/scrum-github:run --dry-run` (hoặc `scrum run plan`) in các đợt: task cùng
+đợt không chặn nhau nên chạy song song, đợt sau chờ đợt trước merge và test xong. Nó in cả task bị loại
+kèm lý do (không có `ai-ready`, bị chặn bởi task đang mở ngoài lần chạy, đã đóng, là feature hay PR) và
+ước tính thời gian theo đợt. Lệnh này không ghi gì. Muốn chọn đúng vài task: `/scrum-github:run 102,107`.
+
+**Bước 2. Chạy.** `/scrum-github:run` hỏi xác nhận rồi:
+- tạo nhánh tích hợp `run/sprint-5-<login>` (`run.branch_pattern`) từ nhánh mặc định mới nhất, lưu
+  trạng thái vào `.scrum/run/<id>.json` (git bỏ qua), chuyển task sang In progress;
+- mỗi đợt: checkout nhánh tích hợp, chạy tối đa `--max-parallel` (mặc định `run.max_parallel` = 3)
+  agent `implementer`, mỗi agent một worktree; xong thì merge từng task (`--no-ff`, mỗi task một
+  commit merge) và chạy `run.test_command`;
+- cuối cùng push nhánh tích hợp và mở **một PR** có `Closes #N` cho mọi task xong.
+
+**Bước 3. Review.** Mô tả PR là gói review: mỗi task có tiêu chí nghiệm thu để tích, thời gian ước
+lượng so với thời gian thật, cách test tay và chỗ cần nhìn kỹ do agent báo; cuối là các task lỗi hoặc
+bị loại kèm lý do. Thời gian thật của từng task cũng được comment lên issue (khối `actual`).
+
+Khi có chuyện:
+
+| Chuyện | Điều xảy ra |
+|---|---|
+| Agent không làm xong một task | Task có comment lý do, về New, không vào PR. Task bị nó chặn cũng bị loại; các task khác chạy tiếp |
+| Merge bị conflict | Merge được huỷ, nhánh tích hợp giữ nguyên, skill hỏi bạn: bỏ task đó, hoặc sửa tay rồi `scrum run merge N` lại |
+| Test đỏ sau một đợt | Skill dừng trước đợt sau và hỏi bạn |
+| Lần chạy bị ngắt | Gọi lại `/scrum-github:run`: nó đề nghị chạy tiếp, bỏ qua task đã xong, chạy lại task dở. `scrum run status` xem từng task |
+
+`--pr-per-wave` mở một PR cho mỗi đợt; PR đợt sau dựa trên nhánh của PR đợt trước và ghi rõ phải merge
+PR đó trước.
+
 ---
 
 ## 6. Quy ước team
@@ -641,6 +704,9 @@ sửa từng lỗi. Bảng dưới cho những trường hợp `doctor` không t
 - "Cần chú ý" đọc quan hệ "bị chặn bởi" cho tối đa 50 task chưa xong; backlog cũng vậy.
 - Không có ngày nghỉ lễ: chỉ các thứ trong `sprint.working_days` được coi là ngày làm việc.
 - Bật In review giữa sprint không đổi task đang có; chúng chỉ đổi ở sự kiện PR kế tiếp.
+- `/scrum-github:run` chạy ở máy của bạn, không chạy trên CI hay máy chủ; không giới hạn chi phí token,
+  chưa đoán trước conflict giữa các task cùng đợt, và chỉ ghi thời gian thật, chưa tự hiệu chỉnh ước
+  lượng. Cần git 2.20 trở lên.
 - `scrum` chỉ có sẵn trên PATH của Claude Code khi plugin cài ở scope user (quan sát ở Claude Code
   2.1.328); skill vẫn chạy với mọi cách cài.
 
