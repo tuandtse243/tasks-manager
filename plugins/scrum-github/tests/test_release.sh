@@ -175,3 +175,177 @@ test_notes_in_vietnamese() {
   assert_contains "$notes" "## Sửa lỗi"
   assert_contains "$notes" "**Toàn bộ thay đổi**"
 }
+
+# ---------- scrum release with a fake gh ----------
+
+# release_env: tags v1.4.2 (on main, 2026-11-10) and v1.3.0; #12 a feature closed by PR #40, #14 a bug.
+release_env() {
+  setup_fake_gh
+  setup_repo 'version: 1'
+  route 'auth status*' "auth.txt"
+  cp "$FIXTURES/gh-auth-status.txt" "$FAKE_GH_DIR/auth.txt"
+  route_json 'api repos/acme/blog' '{"default_branch":"main"}'
+  route_json 'api --paginate repos/acme/blog/tags*' '[{"name":"v1.3.0"},{"name":"v1.4.2"},{"name":"nightly"}]'
+  route_json 'api repos/acme/blog/compare/v1.4.2...main' '{"status":"ahead","base_commit":{"commit":{"committer":{"date":"2026-11-10T08:00:00Z"}}}}'
+  route_json 'api repos/acme/blog/compare/v1.3.0...main' '{"status":"ahead","base_commit":{"commit":{"committer":{"date":"2026-10-01T08:00:00Z"}}}}'
+  printf '%s' "$( { rel_issue 12 '' 2026-11-15T10:00:00Z completed 'Part of #10'; rel_issue 14 bug
+                    rel_issue 13 '' 2026-11-16T10:00:00Z not_planned; rel_issue 9 '' 2026-11-09T10:00:00Z; } | issues)" > "$FAKE_GH_DIR/closed.json"
+  route 'api --paginate repos/acme/blog/issues?state=closed*' "closed.json"
+  route_json 'api --paginate repos/acme/blog/issues/12/timeline*' \
+    '[{"event":"cross-referenced","source":{"issue":{"number":40,"body":"Closes #12","pull_request":{"merged_at":"2026-11-15T09:00:00Z"}}}}]'
+  route_json 'api --paginate repos/acme/blog/issues/14/timeline*' '[]'
+  route_json 'api repos/acme/blog/issues/10' '{"number":10,"title":"Comments"}'
+  route 'api repos/acme/blog/git/ref/tags/*' '!404'
+  route 'api repos/acme/blog/releases/tags/*' '!404'
+  route_json 'api repos/acme/blog/git/ref/heads/main' '{"object":{"sha":"abc1234def"}}'
+  route_json 'api -X POST repos/acme/blog/git/tags *' '{"sha":"tag5678"}'
+  route_json 'api -X POST repos/acme/blog/git/refs *' '{"ref":"refs/tags/v1.5.0"}'
+  route_json 'api -X POST repos/acme/blog/releases *' '{"html_url":"https://github.com/acme/blog/releases/tag/v1.5.0"}'
+}
+
+test_cmd_release_preview_writes_nothing() {
+  release_env
+  run_scrum release
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "Previous version: v1.4.2 (2026-11-10)"
+  assert_contains "$OUT" "New version: v1.5.0: minor, new in #12 (not bugs)"
+  assert_contains "$OUT" "#12  feature  Task 12  PR #40"
+  assert_contains "$OUT" "### Comments"
+  assert_contains "$OUT" "- Task 14 (#14)"
+  assert_contains "$OUT" "compare/v1.4.2...v1.5.0"
+  assert_not_contains "$OUT" "Task 13"
+  assert_not_contains "$OUT" "Task 9 "
+  assert_contains "$OUT" "run again with --yes"
+  assert_contains "$(gh_calls)" "issues?state=closed&since=2026-11-10T08:00:00Z"
+  assert_eq "" "$(gh_writes)" "no GitHub writes"
+}
+
+test_cmd_release_json() {
+  release_env
+  run_scrum release --json
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "v1.5.0 minor v1.4.2 [40]" "$(printf '%s' "$OUT" | jq -r '"\(.tag) \(.bump) \(.previous.tag) \(.tasks[0].prs | tojson)"')"
+  assert_eq "Comments" "$(printf '%s' "$OUT" | jq -r '.tasks[0].parent_title')"
+  assert_contains "$(printf '%s' "$OUT" | jq -r .notes)" "## Bug fixes"
+  assert_eq "" "$(gh_writes)"
+}
+
+test_cmd_release_skips_a_tag_not_on_the_default_branch() {
+  release_env
+  route_first 'api repos/acme/blog/compare/v1.4.2...main' 'diverged.json'
+  printf '{"status":"diverged","base_commit":{"commit":{"committer":{"date":"2026-11-10T08:00:00Z"}}}}' > "$FAKE_GH_DIR/diverged.json"
+  run_scrum release --json
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "v1.3.0 v1.4.0" "$(printf '%s' "$OUT" | jq -r '"\(.previous.tag) \(.tag)"')"
+}
+
+test_cmd_release_nothing_to_release() {
+  release_env
+  printf '%s' "$(rel_issue 13 '' 2026-11-16T10:00:00Z not_planned | issues)" > "$FAKE_GH_DIR/closed.json"
+  run_scrum release --yes
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "Nothing to release: no task was completed since v1.4.2."
+  assert_eq "" "$(gh_writes)"
+}
+
+test_cmd_release_invalid_version_stops() {
+  release_env
+  run_scrum release 1.4.0 --yes
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "must be greater than v1.4.2"
+  assert_eq "" "$(gh_writes)"
+}
+
+test_cmd_release_creates_tag_ref_and_release_in_order() {
+  release_env
+  run_scrum release --yes
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "repos/acme/blog/git/tags|repos/acme/blog/git/refs|repos/acme/blog/releases" \
+    "$(gh_writes | sed 's/.*-X POST \([^ ]*\).*/\1/' | paste -sd '|' -)"
+  assert_contains "$(gh_calls)" 'STDIN {"tag":"v1.5.0","message":"Release v1.5.0","object":"abc1234def","type":"commit"}'
+  assert_contains "$(gh_calls)" 'STDIN {"ref":"refs/tags/v1.5.0","sha":"tag5678"}'
+  assert_eq "v1.5.0 false" "$(grep '^STDIN {"tag_name"' "$FAKE_GH_LOG" | sed 's/^STDIN //' | jq -r '"\(.tag_name) \(.draft)"')"
+  assert_contains "$(grep '^STDIN {"tag_name"' "$FAKE_GH_LOG" | sed 's/^STDIN //' | jq -r .body)" "- Task 12 (#12, PR #40)"
+  assert_contains "$OUT" "Created tag v1.5.0 on main (abc1234)."
+  assert_contains "$OUT" "Published release v1.5.0: https://github.com/acme/blog/releases/tag/v1.5.0"
+}
+
+test_cmd_release_draft() {
+  release_env
+  run_scrum release --draft --yes
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "true" "$(grep '^STDIN {"tag_name"' "$FAKE_GH_LOG" | sed 's/^STDIN //' | jq -r .draft)"
+  assert_contains "$OUT" "Created the draft release v1.5.0"
+}
+
+test_cmd_release_notes_file() {
+  release_env
+  printf 'Hand-written notes\n' > "$T/notes.md"
+  run_scrum release --notes-file "$T/notes.md" --yes
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "Hand-written notes" "$(grep '^STDIN {"tag_name"' "$FAKE_GH_LOG" | sed 's/^STDIN //' | jq -r .body)"
+}
+
+test_cmd_release_already_released_stops() {
+  release_env
+  route_first 'api --paginate repos/acme/blog/tags*' 'tags2.json'
+  printf '[{"name":"v1.5.0"},{"name":"v1.4.2"}]' > "$FAKE_GH_DIR/tags2.json"
+  printf '{"html_url":"https://github.com/acme/blog/releases/tag/v1.5.0"}' > "$FAKE_GH_DIR/released.json"
+  route_first 'api repos/acme/blog/releases/tags/v1.5.0' 'released.json'
+  run_scrum release 1.5.0 --yes
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "v1.5.0 is already released"
+  assert_eq "" "$(gh_writes)"
+}
+
+test_cmd_release_failed_after_the_tag_then_rerun_creates_only_the_release() {
+  release_env
+  route_first 'api -X POST repos/acme/blog/releases *' '!fail'
+  run_scrum release --yes
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "tag v1.5.0 exists on GitHub, but its release was not created"
+  assert_contains "$ERR" "scrum release 1.5.0 --yes"
+  # The rerun: tag v1.5.0 now exists (on main), without a release.
+  : > "$FAKE_GH_LOG"
+  sed -i.bak '1d' "$FAKE_GH_DIR/routes"
+  route_first 'api --paginate repos/acme/blog/tags*' 'tags2.json'
+  printf '[{"name":"v1.5.0"},{"name":"v1.4.2"}]' > "$FAKE_GH_DIR/tags2.json"
+  route_json 'api repos/acme/blog/commits/v1.5.0' '{"commit":{"committer":{"date":"2026-11-20T08:00:00Z"}}}'
+  run_scrum release 1.5.0 --yes
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "repos/acme/blog/releases" "$(gh_writes | sed 's/.*-X POST \([^ ]*\).*/\1/' | paste -sd '|' -)"
+  assert_contains "$(grep '^STDIN {"tag_name"' "$FAKE_GH_LOG" | sed 's/^STDIN //' | jq -r .body)" "compare/v1.4.2...v1.5.0"
+  assert_contains "$OUT" "Published release v1.5.0"
+}
+
+test_cmd_release_by_sprint() {
+  release_env
+  route_json 'api --paginate repos/acme/blog/milestones*' \
+    '[{"number":5,"title":"Sprint 5","state":"closed","description":"scrum:start=2026-11-09 end=2026-11-13"},{"number":6,"title":"Sprint 6","state":"open","description":"scrum:start=2026-11-16 end=2026-11-20"}]'
+  route_json 'api --paginate repos/acme/blog/issues?milestone=5*' "$( { rel_issue 9 '' 2026-11-09T10:00:00Z; rel_issue 13 '' 2026-11-12T10:00:00Z not_planned; } | issues)"
+  route_json 'api --paginate repos/acme/blog/issues/9/timeline*' '[]'
+  run_scrum release --sprint "Sprint 5" --json
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "[9]" "$(printf '%s' "$OUT" | jq -c '[.tasks[].number]')"
+  assert_not_contains "$(gh_calls)" "issues?state=closed"
+}
+
+test_cmd_release_forbidden_tag_points_to_doctor() {
+  release_env
+  route_first 'api -X POST repos/acme/blog/git/tags *' '!403'
+  run_scrum release --yes
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "contents: write"
+  assert_contains "$ERR" "/scrum-github:doctor"
+  assert_eq "repos/acme/blog/git/tags" "$(gh_writes | sed 's/.*-X POST \([^ ]*\).*/\1/' | paste -sd '|' -)" "no ref, no release"
+}
+
+test_cmd_release_since_tag() {
+  release_env
+  run_scrum release --since v1.3.0 --json
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "v1.3.0 [9,12,14]" "$(printf '%s' "$OUT" | jq -c -r '"\(.previous.tag) \([.tasks[].number] | tojson)"')"
+  run_scrum release --since v9.9.9
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "no version tag named v9.9.9"
+}

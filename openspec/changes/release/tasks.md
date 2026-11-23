@@ -13,7 +13,7 @@ Paths are relative to `plugins/scrum-github/`. Run tests with `bash tests/run.sh
 
 ## 3. Command (design 1, 2, 3, 6; spec release)
 
-- [ ] 3.1 `runtime/lib/cmd_release.sh` and `scrum release [VERSION] [--since TAG] [--sprint S…] [--draft] [--notes-file FILE] [--json] [--yes]`, registered in `bin/scrum` and `--help`. Tests with `fake-gh`: preview makes no write call, nothing to release, release (tag, ref, release in order), already released, release failing after the tag and the rerun creating only the release, `--draft`. Verify: `bash tests/run.sh release` green
+- [x] 3.1 `runtime/lib/cmd_release.sh` and `scrum release [VERSION] [--since TAG] [--sprint S…] [--draft] [--notes-file FILE] [--json] [--yes]`, registered in `bin/scrum` and `--help`. Tests with `fake-gh`: preview makes no write call, nothing to release, release (tag, ref, release in order), already released, release failing after the tag and the rerun creating only the release, `--draft`. Verify: `bash tests/run.sh release` green
 
 ## 4. Skill and suggestions (design 7; spec sprint-lifecycle, next-step-guidance)
 
