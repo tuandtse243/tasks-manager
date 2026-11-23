@@ -184,6 +184,44 @@ def is_task($cfg):
 def is_completed: .state == "closed" and ((.state_reason // "completed") == "completed");
 def is_not_planned: .state == "closed" and .state_reason == "not_planned";
 
+# ---------- versions and releases (spec release) ----------
+# Kept here because release-plan.jq and next-step.jq both use them (jq 1.8.2: no include chains).
+# Input: a tag name or a version. [X, Y, Z] for "<prefix>X.Y.Z" or "X.Y.Z", else null.
+def semver_of($prefix):
+  (if type != "string" then null
+   elif $prefix != "" and startswith($prefix) then ltrimstr($prefix) else . end)
+  | if type == "string" and test("^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$")
+    then split(".") | map(tonumber) else null end;
+def semver_text: map(tostring) | join(".");
+# Input: GitHub tags ([{name}]). The version tags, highest version first: [{name, version}].
+# Two names for one version (v1.2.3 and 1.2.3) keep the one with the prefix.
+def version_tags($prefix):
+  [.[]? | .name as $n | ($n | semver_of($prefix)) as $v | select($v != null)
+   | {name: $n, version: $v, prefixed: ($prefix != "" and ($n | startswith($prefix)))}]
+  | sort_by(.version, .prefixed) | reverse | unique_by(.version) | sort_by(.version) | reverse
+  | map({name, version});
+# The parent feature of an issue: from GitHub's sub-issue link, else "Part of #N" in its body.
+def parent_number:
+  ((.parent_issue_url // "") | capture("/issues/(?<n>[0-9]+)$").n // null) as $p
+  | if $p != null then $p | tonumber
+    else ([(.body // "") | capture("Part of #(?<n>[0-9]+)")] | .[0].n | if . then tonumber else null end) end;
+# Input: issues. The tasks of a release: closed as completed, not epics, features, meta issues or
+# pull requests, closed after $since and not after $until (ISO times; null for no bound), each
+# once, by number.
+def release_tasks($cfg; $since; $until):
+  [.[] | select(is_task($cfg) and is_completed)
+   | select($since == null or ((.closed_at // "") > $since))
+   | select($until == null or ((.closed_at // "") <= $until))]
+  | unique_by(.number);
+# Input: the timeline of task $n. Numbers of the merged pull requests of $repo that closed it:
+# cross-referenced from a merged pull request whose body closes #$n (or whose body is not given).
+def timeline_prs($repo; $n):
+  [.[]? | select(.event == "cross-referenced") | .source.issue // empty
+   | select(.pull_request != null and .pull_request.merged_at != null)
+   | select(((.repository.full_name // $repo) | ascii_downcase) == ($repo | ascii_downcase))
+   | select(.body == null or ((.body | closing_refs($repo)) | index($n)) != null)
+   | .number] | unique;
+
 def task_points($cfg):
   [label_names[] | select(startswith($cfg.points.label_prefix))
    | ltrimstr($cfg.points.label_prefix) | tonumber?] | .[0];

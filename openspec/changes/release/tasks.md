@@ -8,8 +8,8 @@ Paths are relative to `plugins/scrum-github/`. Run tests with `bash tests/run.sh
 
 ## 2. Version choice and task selection (design 1, 2, 4; spec release)
 
-- [ ] 2.1 `release-plan.jq`: previous tag by semver and prefix, task selection (completed, not not-planned, not epic/feature/meta/PR, after the tag time), `bump`, `VERSION` check. jq tests in `tests/test_release.sh` for every scenario of "Previous version", "Gather done tasks" and "Suggested version". Verify: `bash tests/run.sh release` green
-- [ ] 2.2 `release-notes.jq`: breaking, features by parent feature, bug fixes; lines with task and pull request numbers; en and vi. Verify: test for the "Parent feature" scenario
+- [x] 2.1 `release-plan.jq`: previous tag by semver and prefix, task selection (completed, not not-planned, not epic/feature/meta/PR, after the tag time), `bump`, `VERSION` check. jq tests in `tests/test_release.sh` for every scenario of "Previous version", "Gather done tasks" and "Suggested version". Verify: `bash tests/run.sh release` green
+- [x] 2.2 `release-notes.jq`: breaking, features by parent feature, bug fixes; lines with task and pull request numbers; en and vi. Verify: test for the "Parent feature" scenario
 
 ## 3. Command (design 1, 2, 3, 6; spec release)
 
