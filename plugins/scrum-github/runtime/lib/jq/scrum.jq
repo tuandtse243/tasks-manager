@@ -200,7 +200,8 @@ def version_tags($prefix):
    | {name: $n, version: $v, prefixed: ($prefix != "" and ($n | startswith($prefix)))}]
   | sort_by(.version, .prefixed) | reverse | unique_by(.version) | sort_by(.version) | reverse
   | map({name, version});
-# The parent feature of an issue: from GitHub's sub-issue link, else "Part of #N" in its body.
+# The parent feature of an issue: from GitHub's sub-issue link (parent_issue_url, in REST issue
+# objects since sub-issues; absent on older servers), else "Part of #N" in its body.
 def parent_number:
   ((.parent_issue_url // "") | capture("/issues/(?<n>[0-9]+)$").n // null) as $p
   | if $p != null then $p | tonumber
@@ -214,13 +215,18 @@ def release_tasks($cfg; $since; $until):
    | select($until == null or ((.closed_at // "") <= $until))]
   | unique_by(.number);
 # Input: the timeline of task $n. Numbers of the merged pull requests of $repo that closed it:
-# cross-referenced from a merged pull request whose body closes #$n (or whose body is not given).
+# cross-referenced from a merged pull request whose body closes #$n.
 def timeline_prs($repo; $n):
   [.[]? | select(.event == "cross-referenced") | .source.issue // empty
    | select(.pull_request != null and .pull_request.merged_at != null)
    | select(((.repository.full_name // $repo) | ascii_downcase) == ($repo | ascii_downcase))
-   | select(.body == null or ((.body | closing_refs($repo)) | index($n)) != null)
+   | select(((.body // "") | closing_refs($repo) | index($n)) != null)
    | .number] | unique;
+# Input: a timeline. The commit of the last "closed" event that has one, or null.
+def timeline_closing_commit: [.[]? | select(.event == "closed" and (.commit_id // "") != "") | .commit_id] | .[-1] // null;
+# Input: the pull requests of a commit (repos/{r}/commits/{sha}/pulls). The merged ones whose
+# merge commit is $sha.
+def merge_commit_prs($sha): [.[]? | select(.merged_at != null and .merge_commit_sha == $sha) | .number] | unique;
 
 def task_points($cfg):
   [label_names[] | select(startswith($cfg.points.label_prefix))

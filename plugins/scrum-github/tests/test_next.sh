@@ -328,3 +328,34 @@ test_cmd_next_skips_release_when_repo_cannot_be_read() {
   assert_status 0 "$STATUS" "$ERR"
   assert_eq "start" "$(printf '%s' "$OUT" | jq -r .step)"
 }
+
+# The tags are listed but none can be compared with the default branch: whether they are released
+# cannot be read, so the step is skipped (not treated as "no tag yet").
+test_cmd_next_skips_release_when_tags_cannot_be_compared() {
+  next_env
+  { issue 20 New 3 alice; } | issues > "$FAKE_GH_DIR/issues.json"
+  printf '[%s,{"number":2,"title":"Sprint 2","state":"closed","closed_at":"2026-11-14T10:00:00Z","description":""}]' "$SPRINT" > "$FAKE_GH_DIR/milestones.json"
+  route_json 'api --paginate repos/acme/blog/issues?milestone=2*' "$(done_at 7 2026-11-12T10:00:00Z | issues)"
+  route_json 'api repos/acme/blog' '{"default_branch":"main"}'
+  route_json 'api --paginate repos/acme/blog/tags*' '[{"name":"v1.5.0"}]'
+  route 'api repos/acme/blog/compare/*' '!fail'
+  run_scrum next --json
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "start" "$(printf '%s' "$OUT" | jq -r .step)"
+}
+
+# Review fix 4: the boundary is the tagger date; tasks closed before it are released.
+test_cmd_next_release_boundary_is_the_tagger_date() {
+  next_env
+  { issue 20 New 3 alice; } | issues > "$FAKE_GH_DIR/issues.json"
+  printf '[%s,{"number":2,"title":"Sprint 2","state":"closed","closed_at":"2026-11-14T10:00:00Z","description":""}]' "$SPRINT" > "$FAKE_GH_DIR/milestones.json"
+  route_json 'api --paginate repos/acme/blog/issues?milestone=2*' "$( { done_at 7 2026-11-12T10:00:00Z; done_at 8 2026-11-13T10:00:00Z; } | issues)"
+  route_json 'api repos/acme/blog' '{"default_branch":"main"}'
+  route_json 'api --paginate repos/acme/blog/tags*' '[{"name":"v1.4.2"}]'
+  route_json 'api repos/acme/blog/compare/v1.4.2...main' '{"status":"ahead","base_commit":{"commit":{"committer":{"date":"2026-11-12T12:00:00Z"}}}}'
+  route_json 'api repos/acme/blog/git/ref/tags/v1.4.2' '{"object":{"type":"tag","sha":"t142"}}'
+  route_json 'api repos/acme/blog/git/tags/t142' '{"tagger":{"date":"2026-11-13T12:00:00Z"}}'
+  run_scrum next --json
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "start" "$(printf '%s' "$OUT" | jq -r .step)"
+}

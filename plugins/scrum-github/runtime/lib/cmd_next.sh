@@ -3,8 +3,9 @@
 # Stops as early as the priority order allows, so a repo that is not set up needs no gh call.
 
 # next_release_info REPO MILESTONES  For the release step: {sprint, tag, since, issues} of the most
-# recently closed sprint and the latest version tag on the default branch; null when no sprint is
-# closed or GitHub cannot be read (the step is then skipped).
+# recently closed sprint and the latest version tag on the default branch, with the time the tag
+# was made (release_tag_time); null when no sprint is closed or GitHub cannot be read (the step is
+# then skipped).
 next_release_info() {
   local repo="$1" last branch vtags prev issues
   last="$(printf '%s' "$2" | jq -c '[.[] | select(.state == "closed")] | sort_by(.closed_at // "") | .[-1] // null')"
@@ -12,7 +13,8 @@ next_release_info() {
   . "$SCRUM_ROOT/lib/cmd_release.sh"
   branch="$(release_default_branch "$repo" 2>/dev/null)" || { printf 'null'; return 0; }
   vtags="$(release_version_tags "$repo" 2>/dev/null)" || { printf 'null'; return 0; }
-  prev="$(release_latest_tag "$repo" "$branch" "$vtags")"
+  # Version tags that cannot be confirmed on the branch: whether the sprint is released is unknown.
+  prev="$(release_latest_tag "$repo" "$branch" "$vtags")" || { printf 'null'; return 0; }
   issues="$(fetch_milestone_issues "$repo" "$(printf '%s' "$last" | jq -r .number)" 2>/dev/null)" || { printf 'null'; return 0; }
   jq -nc --argjson m "$last" --argjson p "$prev" --argjson i "$issues" \
     '{sprint: $m.title, tag: ($p.name // null), since: ($p.date // null), issues: $i}'

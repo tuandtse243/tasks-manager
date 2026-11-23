@@ -7,9 +7,12 @@
 # parent feature), bug fixes; an empty group is left out. Each line: "- Title (#12, PR #40)".
 # Text from issues is inserted as it is: GitHub renders the Markdown.
 include "scrum";
+# "@name" (or "@org/team") in a title would notify that person when the release is published:
+# put it in backticks. An e-mail address (a@b.c) is left alone.
+def quiet: gsub("(?<![A-Za-z0-9_`])@(?<n>[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:/[A-Za-z0-9_.-]+)?)"; "`@\(.n)`");
 def line:
   (($prs[.number | tostring] // []) | map("#\(.)")) as $p
-  | "- \(.title) (#\(.number)\(if ($p | length) > 0 then ", PR " + ($p | join(", ")) else "" end))";
+  | "- \(.title | quiet) (#\(.number)\(if ($p | length) > 0 then ", PR " + ($p | join(", ")) else "" end))";
 def lines: map(line) | join("\n");
 def group($key; $body): "## " + tr($strings; $key) + "\n\n" + $body;
 
@@ -24,7 +27,7 @@ $plan.tasks as $t
        group("release_features";
          [ (if ($loose | length) > 0 then $loose | lines else empty end),
            ($by_parent[] | (.[0].parent | tostring) as $k
-            | "### \($parents[$k] // "#\($k)")\n\n" + lines) ] | join("\n\n"))
+            | "### \($parents[$k] // "#\($k)" | quiet)\n\n" + lines) ] | join("\n\n"))
      else empty end),
     (if ($bugs | length) > 0 then group("release_fixes"; $bugs | lines) else empty end),
     (if $plan.previous != null
