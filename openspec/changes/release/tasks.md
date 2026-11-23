@@ -26,7 +26,7 @@ Paths are relative to `plugins/scrum-github/`. Run tests with `bash tests/run.sh
 
 ## 6. Integration check
 
-- [ ] 6.1 Full `bash tests/run.sh`, `shellcheck`, `openspec validate release --strict`. Verify: all pass
+- [x] 6.1 Full `bash tests/run.sh`, `shellcheck`, `openspec validate release --strict`. Verify: all pass
 
 ## Workflow follow-up
 
