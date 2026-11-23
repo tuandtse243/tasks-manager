@@ -147,6 +147,7 @@ labels:
   epic: "type: epic"               # parent of several features; not counted in points
   meta: "scrum: meta"              # digest issues; not counted
   no_task: no-task                 # lets a PR pass the link check without a task
+  ai_ready: ai-ready               # a task an AI agent may work with /scrum-github:run
 branch:
   pattern: "feat/{number}-{slug}"
 digest:
@@ -164,6 +165,10 @@ planning:
   hours_per_point: null            # e.g. 4: plan.md then shows hours next to points
   context_stale_commits: 50        # the project context counts as stale after this many commits
   merge_minutes: 5                 # merge and test time between two waves, in time estimates
+run:                               # /scrum-github:run, see "Running tasks with agents" below
+  test_command: ""                 # the repo's test command; empty = each agent finds it
+  max_parallel: 3                  # at most this many agents at once (a whole number > 0)
+  branch_pattern: "run/{sprint}-{login}"   # integration branch; also {date} (YYYY-MM-DD)
 project:                           # optional board, see "Project board" below
   enabled: false
   owner: null                      # user or organization that owns the project

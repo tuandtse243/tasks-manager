@@ -34,7 +34,8 @@
     "feature": "type: feature",
     "epic": "type: epic",
     "meta": "scrum: meta",
-    "no_task": "no-task"
+    "no_task": "no-task",
+    "ai_ready": "ai-ready"
   },
   "branch": {
     "pattern": "feat/{number}-{slug}"
@@ -72,5 +73,10 @@
     "behind_percent": 15,
     "review_days": 2
   },
-  "team": []
+  "team": [],
+  "run": {
+    "test_command": "",
+    "max_parallel": 3,
+    "branch_pattern": "run/{sprint}-{login}"
+  }
 }

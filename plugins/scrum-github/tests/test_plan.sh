@@ -1561,3 +1561,52 @@ test_html_timeline_review_only_task_has_no_bar() {
   tl="$(printf '%s' "$d" | jqt plan-html -r --rawfile t "$PLUGIN_DIR/runtime/share/plan.html" | sed -n '/data-part="timeline"/,/<\/section>/p')"
   assert_eq "2" "$(printf '%s' "$tl" | grep -o 'class="b-merge"' | wc -l | tr -d ' ')"
 }
+
+# ---------- ai_ready (delta work-plan "Task sẵn sàng cho agent", change ai-run) ----------
+
+test_validate_ai_ready_must_be_boolean() {
+  local p
+  p="$(plan3 | jq -c '.features[0].tasks[0].ai_ready = "yes" | .features[0].tasks[1].ai_ready = true | .features[0].tasks[2].ai_ready = false')"
+  assert_eq 'task T1: ai_ready must be true or false (got "yes")' "$(validate "$p")"
+}
+
+test_apply_ai_ready_label() {
+  apply_env
+  plan3 | jq '.features[0].tasks[0].ai_ready = true' > "$T/plan.json"
+  run_scrum plan apply "$T/plan.json"
+  assert_status 0 "$STATUS" "$ERR"
+  local posts
+  posts="$(grep '^STDIN' "$FAKE_GH_LOG" | sed 's/^STDIN //' | jq -c 'select(.title == "Store comments" or .title == "Show comments") | {title, ai: (.labels | index("ai-ready") != null)}')"
+  assert_contains "$posts" '{"title":"Store comments","ai":true}'
+  assert_contains "$posts" '{"title":"Show comments","ai":false}'
+}
+
+test_update_removes_ai_ready() {
+  update_env
+  issue_get 11 "$(jq -nc '{number:11,id:1100,state:"open",title:"Store comments",
+    body:"### Acceptance criteria\n\n- [ ] Saved with author\n\n### Subtasks\n\n- [ ] Migration\n- [ ] API\n\nPart of #10",
+    labels:[{name:"status: New"},{name:"points: 3"},{name:"ai-ready"}],milestone:{number:1,title:"Sprint 1"}}')"
+  jq '.features[0].tasks[0].ai_ready = false' "$T/plan.json" > "$T/p2.json"; mv "$T/p2.json" "$T/plan.json"
+  run_scrum plan apply "$T/plan.json" --update
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$(gh_calls)" 'api -X PUT repos/acme/blog/issues/11/labels --input -'
+  assert_contains "$(gh_calls)" 'STDIN {"labels":["status: New","points: 3"]}'
+  assert_contains "$OUT" "remove ai-ready"
+  assert_not_contains "$OUT" "points 3 -> 3"
+}
+
+test_update_adds_ai_ready_and_omitted_leaves_it() {
+  update_env
+  jq '.features[0].tasks[0].ai_ready = true' "$T/plan.json" > "$T/p2.json"; mv "$T/p2.json" "$T/plan.json"
+  run_scrum plan apply "$T/plan.json" --update
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$(gh_calls)" 'STDIN {"labels":["status: In progress","points: 3","ai-ready"]}'
+  assert_contains "$OUT" "add ai-ready"
+  # omitted: a label put on by hand stays
+  update_env
+  : > "$FAKE_GH_LOG"
+  issue_get 12 '{"number":12,"id":1200,"state":"open","title":"Show comments","body":"Part of #10","labels":[{"name":"status: New"},{"name":"points: 3"},{"name":"ai-ready"}],"milestone":{"number":1,"title":"Sprint 1"}}'
+  run_scrum plan apply "$T/plan.json" --update
+  assert_status 0 "$STATUS" "$ERR"
+  assert_not_contains "$(gh_calls)" 'issues/12/labels'
+}

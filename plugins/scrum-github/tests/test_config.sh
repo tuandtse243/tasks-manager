@@ -415,3 +415,39 @@ test_team_review_hours_values() {
   assert_contains "$(errors_with '.team = [{"login": "a", "review_hours": 0}]')" "team[0].review_hours"
   assert_contains "$(errors_with '.team = [{"login": "a", "review_hours": "2"}]')" "team[0].review_hours"
 }
+
+# ---------- run and labels.ai_ready (delta scrum-config, change ai-run) ----------
+
+test_run_defaults_when_not_declared() {
+  setup_fake_gh
+  setup_repo 'version: 1'
+  run_scrum config
+  assert_status 0 "$STATUS" "$ERR"
+  assert_json_eq '{"test_command":"","max_parallel":3,"branch_pattern":"run/{sprint}-{login}"}' "$(printf '%s' "$OUT" | jq -c .run)"
+  assert_eq "ai-ready" "$(printf '%s' "$OUT" | jq -r .labels.ai_ready)"
+}
+
+test_run_max_parallel_zero_rejected() {
+  assert_contains "$(config_error 'run:
+  max_parallel: 0')" "run.max_parallel"
+}
+
+test_run_validation_messages() {
+  assert_contains "$(errors_with '.run.max_parallel = 1.5')" "run.max_parallel"
+  assert_contains "$(errors_with '.run.max_parallel = "3"')" "run.max_parallel"
+  assert_contains "$(errors_with '.run.branch_pattern = ""')" "run.branch_pattern"
+  assert_contains "$(errors_with '.run.test_command = 5')" "run.test_command"
+  assert_contains "$(errors_with '.run = "x"')" "run: must be a mapping"
+  assert_eq "" "$(errors_with '.run.test_command = "npm test" | .run.max_parallel = 1 | .run.branch_pattern = "ai/{date}-{login}"')"
+}
+
+test_ai_ready_label_must_differ() {
+  assert_contains "$(errors_with '.labels.ai_ready = "Type: Feature"')" "labels.ai_ready"
+  assert_contains "$(errors_with '.labels.ai_ready = "no-task"')" "labels.ai_ready"
+  assert_contains "$(errors_with '.labels.ai_ready = ""')" "labels.ai_ready: must be a non-empty text"
+}
+
+test_template_matches_defaults_for_run() {
+  assert_eq "$(jq -c '{run, a: .labels.ai_ready}' "$PLUGIN_DIR/runtime/share/defaults.json")" \
+    "$(yq -o=json '.' "$PLUGIN_DIR/templates/scrum.yml" | jq -c '{run, a: .labels.ai_ready}')"
+}

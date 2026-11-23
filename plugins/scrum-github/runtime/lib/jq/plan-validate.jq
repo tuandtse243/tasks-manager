@@ -59,6 +59,8 @@ def sprint_ok: . == null or type == "string";
          (["acceptance", "subtasks", "assignees", "depends_on"][] as $k
           | if ($t[$k] // [] | str_list) then empty else "task \(name_of($t)): \($k) must be a list of texts" end),
          (if $t.bug == null or ($t.bug | type) == "boolean" then empty else "task \(name_of($t)): bug must be true or false" end),
+         (if $t.ai_ready == null or ($t.ai_ready | type) == "boolean" then empty
+          else "task \(name_of($t)): ai_ready must be true or false (got \($t.ai_ready | tojson))" end),
          # estimate (optional; spec work-plan "Ước lượng thời gian trong plan")
          (if $t.estimate == null then empty
           elif ($t.estimate | type) != "object" then "task \(name_of($t)): estimate must be an object with work_minutes, review_minutes and by"

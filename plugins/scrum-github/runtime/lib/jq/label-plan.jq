@@ -13,7 +13,8 @@ def col: ltrimstr("#") | ascii_downcase;
   {name: $cfg.labels.feature, color: "a2eeef", description: "Feature broken down into sprint tasks"},
   {name: $cfg.labels.epic, color: "5319e7", description: "Large requirement split into features"},
   {name: $cfg.labels.meta, color: "ededed", description: "Scrum bookkeeping issue, not a task"},
-  {name: $cfg.labels.no_task, color: "cfd3d7", description: "Pull request with no linked task"}
+  {name: $cfg.labels.no_task, color: "cfd3d7", description: "Pull request with no linked task"},
+  {name: $cfg.labels.ai_ready, color: "8250df", description: "Task ready for an AI agent (/scrum-github:run)"}
 ]
 | map(.override = ($cfg.colors[.name] != null) | .color = (($cfg.colors[.name] // .color) | col)) as $want
 | ($existing | map({key: (.name | norm), value: .}) | from_entries) as $have
