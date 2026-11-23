@@ -80,10 +80,10 @@ khi thiết lập, repo dự án có sẵn script tại `.github/scrum/bin/scrum
 | `project-scan` | Tech lead, một lần cho dự án có mã sẵn; làm mới khi mã đổi nhiều | `scrum context status` | `/scrum-github:project-scan` |
 | `discover` | PO, khi yêu cầu còn mơ hồ | (không có) | `/scrum-github:discover cho người dùng bình luận dưới bài viết` |
 | `plan` | PO, SM: biến yêu cầu thành task | `scrum plan check FILE`, `scrum plan apply FILE` | `/scrum-github:plan docs/plans/blog-comments/brief.md` |
-| `task-new` | Bất kỳ ai: thêm một task hay bug (vào sprint đang mở, hoặc backlog khi chưa có sprint mở) | `scrum task new --title T [--points N] [--assignee LOGIN] [--sprint S \| --backlog] [--bug]` | `/scrum-github:task-new bug: nút Lưu không phản hồi trên Safari, 2 điểm, giao cho an-nguyen` |
+| `task-new` | Bất kỳ ai: thêm một task hay bug (vào sprint đang mở, hoặc backlog khi chưa có sprint mở) | `scrum task new --title T [--points N] [--assignee LOGIN] [--sprint S \| --backlog] [--bug] [--work D] [--review D] [--by ai\|human]` | `/scrum-github:task-new bug: nút Lưu không phản hồi trên Safari, 2 điểm, giao cho an-nguyen` |
 | `my-tasks` | Dev: xem hết việc của mình và nên làm gì tiếp | `scrum mine [--user LOGIN]` | `/scrum-github:my-tasks` |
 | `task-start` | Dev: nhận task | `scrum task start N` | `/scrum-github:task-start 12` |
-| `task` | Bất kỳ ai: xem, chuyển sprint, đổi điểm, giao, bỏ task | `scrum task list\|move\|estimate\|assign\|drop` | `/scrum-github:task đổi #12 thành 3 điểm` |
+| `task` | Bất kỳ ai: xem, chuyển sprint, đổi điểm hoặc thời gian, giao, bỏ task | `scrum task list\|move\|estimate\|assign\|drop` | `/scrum-github:task đổi #12 thành 3 điểm`, `scrum task estimate 12 --review 30m` |
 | `task-pr` | Dev: viết mô tả PR và mở PR | (dùng `gh pr create`) | `/scrum-github:task-pr` |
 | `sprint-status` | Cả team, hằng ngày | `scrum status [SPRINT]` | `/scrum-github:sprint-status ai còn nhiều việc nhất?` |
 | `sprint-report` | SM, review hoặc gửi stakeholder | `scrum report [SPRINT] [--out FILE]` | `/scrum-github:sprint-report` |
@@ -164,10 +164,12 @@ attention:
   behind_percent: 15              # sprint chậm hơn đường lý tưởng quá 15% phạm vi thì "cần chú ý"
 planning:
   hours_per_point: 4              # tuỳ chọn: plan.md hiện thêm số giờ (1 điểm = 4 giờ)
+  merge_minutes: 5                # phút merge và chạy test giữa hai đợt, dùng khi cộng thời gian (mặc định 5)
 team:                             # tuỳ chọn: /plan gợi ý người làm theo danh sách này
   - login: tuandt
     areas: [backend]              # lĩnh vực thường làm
     capacity: 10                  # điểm mỗi sprint
+    review_hours: 6               # tuỳ chọn: số giờ review mỗi sprint; sprint-fill cảnh báo khi vượt
   - login: an-nguyen
     areas: [frontend]
 ```
@@ -263,8 +265,10 @@ Nếu backlog đã có task, lệnh nhắc bước kế tiếp là chọn task c
 - Sức chứa mặc định là velocity trung bình của tối đa ba sprint đã đóng gần nhất; chưa có sprint
   nào đóng thì Claude hỏi một con số (`--capacity N`).
 - Claude đề xuất các task vừa sức chứa, task chặn đứng trước task bị chặn; bạn sửa danh sách, xem
-  trước các cảnh báo (vượt sức chứa, task chưa có điểm, bị chặn bởi task ngoài sprint), rồi mới
-  đồng ý để chuyển task vào sprint.
+  trước các cảnh báo (vượt sức chứa, task chưa có điểm, bị chặn bởi task ngoài sprint, người vượt
+  `review_hours`), rồi mới đồng ý để chuyển task vào sprint.
+- Khi task có ước lượng thời gian, lệnh in tổng phút review của từng người trong sprint (và sau khi
+  thêm), so với `review_hours` của họ. Cảnh báo không chặn việc thêm task.
 - Xem riêng backlog: `/scrum-github:backlog`.
 
 Tiếp theo: [Flow B](#flow-b-từ-yêu-cầu-tới-task) hoặc [Flow D](#flow-d-thêm-task-lẻ-hoặc-bug).
@@ -341,8 +345,9 @@ và một lượt soát brief độc lập).
 
 Diễn biến:
 1. Chia yêu cầu thành task theo **lát cắt dọc**: mỗi task tự cho ra một hành vi kiểm tra được, không
-   phải một tầng kỹ thuật đứng riêng. Mỗi task có tiêu chí nghiệm thu, điểm trong thang, subtask
-   (thành checklist trong issue) và phụ thuộc.
+   phải một tầng kỹ thuật đứng riêng. Mỗi task có tiêu chí nghiệm thu, điểm trong thang, ước lượng
+   thời gian (phút làm, phút người review và test tay, AI hay người làm), subtask (thành checklist
+   trong issue) và phụ thuộc.
 2. Một agent soát bản nháp: thiếu việc, ngoài phạm vi, task quá lớn, phụ thuộc sai, tiêu chí không
    kiểm tra được. `--quick` bỏ bước này.
 3. Lệnh đề xuất người làm cho task chưa có người (theo `team.areas` và tải hiện tại, chỉ chọn người
@@ -358,7 +363,8 @@ Diễn biến:
 
 **Trang `plan.html`.** Do `plan check`, `plan render`, `plan apply` sinh ra, mở được khi không có mạng,
 theo chế độ sáng hoặc tối của máy. Trang gồm tóm tắt, thay đổi so với lần xem trước, sơ đồ phụ thuộc
-theo đợt (rê chuột để xem chuỗi phụ thuộc), tải và capacity, chi tiết từng task, góp ý của plan-critic,
+theo đợt (rê chuột để xem chuỗi phụ thuộc), dòng thời gian vẽ đúng tỉ lệ (khi task có ước lượng thời
+gian), tải và capacity, chi tiết từng task, góp ý của plan-critic,
 những gì sẽ tạo trên GitHub, giả định và ngoài phạm vi. Trang chỉ để xem; bạn trả lời trong chat.
 `plan.html` và `.plan-snapshot.json` không cần commit (`plan init` ghi sẵn `.gitignore` trong thư mục plan).
 
@@ -372,6 +378,14 @@ từng task có thể ghi riêng. Đưa task từ backlog vào sprint: gán mile
 **Ước lượng.** `plan.md` hiện tổng điểm từng feature và cả plan, số task chưa có điểm, số giờ (nếu có
 `hours_per_point`), và số sprint ước tính theo velocity trung bình của tối đa ba sprint đã đóng gần nhất.
 
+**Ước lượng thời gian.** Điểm đo độ phức tạp; thời gian cho biết bao giờ xong. Mỗi task có thể có
+`estimate`: `work_minutes` (thời gian làm), `review_minutes` (người review và test tay, thường là nút
+cổ chai khi AI làm) và `by` (`ai` hoặc `human`). Plugin lưu trong một khối ở cuối thân issue
+("AI ~25m · Review ~20m"), không dùng label. `plan.md` và `plan.html` cộng thời gian **theo đợt**: các
+task cùng đợt chạy song song nên mỗi đợt mất bằng task lâu nhất, cộng `planning.merge_minutes` (mặc
+định 5) để merge và chạy test; thời gian review là tổng. Ví dụ ba đợt (20m, 8m), (15m, 35m), (20m)
+xong phần làm sau 20 + 5 + 35 + 5 + 20 + 5 = 90 phút. Task chưa có ước lượng được nêu riêng.
+
 **Chạy lại an toàn.** `scrum plan apply` ghi số issue vào `plan.json` ngay sau mỗi issue được tạo:
 
 | Tình huống | Lệnh | Kết quả |
@@ -379,7 +393,7 @@ từng task có thể ghi riêng. Đưa task từ backlog vào sprint: gán mile
 | Xem trước | `scrum plan apply <file> --dry-run` | In ra những gì sẽ tạo, nối, bỏ qua; không ghi gì |
 | Lần trước lỗi giữa chừng | `scrum plan apply <file>` | Chỉ tạo phần chưa có số issue |
 | Vừa thêm task vào plan | `scrum plan apply <file>` | Chỉ tạo task mới và nối chúng |
-| Sửa tiêu đề, nội dung, điểm, sprint | `scrum plan apply <file> --update` | Cập nhật issue còn mở; không đụng label trạng thái, người được giao, issue đã đóng |
+| Sửa tiêu đề, nội dung, điểm, thời gian, sprint | `scrum plan apply <file> --update` | Cập nhật issue còn mở; không đụng label trạng thái, người được giao, issue đã đóng |
 | Sửa tiếp plan cũ bằng Claude | `/scrum-github:plan docs/plans/<slug>/` | Giữ nguyên id và số issue đã có |
 
 > **Đừng xoá số `issue` hay đổi `id` trong plan**: lần tạo sau sẽ sinh issue trùng.
@@ -463,9 +477,12 @@ Hoặc dùng CLI:
 scrum task new --title "Quên mật khẩu" --points 3 --assignee an-nguyen
 scrum task new --title "Nút Lưu không phản hồi trên Safari" --points 2 --bug
 scrum task new --title "Viết tài liệu API" --sprint "Sprint 4"
+scrum task new --title "Sửa lỗi đăng nhập" --points 1 --work 15m --review 10m
+scrum task estimate 12 --review 30m          # chỉ đổi thời gian review, giữ điểm và thời gian làm
 ```
 
 - Task vào sprint đang mở, trạng thái New. `--sprint` để chọn sprint khác.
+- Thời gian viết dạng `90`, `25m`, `2h` hoặc `1h30m`. `--by human` khi task cần người làm; mặc định `ai`.
 - Claude không tự đặt điểm hay người nhận nếu bạn không nói. Nhờ nó ước lượng thì nó đề xuất điểm
   kèm lý do; nhờ nó viết mô tả thì nó cho bạn xem trước khi tạo.
 - Tạo trên giao diện GitHub cũng được (New issue → mẫu Task): ô Points tự thành label `points: N`,
@@ -475,7 +492,8 @@ scrum task new --title "Viết tài liệu API" --sprint "Sprint 4"
 
 | Muốn biết | Lệnh | Kết quả |
 |---|---|---|
-| Ai đang làm gì, còn bao nhiêu điểm | `/scrum-github:sprint-status` hoặc `scrum status` | Bảng theo người và trạng thái, % điểm đã xong, task chưa có điểm, số ngày làm việc còn lại, và mục "Cần chú ý" (task bị chặn, task In progress không động, task thiếu người nhận hoặc điểm, sprint chậm) |
+| Ai đang làm gì, còn bao nhiêu điểm | `/scrum-github:sprint-status` hoặc `scrum status` | Bảng theo người và trạng thái, % điểm đã xong, task chưa có điểm, số ngày làm việc còn lại, và mục "Cần chú ý" (task bị chặn, task In progress không động, task thiếu người nhận hoặc điểm, sprint chậm). Khi task có ước lượng thời gian, bảng có thêm phút làm và phút review còn lại theo người, và số task chưa có ước lượng thời gian |
+| Việc của tôi còn mất bao lâu | `/scrum-github:my-tasks` hoặc `scrum mine` | Thời gian từng task, ước tính phần việc còn lại trong sprint đang mở theo đợt, và phút review |
 | Hỏi một câu cụ thể | `/scrum-github:sprint-status An đang làm gì?` | Claude trả lời từ bảng |
 | Tin tóm tắt mỗi sáng | Tự động | Workflow comment vào issue `Sprint N digest` theo `digest.cron`, kèm mục "Cần chú ý". Muốn nhận cả trên Slack, Google Chat, Mattermost hay Telegram: đặt secret `SCRUM_DIGEST_WEBHOOK` của repo (Telegram: `https://api.telegram.org/bot<TOKEN>/sendMessage?chat_id=<CHAT_ID>`, kèm `digest.webhook_format: telegram`) |
 | Burndown và velocity để gửi stakeholder | `/scrum-github:sprint-report` hoặc `scrum report --out sprint-3.html` | File HTML mở được khi không có mạng, burndown dựng lại từ lịch sử task (task thêm, bỏ hay đổi điểm giữa sprint được tính đúng ngày) kèm đường phạm vi. Mặc định ghi vào `scrum-reports/<sprint>.html` |

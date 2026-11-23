@@ -7,8 +7,11 @@
 # Output: {login, sprint: {number, title}|null, total: {tasks, points},
 #          groups: [{key: in_progress|in_review|current|sprint|backlog, title, sprint, tasks: [task]}],
 #          next: {number, title, action: "continue"|"start"}|null, order: [numbers],
-#          reviews: [{number, title, author, url}]|null}
-# task: {number, title, points, status, role, sprint, blocked_by: [numbers]|null}
+#          reviews: [{number, title, author, url}]|null,
+#          time: {tasks, estimated, missing, missing_numbers, work_minutes, review_minutes, waves}|null}
+# task: {number, title, points, status, role, sprint, blocked_by: [numbers]|null, estimate|null}
+# time (spec my-work "Thời gian trong việc của một người"): the open tasks in the open sprint;
+# work by waves of the blocking graph between them, like the plan view; null without them.
 include "scrum";
 
 ([$ms[]? | {key: (.number | tostring), value: sprint_info}] | from_entries) as $msinfo
@@ -23,7 +26,8 @@ include "scrum";
         sprint: (.milestone.title // null),
         due: (if .milestone == null then null
               else ($msinfo[.milestone.number | tostring].end // (.milestone.due_on // "" | .[0:10]) | if . == "" then null else . end) end),
-        blocked_by: ((.number | tostring) as $k | if $blocked | has($k) then $blocked[$k] else null end) } ]
+        blocked_by: ((.number | tostring) as $k | if $blocked | has($k) then $blocked[$k] else null end),
+        estimate: issue_estimate } ]
 | sort_by(.number) as $tasks
 
 # groups, in the order of the spec
@@ -57,6 +61,24 @@ include "scrum";
          .[$t.number | tostring] = 1 + ([0] + [$t.deps[] | $w[tostring]] + (if $t.outside then [1] else [] end) | max)))
   ) as $wave
 | ($todo | sort_by($wave[.number | tostring], .number)) as $ordered
+
+# time left in the open sprint: waves of the blocking graph between the open tasks there
+| [$tasks[] | select($cur != null and .milestone == $cur and .role != "done")] as $left
+| ([$left[].number]) as $lset
+| ([$left[] | {number, deps: [(.blocked_by // [])[] | select(. as $b | $lset | index($b))]}]) as $litems
+| (reduce range(0; ($litems | length) + 1) as $_
+     ([$litems[] | {key: (.number | tostring), value: 1}] | from_entries;
+     . as $w
+     | reduce $litems[] as $t (.; .[$t.number | tostring] = 1 + ([0] + [$t.deps[] | $w[tostring]] | max)))
+  ) as $lwave
+| ( if ($left | length) == 0 then null
+    else ([$left[] | {wave: $lwave[.number | tostring], estimate}] | eta_by_waves($cfg.planning.merge_minutes // 5)) as $eta
+      | { tasks: ($left | length), estimated: $eta.estimated,
+          missing: (($left | length) - $eta.estimated),
+          missing_numbers: [$left[] | select(.estimate == null) | .number],
+          work_minutes: $eta.work_minutes, review_minutes: $eta.review_minutes,
+          waves: ($eta.waves | length) }
+    end ) as $time
 | ( if ($prog | length) > 0 then ($prog[0] | {number, title, action: "continue"})
     else ([$ordered[] | select(.blocked_by == [])] | .[0] | if . == null then null else {number, title, action: "start"} end)
     end ) as $next
@@ -67,4 +89,5 @@ include "scrum";
     next: $next,
     order: [$ordered[].number],
     reviews: (if $prs == null then null
-              else [$prs[] | {number, title, author: (.user.login // null), url: (.html_url // null)}] | sort_by(.number) end) }
+              else [$prs[] | {number, title, author: (.user.login // null), url: (.html_url // null)}] | sort_by(.number) end),
+    time: $time }

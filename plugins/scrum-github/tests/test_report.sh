@@ -539,3 +539,86 @@ test_review_report_data_has_four_roles() {
   assert_eq '["new","in_progress","in_review","done"]' "$(jq -c .roles <<<"$data")"
   assert_eq "In review" "$(jq -r .statuses.in_review <<<"$data")"
 }
+
+# ---------- time left (delta sprint-reporting "Thời gian còn lại trong bảng tiến độ") ----------
+
+# The sprint of the guide, with estimates on #2 (done), #3 and #4 (david, not done).
+timed_issues() {
+  jq -c 'def est($w; $r): "Text\n\n<!-- scrum:estimate -->\nAI\n<!-- {\"work_minutes\":\($w),\"review_minutes\":\($r)} -->\n<!-- /scrum:estimate -->";
+    map(if .number == 2 then .body = est(40; 40) elif .number == 3 then .body = est(20; 15)
+        elif .number == 4 then .body = est(25; 30) else . end)' "$FIXTURES/issues-sprint1.json"
+}
+
+# "Có ước lượng"
+test_progress_time_left_per_person() {
+  local p
+  p="$(progress_of "$(timed_issues)" 2014-09-24)"
+  assert_json_eq '{"work_minutes":45,"review_minutes":45}' "$(jq -c '.rows[] | select(.assignee == "david") | .time' <<<"$p")"
+  assert_json_eq '{"work_minutes":0,"review_minutes":0}' "$(jq -c '.rows[] | select(.assignee == "ruby") | .time' <<<"$p")"
+  assert_json_eq '{"work_minutes":45,"review_minutes":45}' "$(jq -c .total.time <<<"$p")"
+  assert_eq "0" "$(jq -r .time_missing <<<"$p")"
+}
+
+test_progress_table_time_columns() {
+  local table
+  table="$(progress_of "$(timed_issues)" 2014-09-24 | jqt progress-table -r --argjson cfg "$(defaults)" --argjson strings "$(strings en)")"
+  assert_contains "$table" "Work left  Review left"
+  assert_contains "$table" "david     1 (3 pts)  1 (1 pt)     1 (3 pts)   3 (7 pts)   45m        45m"
+  assert_contains "$table" "Tasks not done without a time estimate: 0."
+}
+
+test_progress_time_shared_task_counted_once() {
+  local issues p
+  issues='[{"number":1,"title":"Pair","state":"open","labels":[],"assignees":[{"login":"david"},{"login":"ruby"}],
+            "body":"<!-- scrum:estimate -->\nAI\n<!-- {\"work_minutes\":30,\"review_minutes\":20} -->\n<!-- /scrum:estimate -->"},
+           {"number":2,"title":"Solo","state":"open","labels":[],"assignees":[{"login":"ruby"}]}]'
+  p="$(progress_of "$issues" 2014-09-22)"
+  assert_eq "20 20 20" "$(jq -r '[(.rows[] | .time.review_minutes), .total.time.review_minutes] | join(" ")' <<<"$p")"
+  assert_eq "1" "$(jq -r .time_missing <<<"$p")"
+}
+
+# "Không có ước lượng": the table and the JSON stay as they were.
+test_progress_without_estimates_has_no_time() {
+  local p table
+  p="$(progress_of "$(cat "$FIXTURES/issues-sprint1.json")" 2014-09-24)"
+  assert_eq "false false" "$(jq -r '"\(.total | has("time")) \(has("time_missing"))"' <<<"$p")"
+  table="$(printf '%s' "$p" | jqt progress-table -r --argjson cfg "$(defaults)" --argjson strings "$(strings en)")"
+  assert_not_contains "$table" "Work left"
+  assert_not_contains "$table" "time estimate"
+}
+
+test_progress_table_time_in_vietnamese() {
+  local table
+  table="$(progress_of "$(timed_issues)" 2014-09-24 | jqt progress-table -r --argjson cfg "$(defaults)" --argjson strings "$(strings vi)")"
+  assert_contains "$table" "Review còn lại"
+  assert_contains "$table" "Task chưa xong chưa có ước lượng thời gian: 0."
+}
+
+test_cmd_status_shows_time_left() {
+  report_env
+  timed_issues > "$FAKE_GH_DIR/issues.json"
+  route_json 'api --paginate repos/acme/blog/issues/*/dependencies/blocked_by*' '[]'
+  run_scrum status
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "Review left"
+  assert_contains "$OUT" "45m"
+}
+
+# "Khối hỏng" in a read command: the status table does not stop and counts the task as without an estimate.
+test_cmd_status_broken_estimate_block_counts_as_missing() {
+  report_env
+  timed_issues | jq 'map(if .number == 3 then .body = "Text\n\n<!-- scrum:estimate -->\nAI ~20m\n<!-- {\"work_minutes\": -->\n<!-- /scrum:estimate -->" else . end)' \
+    > "$FAKE_GH_DIR/issues.json"
+  route_json 'api --paginate repos/acme/blog/issues/*/dependencies/blocked_by*' '[]'
+  run_scrum status
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "Review left"
+  assert_contains "$OUT" "Tasks not done without a time estimate: 1."
+}
+
+# "Không có ước lượng": no time on the rows of status --json when no task has an estimate.
+test_progress_without_estimates_rows_have_no_time() {
+  local p
+  p="$(progress_of "$(cat "$FIXTURES/issues-sprint1.json")" 2014-09-24)"
+  assert_eq "false" "$(jq -c '[.rows[] | has("time")] | any' <<<"$p")" "no time on the rows"
+}

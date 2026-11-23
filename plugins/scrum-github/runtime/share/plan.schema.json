@@ -76,6 +76,16 @@
         "assignees": { "type": "array", "items": { "type": "string" } },
         "bug": { "type": "boolean" },
         "sprint": { "type": ["string", "null"], "description": "Overrides the plan's sprint for this task; null puts this task in the backlog. Omit the key to use the plan's sprint." },
+        "estimate": {
+          "type": "object",
+          "description": "Optional time estimate, next to points (not instead of them): minutes of work, minutes a person needs to review and test by hand, and who does the work. Written into the issue body as the estimate block by `plan apply`, updated by `plan apply --update`.",
+          "required": ["work_minutes", "review_minutes"],
+          "properties": {
+            "work_minutes": { "type": "integer", "minimum": 1 },
+            "review_minutes": { "type": "integer", "minimum": 1, "description": "Review and manual testing by a person" },
+            "by": { "enum": ["ai", "human"], "description": "Who does the work; ai when omitted" }
+          }
+        },
         "issue": { "$ref": "#/$defs/issue" }
       }
     }

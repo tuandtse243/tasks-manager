@@ -1,6 +1,6 @@
 ---
 name: plan
-description: Break a requirement into an epic, features and Scrum tasks with acceptance criteria, story points and dependencies, suggest an assignee and a sprint for each task from the team and the sprint's capacity, and save it as a plan file in the repo (docs/plans/<slug>/plan.json, plan.md and plan.html) for the user to review once; after that one approval create the issues on GitHub with their sprint and assignees. Re-running continues the same plan without duplicates. Use when the user wants a feature, user story, requirement or brief planned, split or estimated into tasks. Replaces sprint-plan. Pass --quick to skip the independent review.
+description: Break a requirement into an epic, features and Scrum tasks with acceptance criteria, story points, time estimates (work and review minutes) and dependencies, suggest an assignee and a sprint for each task from the team and the sprint's capacity, and save it as a plan file in the repo (docs/plans/<slug>/plan.json, plan.md and plan.html) for the user to review once; after that one approval create the issues on GitHub with their sprint and assignees. Re-running continues the same plan without duplicates. Use when the user wants a feature, user story, requirement or brief planned, split or estimated into tasks. Replaces sprint-plan. Pass --quick to skip the independent review.
 argument-hint: "<brief path | requirement text> [--quick]"
 ---
 
@@ -20,7 +20,7 @@ description. `--quick` skips the independent review (step 5).
 
 1. Read `${CLAUDE_PLUGIN_ROOT}/reference/planning-rules.md` and follow it throughout.
 2. `scrum config` (offline): the point scale `points.scale`, `planning.dir`,
-   `planning.context_file`, `planning.hours_per_point`.
+   `planning.context_file`, `planning.hours_per_point`, `planning.merge_minutes`.
 3. `scrum context status`: whether the project context exists and how old it is.
    - It exists: read `planning.context_file`. If `stale` or `unknown` is true, tell the user in one
      line that it may be out of date and suggest `/scrum-github:project-scan`; carry on.
@@ -63,8 +63,14 @@ expand-migrate-contract), with this adapter. **Where they differ, the adapter wi
 - Each ticket becomes a task in `plan.json`: `id`, `title` (short, starts with a verb), `body`
   (the behaviour now and the behaviour once it is done, two or three sentences), `acceptance`
   (two to four criteria, each checkable on its own),
-  optional `subtasks` (checklist items inside the issue, not issues), `points`, `depends_on`,
-  `assignees` (the people the user named; the others are suggested in step 6), `bug` for defects.
+  optional `subtasks` (checklist items inside the issue, not issues), `points`, `estimate`,
+  `depends_on`, `assignees` (the people the user named; the others are suggested in step 6),
+  `bug` for defects.
+- Estimate the time of every task as well as its points (rule 7 of the planning rules):
+  `estimate: {work_minutes, review_minutes, by}`. `work_minutes` is how long the work takes;
+  `review_minutes` is how long a person needs to review it and test it by hand, the bottleneck
+  when AI does the work; `by` is `ai` unless the task needs a person (design, a product
+  decision, work on a live system), then `human`. Both numbers are whole minutes above 0.
 - Several independent streams of work become several features under one `epic`; one stream is
   one feature and no epic.
 - From a brief: plan only what its "In scope" section lists; the brief's size estimate gives the
@@ -143,8 +149,10 @@ the answer comes in the chat.
 
 Show in the chat, in one message:
 
-- a table per feature: id, title, points, depends on, assignee, sprint (suggested values marked
-  as suggestions), plus the totals;
+- a table per feature: id, title, points, work and review time, depends on, assignee, sprint
+  (suggested values marked as suggestions), plus the totals;
+- the time: done in about N minutes of work (by waves, from `plan.md`), then M minutes of
+  review, and the tasks without a time estimate;
 - each person's load against their capacity, and the sprint's points after apply against its
   capacity, with the tasks left in the backlog and why;
 - the reviewer's findings, and what you already changed because of them;
@@ -169,7 +177,7 @@ already in their sprint and assigned: there is no `sprint-fill` or assignment st
 
 - Run again after a failure: only the missing items are created.
 - The user changed tasks that already have issues: `scrum plan apply <plan.json> --update`
-  updates title, body, points and sprint of open issues. Run `scrum plan apply <plan.json>
+  updates title, body, points, time estimate and sprint of open issues. Run `scrum plan apply <plan.json>
   --dry-run --update` first and show the user what will be overwritten.
 - Remind the user to commit `plan.json` and `plan.md` (`plan.html` and `.plan-snapshot.json` are
   generated and ignored by the folder's `.gitignore`).

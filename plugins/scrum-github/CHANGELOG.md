@@ -4,6 +4,46 @@ All notable changes to the `scrum-github` plugin. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the plugin uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2026-11-23
+
+### Added
+
+- **Time estimates.** A task can carry a time estimate next to its points (points stay for
+  velocity, burndown, labels and the board): `work_minutes` (how long the work takes),
+  `review_minutes` (a person reviewing and testing by hand) and `by` (`ai` or `human`, who does
+  the work). It is stored in a small block at the end of the issue body: a line people read
+  ("AI ~25m · Review ~20m") and the data in a hidden HTML comment. No label is used for time.
+  An issue without the block has no time estimate; a block broken by hand reads as none.
+- `scrum task new --work D --review D --by ai|human` writes the block into the new issue.
+  Durations are `90`, `25m`, `2h` or `1h30m`; anything else (0 included) is refused before any
+  GitHub call, with the formats.
+- `plan.json` tasks take an optional `estimate`; `plan validate` checks it, `plan apply` writes
+  the block and `plan apply --update` updates it when it differs from the plan.
+- `plan.md` shows work and review per task, per feature and for the plan, the tasks without a
+  time estimate, and the time to done by waves: the longest task of each wave plus
+  `planning.merge_minutes`, then the review time. `plan.html` shows the same on the task cards
+  and in two KPIs, and adds a timeline drawn to scale: one bar per estimated task placed by
+  wave, the merge gaps, the review bar and a moving "now" line (off under reduced motion). The
+  page has no timeline when no task has an estimate.
+- `scrum mine` shows each task's time and, for the open sprint, the work left by waves of the
+  blocking graph and the review minutes, with the tasks that have no time estimate.
+- `scrum status` (and `/scrum-github:sprint-status`) adds "Work left" and "Review left" per
+  person and in total, and the number of tasks not done without a time estimate, when a task of
+  the sprint has an estimate. Without estimates the table is unchanged.
+- `scrum sprint fill` prints the review minutes per person in the sprint and after adding, and
+  warns when a person passes their `team[].review_hours`; the warning never stops the command.
+  The backlog lists show each task's time estimate.
+- Configuration: `team[].review_hours` (hours of review per sprint, a number above 0) and
+  `planning.merge_minutes` (minutes to merge and test between two waves, a whole number, 0 or
+  more, default 5).
+- `/scrum-github:plan` estimates the time of every task (planning rule 7).
+
+### Changed
+
+- `scrum task estimate N [POINTS] [--work D] [--review D] [--by ai|human]`: the points are now
+  optional, so the time can change alone; the fields not given keep their value. It needs points
+  or at least one time flag. `task estimate N POINTS` works as before.
+
 ## [0.9.0] - 2026-11-23
 
 ### Added

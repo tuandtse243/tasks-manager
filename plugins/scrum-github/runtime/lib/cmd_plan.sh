@@ -227,7 +227,8 @@ plan_actions_compute() {
   state="${3:-}"
   [ -n "$state" ] || state="$(plan_state "$1" "$2" 2>/dev/null)" || state=""
   if [ -z "$state" ]; then PLAN_ACTION_ERRORS='["cannot read the sprints (milestones) from GitHub"]'; return 0; fi
-  result="$(printf '%s' "$PLAN_JSON" | jqlib plan-actions -c --argjson cfg "$CONFIG_JSON" --argjson state "$state" --argjson update "$2")"
+  result="$(printf '%s' "$PLAN_JSON" | jqlib plan-actions -c --argjson cfg "$CONFIG_JSON" --argjson state "$state" --argjson update "$2" \
+    --argjson strings "$(strings_json)")"
   PLAN_ACTION_ERRORS="$(printf '%s' "$result" | jq -c '.errors')"
   [ "$PLAN_ACTION_ERRORS" != '[]' ] || PLAN_ACTIONS="$(printf '%s' "$result" | jq -c .actions)"
 }

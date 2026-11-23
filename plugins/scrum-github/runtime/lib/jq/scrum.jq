@@ -77,6 +77,93 @@ def set_scrum_block($name; $content):
     else ($rest | if . == "" then "" else . + "\n\n" end)
          + "<!-- scrum:\($name) -->\n\($content)\n<!-- /scrum:\($name) -->" end;
 
+# ---------- time estimates (spec time-estimate) ----------
+# A duration from the command line: 90, 25m, 2h, 1h30m -> whole minutes (> 0), or null.
+# After "h" the minutes need their "m" (1h30 is refused). At most 10000 hours, so a long string of
+# digits is refused rather than stored as a float.
+def max_duration_minutes: 600000;
+def parse_duration:
+  (if type == "number" then (if . == floor then . else null end)
+   elif type != "string" then null
+   else ([gsub("^\\s+|\\s+$"; "") | capture("^(?:(?<h>[0-9]{1,7})h(?:(?<hm>[0-9]{1,7})m)?|(?<m>[0-9]{1,9})m?)$")] | .[0]) as $c
+     | if $c == null then null
+       else (($c.h // "0") | tonumber) * 60 + (($c.hm // $c.m // "0") | tonumber) end
+   end)
+  | if . == null or . <= 0 or . > max_duration_minutes then null else . end;
+def duration_formats: "minutes (90), minutes with m (25m), hours (2h) or both (1h30m)";
+# Minutes -> 25m, 2h, 1h30m.
+def fmt_duration:
+  (. / 60 | floor) as $h | (. - $h * 60) as $m
+  | if $h == 0 then "\($m)m" elif $m == 0 then "\($h)h" else "\($h)h\($m)m" end;
+def is_minutes: type == "number" and . == floor and . > 0 and . <= max_duration_minutes;
+
+# An estimate with only its valid fields: {work_minutes?, review_minutes?, by}; null when it has
+# neither time. "by" is "ai" unless it says "human".
+def clean_estimate:
+  if type != "object" then null
+  else {work_minutes: (.work_minutes | if is_minutes then . else null end),
+        review_minutes: (.review_minutes | if is_minutes then . else null end),
+        by: (if .by == "human" then "human" else "ai" end)}
+    | if .work_minutes == null and .review_minutes == null then null
+      else with_entries(select(.value != null)) end
+  end;
+
+# Input: an issue. Its estimate from the "estimate" block of its body; null when the block is
+# missing or its data cannot be read (design 1: a broken block never stops a command).
+def issue_estimate:
+  ((.body // "") | if type == "string" then . else "" end) as $b
+  # The block that is actually closed: no other start marker between its markers, so a start
+  # marker left without its end (edited by hand) never swallows a later block.
+  | ([$b | match("<!-- scrum:estimate -->(?:(?!<!-- scrum:estimate -->)[\\s\\S])*?<!-- /scrum:estimate -->").string] | .[0]) as $blk
+  | (if $blk == null then null else [$blk | capture("<!-- (?<j>\\{[^\\n]*\\}) -->")] | .[0].j end) as $j
+  | if $j == null then null else (try ($j | fromjson) catch null) | clean_estimate end;
+
+# The line people read: "AI ~25m · Review ~20m" ($s: strings of the configured language).
+def estimate_line($e; $s):
+  [ (if $e.work_minutes != null
+       then tr($s; "est_work"; {by: tr($s; "est_by_\($e.by // "ai")"), d: ($e.work_minutes | fmt_duration)}) else empty end),
+    (if $e.review_minutes != null then tr($s; "est_review"; {d: ($e.review_minutes | fmt_duration)}) else empty end)
+  ] | join(" · ");
+# Input: an object with "estimate". "  [AI 20m, review 15m]" for one line of a CLI list, or "".
+def estimate_brief:
+  (.estimate | clean_estimate) as $e
+  | if $e == null then ""
+    else "  [" + ([ (if $e.work_minutes != null then "\(if $e.by == "human" then "human" else "AI" end) \($e.work_minutes | fmt_duration)" else empty end),
+                    (if $e.review_minutes != null then "review \($e.review_minutes | fmt_duration)" else empty end) ] | join(", ")) + "]" end;
+# Content of the "estimate" block: the line, then the data in an HTML comment (hidden on GitHub).
+def estimate_block($e; $s):
+  ($e | clean_estimate) as $c
+  | if $c == null then ""
+    else estimate_line($c; $s) + "\n<!-- " + ($c | {work_minutes, review_minutes, by} | with_entries(select(.value != null)) | tojson) + " -->" end;
+# Input: a body. The body with its "estimate" block replaced by $e (removed when $e is null).
+# Leftovers of a block broken by hand go too: a start marker without its end (with the rest of
+# its paragraph) and an end marker without its start, so exactly one clean block remains.
+def set_estimate($e; $s):
+  (. // "") | gsub(scrum_block_re("estimate"); "")
+  | gsub("\n*<!-- scrum:estimate -->(?:(?!\n\n)[\\s\\S])*"; "")
+  | gsub("\n*<!-- /scrum:estimate -->"; "")
+  | set_scrum_block("estimate"; estimate_block($e; $s));
+
+# Done time of tasks worked in waves (design 4): for each wave with at least one task that has a
+# work time, the longest work time plus $merge; review is the sum of the review times (a task
+# with only a review time adds no wave and no merge).
+# Input: [{wave, estimate}]; tasks without a wave or an estimate are left out.
+def eta_by_waves($merge):
+  [.[] | select(.wave != null) | . as $t | (.estimate | clean_estimate) as $e | select($e != null) | {wave: $t.wave, e: $e}] as $xs
+  | ([$xs[] | select(.e.work_minutes != null)] | group_by(.wave) | map({wave: .[0].wave, work: ([.[].e.work_minutes] | max)})) as $waves
+  | {work_minutes: ([$waves[] | .work + $merge] | add // 0),
+     review_minutes: ([$xs[].e.review_minutes // 0] | add // 0),
+     waves: [$waves[] | {wave, work}],
+     estimated: ($xs | length)};
+
+# Sums of the estimates of a list of tasks ({estimate} each): work, review and how many have none.
+def estimate_totals:
+  [.[] | .estimate | clean_estimate] as $es
+  | {work_minutes: ([$es[] | select(. != null) | .work_minutes // 0] | add // 0),
+     review_minutes: ([$es[] | select(. != null) | .review_minutes // 0] | add // 0),
+     estimated: ([$es[] | select(. != null)] | length),
+     missing: ([$es[] | select(. == null)] | length)};
+
 def is_pr: has("pull_request");
 # Features, epics and meta issues are not tasks: they never count in points, velocity or status sync.
 def is_task($cfg):
@@ -160,17 +247,24 @@ def bucket: {count: length, points: ([.[]._pts // 0] | add // 0)};
 # Tasks of a sprint that count in reports (no PRs, features, meta, not-planned), annotated.
 def report_tasks($cfg):
   [.[] | select(is_task($cfg)) | select(is_not_planned | not)
-   | . + {_role: task_role($cfg), _pts: task_points($cfg), _who: assignee_logins}];
+   | . + {_role: task_role($cfg), _pts: task_points($cfg), _who: assignee_logins, _est: issue_estimate}];
+
+# Time left of tasks not done (spec sprint-reporting "Thời gian còn lại trong bảng tiến độ").
+def time_left: [.[] | select(._role != "done") | ._est | select(. != null)]
+  | {work_minutes: ([.[].work_minutes // 0] | add // 0), review_minutes: ([.[].review_minutes // 0] | add // 0)};
 
 def progress($cfg; $sprint; $issues; $today):
   ($sprint | sprint_info) as $s
   | ($issues | report_tasks($cfg)) as $t
+  # Time columns only when a task of the sprint has an estimate; otherwise the output is as before.
+  | any($t[]; ._est != null) as $timed
   | def row($xs): {
         new: ([$xs[] | select(._role == "new")] | bucket),
         in_progress: ([$xs[] | select(._role == "in_progress")] | bucket) }
       + (if review_on($cfg) then {in_review: ([$xs[] | select(._role == "in_review")] | bucket)} else {} end)
       + { done: ([$xs[] | select(._role == "done")] | bucket),
-          total: ($xs | bucket) };
+          total: ($xs | bucket) }
+      + (if $timed then {time: ($xs | time_left)} else {} end);
   ([$t[]._who[]] | unique) as $people
   | ( ($people | map(. as $p | {assignee: $p} + row([$t[] | select(._who | any(.[]; . == $p))])))
       + (if any($t[]; (._who | length) == 0) then [{assignee: "Unassigned"} + row([$t[] | select((._who | length) == 0)])] else [] end)
@@ -181,7 +275,8 @@ def progress($cfg; $sprint; $issues; $today):
       total: $total,
       pct_done: (if $total.total.points > 0 then ($total.done.points * 100 / $total.total.points | round) else null end),
       unestimated: ([$t[] | select(._pts == null)] | length),
-      days_left: days_left($cfg; $s; $today) };
+      days_left: days_left($cfg; $s; $today) }
+    + (if $timed then {time_missing: ([$t[] | select(._role != "done" and ._est == null)] | length)} else {} end);
 
 # ---------- team (spec team) ----------
 # GitHub logins are not case-sensitive; a leading "@" is not part of the login.

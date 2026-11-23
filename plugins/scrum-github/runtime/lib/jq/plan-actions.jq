@@ -9,6 +9,7 @@
 #     issues:  {"<issue number>": issue JSON}   (only with --update)
 #   }
 # --argjson update true|false
+# [--argjson strings STRINGS]   (the language of the estimate block's line)
 # Output: {errors: [...]} when a sprint cannot be used, otherwise {errors: [], actions: [...]}.
 # Order: create_epic, create_feature, create_task (dependency order), skip/update, link_sub, link_blocked.
 # Every action has "text" (one line for the user) and "ref" ("epic", a feature id or a task id).
@@ -19,6 +20,7 @@ include "plan";
 | ($state.subs // {}) as $subs
 | ($state.blocked // {}) as $blocked
 | ($state.issues // {}) as $issues
+| ($ARGS.named.strings // null) as $strings
 | plan_tasks as $tasks
 
 # ---------- sprints ----------
@@ -48,6 +50,9 @@ include "plan";
 
 # ---------- helpers ----------
   def ms_label($r): $r.sprint;
+  def est_text: if . == null then "none"
+    else [ (if .work_minutes != null then "work \(.work_minutes | fmt_duration)" else empty end),
+           (if .review_minutes != null then "review \(.review_minutes | fmt_duration)" else empty end) ] | join(" + ") end;
   def ref_text($ref; $issue): if $issue == null then "\($ref) (new)" else "\($ref) #\($issue)" end;
   ([plan_features[] as $f | $f.tasks[] | {key: .id, value: $f.id}] | from_entries) as $parent_of
   | ([plan_features[] | {key: .id, value: .issue}] + [$tasks[] | {key: .id, value: .issue}]
@@ -67,7 +72,12 @@ include "plan";
                               text: "skip    \(ref_text($ref; $item.issue)) is closed, not updated"}
         else
           (($cur.body // "") | [scrum_blocks[]] | join("\n\n")) as $blocks
-          | ($want_body + (if $blocks == "" then "" else (if $want_body == "" then "" else "\n\n" end) + $blocks end)) as $body
+          | ($want_body + (if $blocks == "" then "" else (if $want_body == "" then "" else "\n\n" end) + $blocks end)) as $kept
+          # The estimate block follows the plan; it is written only when its data differ, and
+          # left as it is when the plan has no estimate (spec work-plan "Cập nhật thời gian").
+          | ($item.estimate | clean_estimate) as $want_est
+          | ($want_est != null and $kind == "task" and ($cur | issue_estimate) != $want_est) as $est_changed
+          | (if $est_changed then $kept | set_estimate($want_est; $strings) else $kept end) as $body
           | ($cur | label_names) as $labels
           | (if $kind == "task" then
                ([$labels[] | select(startswith($cfg.points.label_prefix) | not)]
@@ -86,7 +96,8 @@ include "plan";
               {op: "update", ref: $ref, issue: $item.issue, patch: $patch, labels: $set_labels,
                text: ("update  \(ref_text($ref; $item.issue)): "
                       + ([ (if $patch.title then "title" else empty end),
-                           (if $patch.body then "body" else empty end),
+                           (if $patch.body and ($cur.body // "") != $kept then "body" else empty end),
+                           (if $est_changed then "time estimate \(($cur | issue_estimate) | est_text) -> \($want_est | est_text)" else empty end),
                            (if $patch | has("milestone") then "sprint \(($cur.milestone.title // "backlog")) -> \($res.sprint)" else empty end),
                            (if $set_labels then "points \($cur | task_points($cfg) // "none") -> \($want_points // "none")" else empty end)
                          ] | join(", ")))}
@@ -126,7 +137,7 @@ include "plan";
        | if $t.issue == null then
            {op: "create_task", ref: $id, kind: "task", parent: $fid,
             task: ($t | del(.id, .issue, .sprint, .depends_on)), milestone: $r.milestone,
-            text: "create  task \($id) \"\($t.title)\" (\(if $t.points == null then "no points" elif $t.points == 1 then "1 point" else "\($t.points) points" end), \(ms_label($r)))"}
+            text: "create  task \($id) \"\($t.title)\" (\(if $t.points == null then "no points" elif $t.points == 1 then "1 point" else "\($t.points) points" end)\(($t.estimate | clean_estimate) as $e | if $e == null then "" else ", \($e | est_text)" end), \(ms_label($r)))"}
          else existing($id; "task"; $t; $t.title; task_issue_body($t; $num[$fid]); $t.points; $r) end),
 
       # sub-issues: epic -> features, feature -> tasks

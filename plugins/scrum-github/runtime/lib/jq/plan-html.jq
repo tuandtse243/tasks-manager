@@ -24,6 +24,51 @@ include "scrum";
     elif ($v | type) == "array" then (if ($v | length) == 0 then "–" else ($v | map(tostring) | join(", ") | e) end)
     else ($v | e) end;
   def pct($x; $max): if $max <= 0 then 0 else (($x * 10000 / $max) | round) / 100 end;
+  def r1: (. * 10 | round) / 10;
+  def cut($n): if length > $n then .[0:($n - 1)] + "…" else . end;
+  # The timeline, to scale (spec work-plan "Dòng thời gian trong plan.html"): one work bar per
+  # estimated task at the start of its wave, a merge gap after each wave, then the review bar.
+  # Drawn here as SVG so it reads without JavaScript; the "now" line moves by SMIL <animate>,
+  # hidden under prefers-reduced-motion.
+  def timeline_svg($tm):
+    920 as $W | 200 as $X0 | 22 as $TOP | 32 as $ROW
+    | ($tm.rows | length) as $n
+    | ([$tm.total, 1] | max) as $total
+    | (($W - $X0 - 82) / $total) as $sc
+    | def x($m): ($X0 + $m * $sc) | r1;
+      def w($m): ($m * $sc) | r1;
+    ($TOP + $n * $ROW + 16) as $ry
+    | ($ry + 38) as $gb
+    | ($gb + 20) as $ay
+    | ([5, 10, 15, 20, 30, 60, 90, 120, 180, 240, 360, 480, 720, 960, 1440, 2880] | map(select($total / . <= 6)) | .[0] // 2880) as $step
+    | [range(0; 100) | . * $step | select(x(.) <= $W - 20)] as $ticks
+    | ($tm.rows | to_entries) as $rows
+    | "<svg class=\"tl\" viewBox=\"0 0 \($W) \($ay + 14)\" role=\"img\" aria-label=\"\(t("plan_tl_aria"; {work: ($tm.work | fmt_duration), review: ($tm.review | fmt_duration), total: ($tm.total | fmt_duration)}))\">"
+      + "<g font-size=\"10.5\">"
+      + ([$ticks[] | "<line x1=\"\(x(.))\" y1=\"14\" x2=\"\(x(.))\" y2=\"\($gb)\" class=\"grid\"/><text x=\"\(x(.))\" y=\"\($ay)\" text-anchor=\"middle\" class=\"tm\">\(if . == 0 then "0" else fmt_duration end)</text>"] | join(""))
+      + "</g><g font-size=\"12\">"
+      + ([$rows[] | "<text x=\"10\" y=\"\($TOP + .key * $ROW + 14)\">\("\(.value.id) \(.value.title)" | cut(26) | e)</text>"] | join(""))
+      + "<text x=\"10\" y=\"\($ry + 15)\" font-weight=\"700\" class=\"th\">\(t("plan_tl_review"))</text></g>"
+      + ([$rows[] | select(.value.work > 0) | .key as $i | .value as $r
+          | "<rect x=\"\(x($r.start))\" y=\"\($TOP + $i * $ROW)\" width=\"\(w($r.work))\" height=\"20\" rx=\"4\" class=\"\(if $r.by == "human" then "b-hw" else "b-ai" end)\"><title>"
+            + ("\($r.id) · \(tr($S; "est_work"; {by: tr($S; "est_by_\($r.by)"), d: ($r.work | fmt_duration)})) · \(tr($S; "est_review"; {d: ($r.review | fmt_duration)}))" | e)
+            + "</title></rect>"] | join(""))
+      + (if $tm.merge > 0 then
+           ([$tm.waves[] as $wv | [$rows[] | select(.value.wave == $wv.wave) | .key] as $ks
+             | select(($ks | length) > 0)
+             | "<rect x=\"\(x($wv.start + $wv.work))\" y=\"\($TOP + ($ks | min) * $ROW)\" width=\"\(w($tm.merge))\" height=\"\((($ks | max) - ($ks | min)) * $ROW + 20)\" rx=\"2\" class=\"b-merge\"><title>\(t("plan_tl_merge")) · \($tm.merge | fmt_duration)</title></rect>"] | join(""))
+         else "" end)
+      + "<line x1=\"\(x($tm.work))\" y1=\"14\" x2=\"\(x($tm.work))\" y2=\"\($gb)\" class=\"done\"/>"
+      + "<text x=\"\(x($tm.work) + 6)\" y=\"\($ry - 12)\" font-size=\"11\" class=\"tai\">\(t("plan_tl_done"; {d: ($tm.work | fmt_duration)}))</text>"
+      + (if $tm.review > 0 then
+           "<rect x=\"\(x($tm.work))\" y=\"\($ry)\" width=\"\(w($tm.review))\" height=\"22\" rx=\"4\" class=\"b-h\"><title>\(t("plan_tl_review_bar"; {d: ($tm.review | fmt_duration)}))</title></rect>"
+           + (if w($tm.review) >= 170 then "<text x=\"\(x($tm.work + $tm.review / 2))\" y=\"\($ry + 15)\" text-anchor=\"middle\" font-size=\"11.5\" font-weight=\"700\" class=\"onbar\">\(t("plan_tl_review_bar"; {d: ($tm.review | fmt_duration)}))</text>" else "" end)
+         else "" end)
+      + "<text x=\"\(x($tm.total) + 6)\" y=\"\($ry + 15)\" font-size=\"11\" class=\"th mono\">\($tm.total | fmt_duration)</text>"
+      + "<line class=\"now mover\" x1=\"\($X0)\" y1=\"14\" x2=\"\($X0)\" y2=\"\($gb)\">"
+        + "<animate attributeName=\"x1\" values=\"\($X0);\(x($tm.total))\" dur=\"9s\" repeatCount=\"indefinite\"/>"
+        + "<animate attributeName=\"x2\" values=\"\($X0);\(x($tm.total))\" dur=\"9s\" repeatCount=\"indefinite\"/></line>"
+      + "</svg>";
 
   $d.summary as $sum
 | $d.load as $L
@@ -46,6 +91,10 @@ include "scrum";
          + "</b><span>" + (if $L.capacity != null then t("plan_kpi_capacity_sub"; {sprint: $L.sprint.title}) else t("plan_kpi_capacity_unknown"; {sprint: $L.sprint.title}) end) + "</span></div>"
        else "" end)
     + "<div class=\"kpi\"><b>\(tn("plan_kpi_waves"; $sum.waves; {}))</b><span>\(t("plan_kpi_waves_sub"))</span></div>"
+    + (if $d.time == null then "" else
+         "<div class=\"kpi ai\"><b>\(t("plan_kpi_time"; {d: ($d.time.work | fmt_duration)}))</b><span>\(tn("plan_kpi_work_sub"; ($d.time.waves | length); {}))</span></div>"
+         + "<div class=\"kpi hu\"><b>\(t("plan_kpi_time"; {d: ($d.time.review | fmt_duration)}))</b><span>\(t("plan_kpi_review_sub"))"
+           + (if $d.time.missing > 0 then " · " + tn("plan_kpi_time_missing"; $d.time.missing; {}) else "" end) + "</span></div>" end)
     + "</div>\n"
     + (if ($d.warnings | length) > 0 then
          "<div class=\"warnings\"><b>\(t("plan_warnings"))</b><ul>" + ([$d.warnings[] | "<li>\(e)</li>"] | join("")) + "</ul></div>\n"
@@ -81,13 +130,26 @@ include "scrum";
           + ([.value[] | "<a href=\"#\(anchor(.))\">\(e)</a>"] | join(", ")) + "</li>"] | join(""))
     + "</ol>") as $p3
 
+# ---------- 3b. timeline (only with time estimates) ----------
+| (if $d.time == null then 0 else 1 end) as $tl
+| ( if $d.time == null then null
+    else $d.time as $tm
+      | sec(3; "timeline"; t("plan_sec_timeline");
+          "<div class=\"legend\"><span><i class=\"sw tl-ai\"></i>\(t("plan_tl_ai"))</span>"
+          + (if $tm.humans then "<span><i class=\"sw tl-hw\"></i>\(t("plan_tl_human"))</span>" else "" end)
+          + "<span><i class=\"sw tl-merge\"></i>\(t("plan_tl_merge"))</span><span><i class=\"sw tl-h\"></i>\(t("plan_tl_review"))</span></div>\n"
+          + "<div class=\"panel scroll\">" + timeline_svg($tm) + "</div>\n"
+          + "<p class=\"small muted\">\(t("plan_tl_note"; {merge: ($tm.merge | fmt_duration), sum: ($tm.sum_work | fmt_duration)}))"
+          + (if $tm.missing > 0 then " " + tn("plan_tl_missing"; $tm.missing; {ids: ($tm.missing_ids | join(", "))}) else "" end) + "</p>")
+    end ) as $p3b
+
 # ---------- 4. load and capacity ----------
-| ( if $L.unreadable then sec(3; "load"; t("plan_sec_load_nosprint"); "<p class=\"muted offline\">\(t("plan_load_unreadable"))</p>")
-    elif ($L.online | not) then sec(3; "load"; t("plan_sec_load_nosprint"); "<p class=\"muted offline\">\(t("plan_load_offline"))</p>")
-    elif $L.sprint == null then sec(3; "load"; t("plan_sec_load_nosprint"); "<p class=\"muted\">\(t("plan_load_no_sprint"))</p>")
+| ( if $L.unreadable then sec(3 + $tl; "load"; t("plan_sec_load_nosprint"); "<p class=\"muted offline\">\(t("plan_load_unreadable"))</p>")
+    elif ($L.online | not) then sec(3 + $tl; "load"; t("plan_sec_load_nosprint"); "<p class=\"muted offline\">\(t("plan_load_offline"))</p>")
+    elif $L.sprint == null then sec(3 + $tl; "load"; t("plan_sec_load_nosprint"); "<p class=\"muted\">\(t("plan_load_no_sprint"))</p>")
     else
       ([$L.capacity // 0, $L.after] | max) as $scale
-      | sec(3; "load"; t("plan_sec_load"; {sprint: $L.sprint.title});
+      | sec(3 + $tl; "load"; t("plan_sec_load"; {sprint: $L.sprint.title});
           "<div class=\"panel load\">\n"
           + "<div class=\"cap-track\">"
           + (if $L.planned > 0 then "<div class=\"seg now\" style=\"width:\(pct($L.planned; $scale))%\" title=\"\(t("plan_load_now"; {n: $L.planned}))\">\($L.planned)</div>" else "" end)
@@ -117,7 +179,7 @@ include "scrum";
     end ) as $p4
 
 # ---------- 5. tasks ----------
-| sec(4; "tasks"; t("plan_sec_tasks");
+| sec(4 + $tl; "tasks"; t("plan_sec_tasks");
     "<div class=\"cards\">\n"
     + ([$d.tasks[] as $k
         | "<article class=\"card \(fcls($k.feature_index))\(if $k.sprint.kind == "backlog" then " backlog" else "" end)\" id=\"\(anchor($k.id))\">"
@@ -130,6 +192,9 @@ include "scrum";
           + "<h3>\($k.title | e)</h3>"
           + "<div class=\"facts\">"
             + "<span class=\"fact\">\(if $k.points == null then t("plan_not_estimated") else t("plan_kpi_points"; {n: $k.points}) end)</span>"
+            + (if $k.estimate == null then ""
+               else (if $k.estimate.work_minutes != null then "<span class=\"fact \(if $k.estimate.by == "human" then "hu" else "ai" end)\">\(t("est_work"; {by: tr($S; "est_by_\($k.estimate.by)"), d: ($k.estimate.work_minutes | fmt_duration)}))</span>" else "" end)
+                    + (if $k.estimate.review_minutes != null then "<span class=\"fact hu\">\(t("est_review"; {d: ($k.estimate.review_minutes | fmt_duration)}))</span>" else "" end) end)
             + (if ($k.assignees | length) == 0 then "<span class=\"fact dim\">\(t("plan_unassigned"))</span>"
                else ([$k.assignees[] | "<span class=\"fact\">@\(e)</span>"] | join("")) end)
             + "<span class=\"fact\(if $k.sprint.kind == "backlog" then " bl" else "" end)\">\(sprint_text($k.sprint))</span>"
@@ -142,7 +207,7 @@ include "scrum";
     + "</div>") as $p5
 
 # ---------- 6. review ----------
-| sec(5; "review"; t("plan_sec_review");
+| sec(5 + $tl; "review"; t("plan_sec_review");
     if ($d.review | length) == 0 then "<p class=\"muted\">\(t("plan_review_none"))</p>"
     else "<div class=\"list\">"
       + ([$d.review[] | "<div class=\"item\"><span class=\"tick \(if .status == "fixed" then "done" else "keep" end)\">\(if .status == "fixed" then t("plan_review_fixed") else t("plan_review_kept") end)</span>"
@@ -151,13 +216,13 @@ include "scrum";
 
 # ---------- 7. actions ----------
 | ( $d.actions as $A
-    | if $A == null then sec(6; "actions"; t("plan_sec_actions"); "<p class=\"muted offline\">\(t("plan_actions_offline"))</p>")
-      elif ($A.errors | length) > 0 then sec(6; "actions"; t("plan_sec_actions");
+    | if $A == null then sec(6 + $tl; "actions"; t("plan_sec_actions"); "<p class=\"muted offline\">\(t("plan_actions_offline"))</p>")
+      elif ($A.errors | length) > 0 then sec(6 + $tl; "actions"; t("plan_sec_actions");
         "<div class=\"warnings\"><b>\(t("plan_actions_errors"))</b><ul>" + ([$A.errors[] | "<li>\(e)</li>"] | join("")) + "</ul></div>")
       elif ($A.epic + $A.features + $A.tasks + $A.link_sub + $A.link_blocked) == 0 then
-        sec(6; "actions"; (if $d.applied then t("plan_sec_actions_done") else t("plan_sec_actions") end); "<p class=\"muted\">\(t("plan_actions_none"))</p>")
+        sec(6 + $tl; "actions"; (if $d.applied then t("plan_sec_actions_done") else t("plan_sec_actions") end); "<p class=\"muted\">\(t("plan_actions_none"))</p>")
       else
-        sec(6; "actions"; (if $A.done then t("plan_sec_actions_done") else t("plan_sec_actions") end);
+        sec(6 + $tl; "actions"; (if $A.done then t("plan_sec_actions_done") else t("plan_sec_actions") end);
           "<div class=\"acts\">"
           + "<div class=\"act\"><b>\($A.epic + $A.features + $A.tasks)</b><span>"
             + t(if $A.done then "plan_act_issues_done" else "plan_act_issues" end; {detail: ([ (if $A.epic > 0 then trn($S; "plan_act_epic"; $A.epic; {}) else empty end),
@@ -173,7 +238,7 @@ include "scrum";
       end ) as $p7
 
 # ---------- 8. assumptions and out of scope ----------
-| sec(7; "assumptions"; t("plan_sec_assumptions");
+| sec(7 + $tl; "assumptions"; t("plan_sec_assumptions");
     "<div class=\"two\">"
     + "<div class=\"panel\"><h3>\(t("plan_assumptions"))</h3>"
       + (if ($d.assumptions | length) == 0 then "<p class=\"muted\">\(t("plan_none"))</p>" else "<ul>" + ([$d.assumptions[] | "<li>\(e)</li>"] | join("")) + "</ul>" end) + "</div>"
@@ -185,7 +250,7 @@ include "scrum";
     else "<div class=\"confirm\"><h3>\(t("plan_confirm_title"))</h3><p class=\"small\">\(t("plan_confirm_text"))</p>"
       + "<span class=\"say\">\(t("plan_confirm_say"))</span><p class=\"small muted\">\(t("plan_confirm_note"))</p></div>" end ) as $confirm
 
-| ([$p1, $p2, $p3, $p4, $p5, $p6, $p7, $p8, $confirm] | join("\n\n")) as $body
+| ([$p1, $p2, $p3, ($p3b // empty), $p4, $p5, $p6, $p7, $p8, $confirm] | join("\n\n")) as $body
 | ( $d | {language, tasks: [.tasks[] | {id, title, feature_index, points, depends_on, assignees, wave, sprint, issue}], waves,
            strings: {plan_wave: .strings.plan_wave, plan_wave_parallel: .strings.plan_wave_parallel, plan_backlog: .strings.plan_backlog,
                      plan_kpi_points: .strings.plan_kpi_points, plan_not_estimated: .strings.plan_not_estimated}}

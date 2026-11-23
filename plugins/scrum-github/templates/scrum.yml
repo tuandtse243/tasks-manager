@@ -76,6 +76,9 @@ planning:
   hours_per_point: null
   # The project context counts as stale after this many commits.
   context_stale_commits: 50
+  # Minutes to merge and run the tests between two waves of parallel work, used when time
+  # estimates add up how long a plan or a sprint takes (scrum mine, plan.md, plan.html).
+  merge_minutes: 5
 
 # Optional: who is on the team. /plan suggests an assignee for each task from this list (by
 # areas and current load), `scrum team` shows each person's load, and task new, task assign and
@@ -85,6 +88,7 @@ planning:
 #   - login: tuandt
 #     areas: [backend, api]          # optional: what this person usually works on
 #     capacity: 10                   # optional: points per sprint
+#     review_hours: 6                # optional: hours of review per sprint (sprint fill warns above it)
 #   - login: an-nguyen
 #     areas: [frontend]
 

@@ -58,7 +58,16 @@ def sprint_ok: . == null or type == "string";
          (if ($t.sprint | sprint_ok) then empty else "task \(name_of($t)): sprint must be a sprint name, \"current\", or null" end),
          (["acceptance", "subtasks", "assignees", "depends_on"][] as $k
           | if ($t[$k] // [] | str_list) then empty else "task \(name_of($t)): \($k) must be a list of texts" end),
-         (if $t.bug == null or ($t.bug | type) == "boolean" then empty else "task \(name_of($t)): bug must be true or false" end)),
+         (if $t.bug == null or ($t.bug | type) == "boolean" then empty else "task \(name_of($t)): bug must be true or false" end),
+         # estimate (optional; spec work-plan "Ước lượng thời gian trong plan")
+         (if $t.estimate == null then empty
+          elif ($t.estimate | type) != "object" then "task \(name_of($t)): estimate must be an object with work_minutes, review_minutes and by"
+          else (["work_minutes", "review_minutes"][] as $k | $t.estimate[$k] as $v
+                | if ($v | type) == "number" and $v == ($v | floor) and $v > 0 then empty
+                  else "task \(name_of($t)): estimate.\($k) must be a whole number of minutes greater than 0 (got \($v | tojson))" end),
+               (if $t.estimate.by == null or $t.estimate.by == "ai" or $t.estimate.by == "human" then empty
+                else "task \(name_of($t)): estimate.by must be ai or human (got \($t.estimate.by | tojson))" end)
+          end)),
 
       # ids unique across epic-less plan: features and tasks share one namespace
       ([plan_features[].id, $tasks[].id] | map(select(type == "string")) | group_by(.) | map(select(length > 1) | .[0])[]

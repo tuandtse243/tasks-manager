@@ -449,3 +449,263 @@ test_cmd_task_logins_are_not_globbed() {
   assert_status 0 "$STATUS" "$ERR"
   assert_contains "$(gh_calls)" '"assignees":["*"]'
 }
+
+# ---------- time estimates (spec time-estimate) ----------
+
+# "Tạo task có thời gian"
+test_cmd_task_new_with_time_estimate() {
+  task_env
+  route_json 'api -X POST repos/acme/blog/issues --input -' '{"number":3,"title":"Fix login","html_url":"u3"}'
+  run_scrum task new --title "Fix login" --work 15m --review 10m
+  assert_status 0 "$STATUS" "$ERR"
+  local body
+  body="$(gh_calls | sed -n 's/^STDIN //p' | jq -r .body)"
+  assert_contains "$body" "<!-- scrum:estimate -->"
+  assert_contains "$body" "AI ~15m · Review ~10m"
+  assert_contains "$body" '<!-- {"work_minutes":15,"review_minutes":10,"by":"ai"} -->'
+}
+
+test_cmd_task_new_time_estimate_in_vietnamese_and_by_human() {
+  task_env
+  printf 'version: 1\nlanguage: vi\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  route_json 'api -X POST repos/acme/blog/issues --input -' '{"number":3,"title":"x","html_url":"u3"}'
+  run_scrum task new --title "x" --body "Do it" --work 1h30m --by human
+  assert_status 0 "$STATUS" "$ERR"
+  local body
+  body="$(gh_calls | sed -n 's/^STDIN //p' | jq -r .body)"
+  case "$body" in "Do it"*) ;; *) _fail "body starts with its text: $body" ;; esac
+  assert_contains "$body" "Người ~1h30m"
+  assert_contains "$body" '{"work_minutes":90,"by":"human"}'
+}
+
+# "Không hợp lệ"
+test_cmd_task_new_invalid_duration_writes_nothing() {
+  task_env
+  run_scrum task new --title "x" --review abc
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "--review"
+  assert_contains "$ERR" "1h30m"
+  assert_eq "" "$(gh_calls)" "nothing read or written"
+}
+
+test_cmd_task_new_without_time_has_no_block() {
+  task_env
+  route_json 'api -X POST repos/acme/blog/issues --input -' '{"number":3,"title":"x","html_url":"u3"}'
+  run_scrum task new --title "x"
+  assert_not_contains "$(gh_calls)" "scrum:estimate"
+}
+
+est_issue() { # est_issue BODY  -> issue 12 with that body, 3 points, In progress
+  jq -c --arg b "$1" '.body = $b' "$FAKE_GH_DIR/i12.json" > "$FAKE_GH_DIR/i12b.json"
+  route_first 'api repos/acme/blog/issues/12' i12b.json
+}
+EST_BODY='Lưu bình luận
+
+<!-- scrum:estimate -->
+AI ~25m · Review ~20m
+<!-- {"work_minutes":25,"review_minutes":20,"by":"ai"} -->
+<!-- /scrum:estimate -->'
+
+# "Chỉ đổi thời gian" and "Ghi đè"
+test_cmd_task_estimate_only_time_keeps_points() {
+  ops_env
+  est_issue "$EST_BODY"
+  run_scrum task estimate 12 --review 30m
+  assert_status 0 "$STATUS" "$ERR"
+  assert_not_contains "$(gh_calls)" "labels" "points untouched"
+  assert_contains "$(gh_calls)" "-X PATCH repos/acme/blog/issues/12 --input -"
+  local body
+  body="$(gh_calls | sed -n 's/^STDIN //p' | jq -r .body)"
+  case "$body" in "Lưu bình luận"*) ;; *) _fail "body starts with its text: $body" ;; esac
+  assert_eq "1" "$(printf '%s' "$body" | grep -c '<!-- scrum:estimate -->')"
+  assert_contains "$body" '{"work_minutes":25,"review_minutes":30,"by":"ai"}'
+  assert_contains "$OUT" "#12 time estimate: work 25m (AI), review 30m."
+}
+
+test_cmd_task_estimate_first_time_on_a_plain_body() {
+  ops_env
+  est_issue "Lưu bình luận"
+  run_scrum task estimate 12 --work 25 --review 20m
+  assert_status 0 "$STATUS" "$ERR"
+  local body
+  body="$(gh_calls | sed -n 's/^STDIN //p' | jq -r .body)"
+  assert_eq "$EST_BODY" "$body"
+}
+
+test_cmd_task_estimate_points_and_time() {
+  ops_env
+  est_issue "$EST_BODY"
+  run_scrum task estimate 12 7 --by human
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$(gh_calls)" 'STDIN {"labels":["status: In progress","points: 7"]}'
+  assert_contains "$(gh_calls)" 'Human ~25m · Review ~20m'
+  assert_contains "$OUT" "#12 now has 7 points."
+}
+
+test_cmd_task_estimate_same_time_writes_nothing() {
+  ops_env
+  est_issue "$EST_BODY"
+  run_scrum task estimate 12 --work 25m
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "" "$(gh_writes)"
+  assert_contains "$OUT" "already has this time estimate"
+}
+
+# "Không có gì để đổi"
+test_cmd_task_estimate_nothing_to_change() {
+  ops_env
+  run_scrum task estimate 12
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "give points, or at least one of --work, --review, --by"
+  assert_eq "" "$(gh_calls)" "nothing read or written"
+}
+
+test_cmd_task_estimate_invalid_duration_calls_nothing() {
+  ops_env
+  run_scrum task estimate 12 --work 0
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "--work"
+  assert_eq "" "$(gh_calls)"
+}
+
+test_cmd_task_estimate_by_alone_without_estimate_refused() {
+  ops_env
+  run_scrum task estimate 12 --by human
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "--by needs --work or --review"
+  assert_eq "" "$(gh_writes)"
+}
+
+test_cmd_task_estimate_broken_block_is_rewritten() {
+  ops_env
+  est_issue 'Text
+
+<!-- scrum:estimate -->
+AI ~25m
+<!-- {"work_minutes": -->
+<!-- /scrum:estimate -->'
+  run_scrum task estimate 12 --review 10m
+  assert_status 0 "$STATUS" "$ERR"
+  local body
+  body="$(gh_calls | sed -n 's/^STDIN //p' | jq -r .body)"
+  assert_eq 'Text
+
+<!-- scrum:estimate -->
+Review ~10m
+<!-- {"review_minutes":10,"by":"ai"} -->
+<!-- /scrum:estimate -->' "$body"
+}
+
+# ---------- time estimates: edge cases (tests for the spec scenarios) ----------
+
+# Points only, as before the change: the label changes, the body (and its estimate block) is not written.
+test_cmd_task_estimate_points_only_leaves_the_estimate_block() {
+  ops_env
+  est_issue "$EST_BODY"
+  run_scrum task estimate 12 7
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$(gh_calls)" 'STDIN {"labels":["status: In progress","points: 7"]}'
+  assert_not_contains "$(gh_calls)" "-X PATCH" "the body is not written"
+  assert_not_contains "$OUT" "time estimate"
+  assert_contains "$OUT" "#12 now has 7 points."
+}
+
+# Durations with spaces around them, hours with 0 minutes, plain minutes.
+test_cmd_task_estimate_duration_forms() {
+  ops_env
+  est_issue "Lưu bình luận"
+  run_scrum task estimate 12 --work ' 25m' --review 1h0m
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$(gh_calls | sed -n 's/^STDIN //p' | jq -r .body)" '{"work_minutes":25,"review_minutes":60,"by":"ai"}'
+}
+
+test_cmd_task_estimate_bare_unit_refused() {
+  local d
+  for d in h m 0m; do
+    ops_env
+    run_scrum task estimate 12 --review "$d"
+    assert_status 1 "$STATUS" "--review $d"
+    assert_contains "$ERR" "--review"
+    assert_contains "$ERR" "1h30m"
+    assert_eq "" "$(gh_calls)" "nothing read or written for $d"
+  done
+}
+
+# "Ghi đè" in the language of the repository: the line people read is in Vietnamese.
+test_cmd_task_estimate_overwrite_in_vietnamese() {
+  ops_env
+  printf 'version: 1\nlanguage: vi\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  est_issue "$EST_BODY"
+  run_scrum task estimate 12 --by human
+  assert_status 0 "$STATUS" "$ERR"
+  local body
+  body="$(gh_calls | sed -n 's/^STDIN //p' | jq -r .body)"
+  assert_contains "$body" "Người ~25m · Review ~20m"
+  assert_contains "$body" '{"work_minutes":25,"review_minutes":20,"by":"human"}'
+  assert_eq "1" "$(printf '%s' "$body" | grep -c '<!-- scrum:estimate -->')"
+}
+
+# "Ghi đè" on a body with two estimate blocks (one pasted by hand): one block is left.
+test_cmd_task_estimate_two_blocks_become_one() {
+  ops_env
+  est_issue "$EST_BODY
+
+<!-- scrum:estimate -->
+AI ~99m
+<!-- {\"work_minutes\":99} -->
+<!-- /scrum:estimate -->"
+  run_scrum task estimate 12 --review 30m
+  assert_status 0 "$STATUS" "$ERR"
+  local body
+  body="$(gh_calls | sed -n 's/^STDIN //p' | jq -r .body)"
+  assert_eq "1" "$(printf '%s' "$body" | grep -c '<!-- scrum:estimate -->')"
+  assert_contains "$body" '{"work_minutes":25,"review_minutes":30,"by":"ai"}'
+}
+
+# "Khối hỏng" then "Ghi đè": a block whose end marker was deleted by hand reads as no estimate,
+# and writing a new estimate must leave exactly one block that reads back as the new values.
+test_cmd_task_estimate_over_a_block_without_its_end_marker() {
+  ops_env
+  est_issue 'Text
+
+<!-- scrum:estimate -->
+AI ~10m · Review ~10m
+<!-- {"work_minutes":10,"review_minutes":10,"by":"ai"} -->'
+  run_scrum task estimate 12 --work 30m --review 30m
+  assert_status 0 "$STATUS" "$ERR"
+  local body
+  body="$(gh_calls | sed -n 's/^STDIN //p' | jq -r .body)"
+  assert_eq "1" "$(printf '%s' "$body" | grep -c '<!-- scrum:estimate -->')" "exactly one estimate block"
+  assert_json_eq '{"work_minutes":30,"review_minutes":30,"by":"ai"}' \
+    "$(jq -n --arg b "$body" '{body: $b}' | jq -L "$PLUGIN_DIR/runtime/lib/jq" -c 'include "scrum"; issue_estimate')" \
+    "the new estimate is the one read back"
+}
+
+# Fix round: points given as a negative number, --by alone on task new, the issue on stdin.
+test_cmd_task_estimate_negative_points() {
+  ops_env
+  run_scrum task estimate 12 -3
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" 'points must be a whole number (got "-3")'
+  assert_eq "" "$(gh_writes)"
+}
+
+test_cmd_task_new_by_alone_refused() {
+  task_env
+  run_scrum task new --title x --by human
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "--by needs --work or --review"
+  assert_not_contains "$ERR" "the task has no time estimate yet"
+  assert_eq "" "$(gh_calls)"
+}
+
+test_cmd_task_estimate_long_body() {
+  ops_env
+  # 300 KB: more than Linux allows in one argument (128 KB), so it must not travel as one.
+  head -c 300000 /dev/zero | tr '\0' 'a' > "$T/body.txt"
+  jq -c --rawfile b "$T/body.txt" '.body = $b' "$FAKE_GH_DIR/i12.json" > "$FAKE_GH_DIR/i12b.json"
+  route_first 'api repos/acme/blog/issues/12' i12b.json
+  run_scrum task estimate 12 --review 30m
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$(gh_calls | sed -n 's/^STDIN //p' | jq -r .body)" '{"review_minutes":30,"by":"ai"}'
+}

@@ -64,7 +64,8 @@
     "dir": "docs/plans",
     "context_file": "docs/project-context.md",
     "hours_per_point": null,
-    "context_stale_commits": 50
+    "context_stale_commits": 50,
+    "merge_minutes": 5
   },
   "attention": {
     "stale_days": 2,

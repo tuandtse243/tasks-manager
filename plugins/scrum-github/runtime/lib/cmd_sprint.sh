@@ -184,14 +184,24 @@ cmd_sprint_fill() {
       elif .capacity_source == "velocity" then "Capacity: \(.capacity) points (average velocity of \(.velocity.sprints | map("\(.title): \(.velocity)") | join(", ")))"
       else "Capacity: unknown: no closed sprint has recorded a velocity yet. Pass --capacity N to set one." end ),
     "Planned: \(.planned) points\(if .free == null then "" else "; free: \(.free) points" end)"'
+  # Review minutes per person (spec sprint-lifecycle "Giờ review khi lập kế hoạch sprint"); the
+  # warnings never stop the command.
+  printf '%s' "$plan" | jq -r -L "$JQ_LIB" --argjson adding "$([ "$add_json" = "[]" ] && echo false || echo true)" 'include "scrum";
+    def person($k): "@\(.login) \(.[$k] | fmt_duration)\(if .limit == null then "" else " of \(.limit | fmt_duration)" end)";
+    def line($k): [(.review.people[] | person($k)), (if .review.unassigned[$k] > 0 then "unassigned \(.review.unassigned[$k] | fmt_duration)" else empty end)] | join(", ");
+    if .review == null then empty
+    else "Review in the sprint: \(line("now"))",
+         (if $adding then "Review after adding: \(line("after"))" else empty end),
+         (.review_warnings[] | "Warning: " + .)
+    end'
   if [ "$add_json" = "[]" ]; then
     info ""
     print_backlog
     return 0
   fi
-  printf '%s' "$plan" | jq -r '
+  printf '%s' "$plan" | jq -r -L "$JQ_LIB" 'include "scrum";
     "", "To add:",
-    (.adding.tasks[] | "  #\(.number)  \(if .points == null then "-" else "\(.points) pt" end)  \(.title)"),
+    (.adding.tasks[] | "  #\(.number)  \(if .points == null then "-" else "\(.points) pt" end)  \(.title)\(estimate_brief)"),
     "After adding: \(.after)\(if .capacity == null then "" else " of \(.capacity)" end) points",
     (if (.warnings | length) > 0 then "", "Warnings:", (.warnings[] | "  - " + .) else empty end)'
   if [ "$(printf '%s' "$plan" | jq '.errors | length')" != 0 ]; then

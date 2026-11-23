@@ -30,13 +30,17 @@ Backlog and sprints
 
 Tasks
   task new --title T [--body B] [--points N] [--assignee LOGIN]... [--sprint S | --backlog] [--bug]
-                                                  In the open sprint, or the backlog when none is open
+           [--work D] [--review D] [--by ai|human]
+                                                  In the open sprint, or the backlog when none is open;
+                                                  D is a duration: 90, 25m, 2h or 1h30m
   task start NUMBER
   task list [--mine] [--sprint S | --backlog] [--status new|in_progress|in_review|done] [--json]
   mine [--user LOGIN] [--json]                    Every open task of one person (all sprints and the backlog),
                                                   pull requests waiting for their review, what to do next
   task move N... --sprint S | --backlog           Move tasks between sprints and the backlog (with a comment)
-  task estimate N POINTS                          Replace the points label (checked against the scale)
+  task estimate N [POINTS] [--work D] [--review D] [--by ai|human]
+                                                  Replace the points label (checked against the scale)
+                                                  and/or change the time estimate (work, review, who works)
   task assign N LOGIN... [--unassign]             Add or remove assignees
   task drop N [--reason TEXT]                     Close as not planned: counts nowhere
 

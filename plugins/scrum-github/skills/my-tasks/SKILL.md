@@ -1,6 +1,6 @@
 ---
 name: my-tasks
-description: Show everything one person has to do in Scrum on GitHub - their open tasks in every sprint and the backlog, grouped by status and sprint with what blocks them, the pull requests waiting for their review, and the task to do next in dependency order - then offer to start that task. Read-only until the user agrees. Use when the user asks what they (or a teammate) have to do, what is on their plate, what to work on next, or which reviews are waiting for them.
+description: Show everything one person has to do in Scrum on GitHub - their open tasks in every sprint and the backlog, grouped by status and sprint with what blocks them, the pull requests waiting for their review, and the task to do next in dependency order - then offer to start that task. Read-only until the user agrees. Use when the user asks what they (or a teammate) have to do, what is on their plate, what to work on next, how long their work in the sprint will take, or which reviews are waiting for them.
 ---
 
 # My tasks
@@ -16,7 +16,12 @@ Run it from the root of the target repository. It only reads from GitHub.
    someone else. Add `--json` when you need the data for a further question.
 2. Show the groups as printed, in their order: In progress, In review (when that status is on),
    New in the open sprint, other sprints by end date, then the backlog. Each line has the number,
-   points, sprint, title and the open tasks that block it.
+   points, sprint, title, the time estimate when the task has one ("[AI 20m, review 15m]") and the
+   open tasks that block it.
+   Then give the "Time left in <sprint>" line: about how long the work on their open tasks of the
+   open sprint takes, counted by waves like the plan view (tasks that do not block each other run
+   in parallel, `planning.merge_minutes` after each wave), and the minutes of review. Name the
+   tasks without a time estimate; `scrum task estimate N --work D --review D` adds one.
 3. Say which task to do next, as the output's "Next:" line gives it: continue the task In
    progress, or start the first New task of the open sprint that nothing open blocks. Never
    suggest a blocked task before the task that blocks it. When "Next:" names no task, say why
