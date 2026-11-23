@@ -41,15 +41,15 @@ test_bin_scrum_works_through_a_symlink() {
   assert_eq "$(cat "$PLUGIN_DIR/runtime/VERSION")" "$("$T/a/b/scrum" --version)"
 }
 
-# Skills call `scrum` (on the PATH), with one fallback line to the full path.
-test_skills_call_scrum_with_a_fallback() {
-  local f fallback='run `bash "${CLAUDE_PLUGIN_ROOT}/runtime/bin/scrum"` instead.'
+# Skills define `scrum` as the full plugin path from the first call (a bare `scrum` is not on the
+# PATH after a local-scope install or right after installing), and never name runtime/bin/scrum.
+test_skills_call_scrum_by_full_path() {
+  local f def='means `bash "${CLAUDE_PLUGIN_ROOT}/bin/scrum"'
   for f in "$PLUGIN_DIR"/skills/*/SKILL.md; do
     if grep -q '`scrum ' "$f"; then
-      grep -qF "$fallback" "$f" || _fail "$f runs scrum without the fallback line"
+      grep -qF "$def" "$f" || _fail "$f runs scrum without defining the full path"
     fi
-    [ "$(grep -c 'runtime/bin/scrum' "$f")" = "$(grep -cF "$fallback" "$f")" ] \
-      || _fail "$f names runtime/bin/scrum outside the fallback line"
+    ! grep -q 'runtime/bin/scrum' "$f" || _fail "$f names runtime/bin/scrum"
   done
 }
 
