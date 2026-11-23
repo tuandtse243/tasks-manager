@@ -307,3 +307,75 @@ test_in_review_board_option_validation() {
     "project.status_options: the options of the statuses in use must be different"
   assert_eq "" "$(errors_with "$base | .project.status_options.in_review = \"Done\"")" "off: the in_review option is not used"
 }
+
+# ---------- team (delta scrum-config "Khối team") ----------
+
+test_team_empty_by_default() {
+  setup_fake_gh
+  setup_repo 'version: 1'
+  run_scrum config
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "[]" "$(printf '%s' "$OUT" | jq -c .team)"
+}
+
+test_team_full_member_accepted() {
+  setup_fake_gh
+  setup_repo 'team:
+  - login: tuandt
+    areas: [backend]
+    capacity: 10
+  - login: an-nguyen'
+  run_scrum config
+  assert_status 0 "$STATUS" "$ERR"
+  assert_json_eq '[{"login":"tuandt","areas":["backend"],"capacity":10},{"login":"an-nguyen"}]' "$(printf '%s' "$OUT" | jq -c .team)"
+}
+
+test_team_duplicate_login_rejected() {
+  local e
+  e="$(config_error 'team:
+  - login: TuanDT
+  - login: tuandt')"
+  assert_contains "$e" "team"
+  assert_contains "$e" '"tuandt" is listed more than once'
+}
+
+test_team_capacity_zero_rejected() {
+  local e
+  e="$(config_error 'team:
+  - login: tuandt
+    capacity: 0')"
+  assert_contains "$e" "team[0].capacity"
+}
+
+test_team_login_with_at_is_read_without_it() {
+  setup_fake_gh
+  setup_repo 'team:
+  - login: "@tuandt"'
+  run_scrum config
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "tuandt" "$(printf '%s' "$OUT" | jq -r '.team[0].login')"
+}
+
+test_team_validation_messages() {
+  assert_contains "$(errors_with '.team = [{"login": ""}]')" "team[0].login: is required"
+  assert_contains "$(errors_with '.team = [{"login": "a b"}]')" "is not a GitHub login"
+  assert_contains "$(errors_with '.team = [{"login": "a", "areas": "backend"}]')" "team[0].areas"
+  assert_contains "$(errors_with '.team = [{"login": "a", "areas": [""]}]')" "team[0].areas"
+  assert_contains "$(errors_with '.team = [{"login": "a", "capacity": "ten"}]')" "team[0].capacity"
+  assert_contains "$(errors_with '.team = "tuandt"')" "team: must be a list"
+  assert_contains "$(errors_with '.team = ["tuandt"]')" "team[0]: must be a mapping"
+  assert_eq "" "$(errors_with '.team = [{"login": "a-1", "areas": ["web"], "capacity": 2.5}]')"
+}
+
+# The commented team example in the template is a valid configuration once uncommented.
+test_template_team_example_is_valid() {
+  setup_fake_gh
+  setup_repo
+  { cat "$PLUGIN_DIR/templates/scrum.yml"
+    sed -n '/^# team:/,/^$/p' "$PLUGIN_DIR/templates/scrum.yml" | sed -e 's/^# //'
+  } > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  run_scrum config
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "tuandt,an-nguyen" "$(printf '%s' "$OUT" | jq -r '[.team[].login] | join(",")')"
+  assert_eq "10" "$(printf '%s' "$OUT" | jq -r '.team[0].capacity')"
+}

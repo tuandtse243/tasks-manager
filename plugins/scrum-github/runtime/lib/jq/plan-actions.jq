@@ -27,7 +27,7 @@ include "plan";
     if $name == "" then {milestone: null, sprint: "backlog"}
     elif ($name | ascii_downcase) == "current" then
       (($state.milestones // []) | current_sprint($state.today)) as $m
-      | if $m == null then {error: "there is no open sprint for \"current\". Create one first (scrum sprint new), or leave sprint empty for the backlog"}
+      | if $m == null then {error: "there is no open sprint for \"current\". Create one first (/scrum-github:sprint-new, or scrum sprint new), or leave sprint empty for the backlog"}
         else {milestone: $m.number, sprint: $m.title} end
     else
       ([($state.milestones // [])[] | select((.title | ascii_downcase) == ($name | ascii_downcase))] | .[0]) as $m

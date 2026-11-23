@@ -75,11 +75,13 @@ khi thiết lập, repo dự án có sẵn script tại `.github/scrum/bin/scrum
 | `next` | Bất kỳ ai, khi không biết làm gì tiếp | `scrum next [--json]` | `/scrum-github:next` |
 | `sprint-new` | SM, đầu sprint | `scrum sprint new [--start DATE] [--length DAYS] [--goal TEXT]` | `/scrum-github:sprint-new bắt đầu thứ 2 tới, mục tiêu "Đăng ký, đăng nhập"` |
 | `sprint-fill` | SM và team, buổi Sprint Planning | `scrum sprint fill [SPRINT] [--capacity N] [--add N,N] [--yes]` | `/scrum-github:sprint-fill sức chứa 20 điểm` |
+| (không có) | SM, PO: xem team, lĩnh vực, capacity và tải trong sprint | `scrum team [--json]` | `scrum team` |
 | `backlog` | PO, SM: xem việc chưa vào sprint | `scrum backlog` | `/scrum-github:backlog còn task nào chưa ước lượng?` |
 | `project-scan` | Tech lead, một lần cho dự án có mã sẵn; làm mới khi mã đổi nhiều | `scrum context status` | `/scrum-github:project-scan` |
 | `discover` | PO, khi yêu cầu còn mơ hồ | (không có) | `/scrum-github:discover cho người dùng bình luận dưới bài viết` |
 | `plan` | PO, SM: biến yêu cầu thành task | `scrum plan check FILE`, `scrum plan apply FILE` | `/scrum-github:plan docs/plans/blog-comments/brief.md` |
-| `task-new` | Bất kỳ ai: thêm một task hay bug | `scrum task new --title T [--points N] [--assignee LOGIN] [--bug]` | `/scrum-github:task-new bug: nút Lưu không phản hồi trên Safari, 2 điểm, giao cho an-nguyen` |
+| `task-new` | Bất kỳ ai: thêm một task hay bug (vào sprint đang mở, hoặc backlog khi chưa có sprint mở) | `scrum task new --title T [--points N] [--assignee LOGIN] [--sprint S \| --backlog] [--bug]` | `/scrum-github:task-new bug: nút Lưu không phản hồi trên Safari, 2 điểm, giao cho an-nguyen` |
+| `my-tasks` | Dev: xem hết việc của mình và nên làm gì tiếp | `scrum mine [--user LOGIN]` | `/scrum-github:my-tasks` |
 | `task-start` | Dev: nhận task | `scrum task start N` | `/scrum-github:task-start 12` |
 | `task` | Bất kỳ ai: xem, chuyển sprint, đổi điểm, giao, bỏ task | `scrum task list\|move\|estimate\|assign\|drop` | `/scrum-github:task đổi #12 thành 3 điểm` |
 | `task-pr` | Dev: viết mô tả PR và mở PR | (dùng `gh pr create`) | `/scrum-github:task-pr` |
@@ -162,7 +164,17 @@ attention:
   behind_percent: 15              # sprint chậm hơn đường lý tưởng quá 15% phạm vi thì "cần chú ý"
 planning:
   hours_per_point: 4              # tuỳ chọn: plan.md hiện thêm số giờ (1 điểm = 4 giờ)
+team:                             # tuỳ chọn: /plan gợi ý người làm theo danh sách này
+  - login: tuandt
+    areas: [backend]              # lĩnh vực thường làm
+    capacity: 10                  # điểm mỗi sprint
+  - login: an-nguyen
+    areas: [frontend]
 ```
+
+Không khai báo `team` thì danh sách team là những người có thể được giao issue trong repo (lấy từ
+GitHub, không có lĩnh vực và capacity). Có `team` thì `task new`, `task assign` và `plan check` cảnh
+báo khi giao cho login không có trong danh sách (vẫn giao). Xem tải từng người: `scrum team`.
 
 Kiểm tra cấu hình mà không gọi mạng: `scrum config`. Sửa xong thì chạy lại `/scrum-github:init`:
 lệnh đồng bộ label và tự cập nhật các file sinh ra theo cấu hình mới (Issue Form khi đổi
@@ -273,10 +285,10 @@ flowchart TD
     Q3 -- Có --> QN["questionnaire-tên.md<br/>gửi đi, chờ trả lời,<br/>rồi chạy lại discover"]
     QN --> D
     Q3 -- Không --> P
-    Q2 -- Rồi --> P["/scrum-github:plan brief hoặc mô tả<br/>→ plan.json + plan.md"]
-    P --> R{Bạn duyệt plan?}
+    Q2 -- Rồi --> P["/scrum-github:plan brief hoặc mô tả<br/>→ plan.json + plan.md + plan.html<br/>(đề xuất người làm và sprint)"]
+    P --> R{Bạn duyệt plan?<br/>một lần}
     R -- Sửa tiếp --> P
-    R -- Duyệt --> A["Tạo issue trên GitHub<br/>(scrum plan apply)"]
+    R -- Duyệt --> A["Tạo issue trên GitHub, đã vào sprint<br/>và có người làm (scrum plan apply)"]
     A --> C([Commit thư mục docs/])
 ```
 
@@ -333,14 +345,26 @@ Diễn biến:
    (thành checklist trong issue) và phụ thuộc.
 2. Một agent soát bản nháp: thiếu việc, ngoài phạm vi, task quá lớn, phụ thuộc sai, tiêu chí không
    kiểm tra được. `--quick` bỏ bước này.
-3. Bạn xem bảng task, các phát hiện, phần ước lượng và danh sách việc sẽ làm trên GitHub. Sửa bằng
-   lời ("gộp T3 với T4", "T2 chỉ 3 điểm") tới khi duyệt.
-4. Sau khi bạn duyệt, lệnh tạo epic, feature, task trên GitHub, nối sub-issue và phụ thuộc, rồi ghi
-   số issue vào `plan.json`.
+3. Lệnh đề xuất người làm cho task chưa có người (theo `team.areas` và tải hiện tại, chỉ chọn người
+   trong team, giữ nguyên người bạn đã nêu) và sprint (task vừa capacity của sprint đang mở, theo thứ
+   tự phụ thuộc, vào sprint; phần dư để backlog kèm lý do).
+4. Bạn xem **một lần**, trong chat và trong trang `plan.html` cạnh `plan.md`: bảng task có người làm
+   và sprint, tải từng người, capacity của sprint, các phát hiện và danh sách việc sẽ làm trên GitHub.
+   Sửa bằng lời ("gộp T3 với T4", "T6 vào Sprint 5", "T3 cho @minh-ho") tới khi duyệt; trang được
+   sinh lại và mục "Thay đổi" cho thấy phần đã đổi.
+5. Sau khi bạn duyệt, lệnh tạo epic, feature, task trên GitHub, đã có milestone và người làm, nối
+   sub-issue và phụ thuộc, rồi ghi số issue vào `plan.json`. Không cần chạy `sprint-fill` hay giao
+   task sau đó.
+
+**Trang `plan.html`.** Do `plan check`, `plan render`, `plan apply` sinh ra, mở được khi không có mạng,
+theo chế độ sáng hoặc tối của máy. Trang gồm tóm tắt, thay đổi so với lần xem trước, sơ đồ phụ thuộc
+theo đợt (rê chuột để xem chuỗi phụ thuộc), tải và capacity, chi tiết từng task, góp ý của plan-critic,
+những gì sẽ tạo trên GitHub, giả định và ngoài phạm vi. Trang chỉ để xem; bạn trả lời trong chat.
+`plan.html` và `.plan-snapshot.json` không cần commit (`plan init` ghi sẵn `.gitignore` trong thư mục plan).
 
 Plan có bản nháp còn câu hỏi mở thì chỉ lập tiếp khi bạn đồng ý biến mỗi câu hỏi thành một giả định.
 
-**Vào sprint hay vào backlog.** Plan không ghi `sprint` thì task vào **backlog** (không milestone,
+**Vào sprint hay vào backlog.** Lệnh đề xuất sprint cho từng task như trên. Task không ghi `sprint` thì vào **backlog** (không milestone,
 không vào báo cáo sprint). Ghi `"sprint": "current"` để vào sprint đang mở, hoặc tên sprint cụ thể;
 từng task có thể ghi riêng. Đưa task từ backlog vào sprint: gán milestone trên GitHub, hoặc sửa
 `sprint` trong plan rồi chạy `scrum plan apply <file> --update`.

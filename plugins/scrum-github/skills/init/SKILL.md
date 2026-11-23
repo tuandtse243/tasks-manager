@@ -37,5 +37,9 @@ Run it from the root of the repository the user wants to manage (a clone with a 
 - A repository set up before 0.5.0 has no record yet, so the first run after updating reports
   every file that differs from the new template as a `conflict`.
 - To remove what `init` installed: `scrum uninstall` (it shows what it would remove; add `--yes`).
+- Mention the optional `team` block of `.github/scrum.yml` (an example is commented in the
+  file): members with `login`, `areas` and `capacity`. `/scrum-github:plan` suggests assignees
+  from it and `scrum team` shows each person's load. Without it, the team is the people GitHub
+  lets you assign issues to.
 
 If a `scrum` or `gh` command fails on login or network, run `/scrum-github:doctor`.

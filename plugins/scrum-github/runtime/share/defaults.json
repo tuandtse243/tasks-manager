@@ -70,5 +70,6 @@
     "stale_days": 2,
     "behind_percent": 15,
     "review_days": 2
-  }
+  },
+  "team": []
 }

@@ -92,6 +92,27 @@ def nonempty_string: type == "string" and length > 0;
         | "colors.\(.key): must be a 6-digit hex color such as 0e8a16")
      else "colors: must be a mapping of label name to color" end),
 
+    # team (members, their areas and capacity); logins are compared without case
+    (if ($c.team | type) != "array" then "team: must be a list of members, each with a login"
+     else
+       ($c.team | to_entries[] | .key as $i | .value as $m
+        | if ($m | type) != "object" then "team[\($i)]: must be a mapping with a login"
+          else
+            (if ($m.login | nonempty_string) | not then "team[\($i)].login: is required"
+             elif ($m.login | test("^[A-Za-z0-9][A-Za-z0-9-]{0,38}$") | not)
+               then "team[\($i)].login: \($m.login | tojson) is not a GitHub login (letters, digits and dashes)"
+             else empty end),
+            (if $m.areas == null then empty
+             elif ($m.areas | type) == "array" and all($m.areas[]; nonempty_string) then empty
+             else "team[\($i)].areas: must be a list of non-empty texts (\($m.login // "?"))" end),
+            (if $m.capacity == null then empty
+             elif ($m.capacity | type) == "number" and $m.capacity > 0 then empty
+             else "team[\($i)].capacity: must be a number of points greater than 0 (\($m.login // "?"): got \($m.capacity | tojson))" end)
+          end),
+       ([$c.team[] | objects | .login | strings | ascii_downcase] | group_by(.) | map(select(length > 1) | .[0])[]
+        | "team: the login \(tojson) is listed more than once (logins are not case-sensitive)")
+     end),
+
     # project (board sync): checked only when turned on
     (if ($c.project | type) != "object" then "project: must be a mapping"
      elif ($c.project.enabled | type) != "boolean" then "project.enabled: must be true or false"

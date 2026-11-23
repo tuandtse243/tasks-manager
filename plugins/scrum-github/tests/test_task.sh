@@ -84,12 +84,50 @@ test_cmd_task_new_invalid_points_no_call() {
   assert_not_contains "$(gh_calls)" "milestones" "fails before reading GitHub"
 }
 
-test_cmd_task_new_without_open_sprint() {
+# delta task-management "Tạo task": no open sprint -> the backlog (it was an error before 0.9.0).
+test_cmd_task_new_without_open_sprint_goes_to_the_backlog() {
   task_env
   jq '.[0].state = "closed"' "$FIXTURES/milestones.json" > "$FAKE_GH_DIR/milestones.json"
-  run_scrum task new --title "x"
+  route_json 'api -X POST repos/acme/blog/issues --input -' '{"number":3,"title":"Fix login","html_url":"u3"}'
+  run_scrum task new --title "Fix login"
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "Created #3 Fix login in the backlog"
+  assert_contains "$OUT" "/scrum-github:sprint-new"
+  assert_contains "$(gh_calls)" 'STDIN {"title":"Fix login","body":"","labels":["status: New"],"assignees":[]}'
+}
+
+test_cmd_task_new_with_open_sprint_goes_into_it() {
+  task_env
+  route_json 'api -X POST repos/acme/blog/issues --input -' '{"number":3,"title":"Fix login","html_url":"u3"}'
+  run_scrum task new --title "Fix login"
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "Created #3 Fix login in Sprint 1"
+  assert_contains "$(gh_calls)" '"milestone":1}'
+}
+
+test_cmd_task_new_backlog_flag() {
+  task_env
+  route_json 'api -X POST repos/acme/blog/issues --input -' '{"number":3,"title":"Fix login","html_url":"u3"}'
+  run_scrum task new --title "Fix login" --backlog
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "Created #3 Fix login in the backlog"
+  assert_not_contains "$OUT" "no open sprint"
+  assert_not_contains "$(gh_calls)" '"milestone"'
+}
+
+test_cmd_task_new_backlog_and_sprint_refused() {
+  task_env
+  run_scrum task new --title "Fix login" --backlog --sprint "Sprint 1"
   assert_status 1 "$STATUS"
-  assert_contains "$ERR" "/scrum-github:sprint-new"
+  assert_contains "$ERR" "use --sprint or --backlog, not both"
+  assert_eq "" "$(gh_calls)" "nothing read or written"
+}
+
+test_cmd_task_new_unknown_sprint_refused() {
+  task_env
+  run_scrum task new --title "Fix login" --sprint "Sprint 9"
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" 'no sprint named "Sprint 9"'
   assert_eq "" "$(gh_writes)"
 }
 
@@ -308,4 +346,106 @@ test_cmd_task_list_in_review_refused_when_off() {
   run_scrum task list --status in_review
   assert_status 1 "$STATUS"
   assert_contains "$ERR" "statuses.in_review"
+}
+
+# ---------- logins outside the team (spec team "Cảnh báo login ngoài team") ----------
+
+test_cmd_task_assign_warns_about_a_login_outside_the_team() {
+  ops_env
+  printf 'team:\n  - login: tuandt\n  - login: an-nguyen\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  run_scrum task assign 14 tuandtt
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$ERR" "tuandtt is not in the team"
+  assert_contains "$ERR" "tuandt, an-nguyen"
+  assert_contains "$(gh_calls)" 'STDIN {"assignees":["tuandtt"]}' "still assigned"
+}
+
+test_cmd_task_assign_no_warning_without_team() {
+  ops_env
+  run_scrum task assign 14 bob
+  assert_status 0 "$STATUS" "$ERR"
+  assert_not_contains "$ERR" "not in the team"
+}
+
+test_cmd_task_assign_known_login_any_case_no_warning() {
+  ops_env
+  printf 'team:\n  - login: tuandt\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  run_scrum task assign 14 TuanDT
+  assert_status 0 "$STATUS" "$ERR"
+  assert_not_contains "$ERR" "not in the team"
+}
+
+test_cmd_task_new_warns_about_a_login_outside_the_team() {
+  task_env
+  printf 'team:\n  - login: ruby\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  route_json 'api -X POST repos/acme/blog/issues --input -' '{"number":1,"title":"x","html_url":"u"}'
+  run_scrum task new --title "x" --assignee bob --assignee ruby
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$ERR" "bob is not in the team (team in .github/scrum.yml: ruby)"
+  assert_not_contains "$ERR" "ruby is not"
+  assert_contains "$(gh_calls)" '"assignees":["bob","ruby"]'
+}
+
+# ---------- spec scenarios checked end to end (tests added for the team-and-backlog-tasks change) ----------
+
+# "Vừa backlog vừa sprint" with the options the other way round.
+test_cmd_task_new_sprint_then_backlog_refused() {
+  task_env
+  run_scrum task new --title "Fix login" --sprint "Sprint 1" --backlog
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "use --sprint or --backlog, not both"
+  assert_eq "" "$(gh_writes)"
+}
+
+# "Sprint chỉ định không tồn tại" when no sprint is open at all: still an error, not the backlog.
+test_cmd_task_new_unknown_sprint_without_open_sprint() {
+  task_env
+  jq '.[0].state = "closed"' "$FIXTURES/milestones.json" > "$FAKE_GH_DIR/milestones.json"
+  run_scrum task new --title "Fix login" --sprint "Sprint 9"
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "Sprint 9"
+  assert_eq "" "$(gh_writes)"
+}
+
+# "Chủ động đưa vào backlog" with points, an assignee and bug: no milestone, the rest kept.
+test_cmd_task_new_backlog_keeps_points_and_assignee() {
+  task_env
+  route_json 'api -X POST repos/acme/blog/issues --input -' '{"number":3,"title":"Fix login","html_url":"u3"}'
+  run_scrum task new --title "Fix login" --backlog --points 3 --assignee ruby --bug
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$(gh_calls)" 'STDIN {"title":"Fix login","body":"","labels":["status: New","points: 3","bug"],"assignees":["ruby"]}'
+}
+
+# "Team trống" with an explicit empty list: no warning.
+test_cmd_task_assign_no_warning_with_empty_team_list() {
+  ops_env
+  printf 'team: []\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  run_scrum task assign 14 bob
+  assert_status 0 "$STATUS" "$ERR"
+  assert_not_contains "$ERR" "not in the team"
+}
+
+# A login written with @ in the team and in --assignee is the same person: no warning.
+test_cmd_task_new_at_login_in_team_no_warning() {
+  task_env
+  printf 'team:\n  - login: "@ruby"\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  route_json 'api -X POST repos/acme/blog/issues --input -' '{"number":1,"title":"x","html_url":"u"}'
+  run_scrum task new --title "x" --assignee @ruby
+  assert_status 0 "$STATUS" "$ERR"
+  assert_not_contains "$ERR" "not in the team"
+}
+
+# A login is passed as it is, never expanded by the shell.
+test_cmd_task_logins_are_not_globbed() {
+  ops_env
+  printf 'team:\n  - login: tuandt\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  touch "$T/aaa" "$T/bbb"
+  run_scrum task assign 14 '*'
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$(gh_calls)" 'STDIN {"assignees":["*"]}'
+  assert_contains "$ERR" "* is not in the team"
+  route_json 'api -X POST repos/acme/blog/issues --input -' '{"number":1,"title":"x","html_url":"u"}'
+  run_scrum task new --title x --assignee '*' --backlog
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$(gh_calls)" '"assignees":["*"]'
 }

@@ -720,3 +720,626 @@ test_apply_view_keeps_velocity() {
   assert_contains "$(cat "$T/plan.md")" "Velocity: 10 points per sprint"
   assert_contains "$(cat "$T/plan.md")" "#11"
 }
+
+# ---------- waves, load and capacity (delta work-plan "Đợt theo phụ thuộc", "Tải và capacity khi kiểm tra plan") ----------
+
+# Five tasks: T2 and T3 depend on T1, T4 on T2, T5 on nothing. Scale 1, 2, 3, 5, 8.
+plan5() {
+  cat <<'EOF2'
+{"version": 2, "title": "Blog post comments", "sprint": "current", "epic": null,
+ "features": [{"id": "F1", "title": "Comments", "issue": null, "tasks": [
+   {"id": "T1", "title": "Comment API", "points": 3, "assignees": ["tuandt"], "issue": null},
+   {"id": "T2", "title": "Comment form", "points": 2, "depends_on": ["T1"], "assignees": ["an-nguyen"], "issue": null},
+   {"id": "T3", "title": "Moderation queue", "points": 5, "depends_on": ["T1"], "assignees": ["tuandt"], "issue": null},
+   {"id": "T4", "title": "Reply notifications", "points": 3, "depends_on": ["T2"], "issue": null},
+   {"id": "T5", "title": "Comment count", "points": 3, "issue": null}]}],
+ "assumptions": [], "out_of_scope": []}
+EOF2
+}
+cfg5() { defaults | jq -c '.points.scale = [1, 2, 3, 5, 8] | .team = [{"login": "tuandt", "capacity": 10}, {"login": "an-nguyen", "capacity": 5}]'; }
+jqp() { jq -n -L "$PLUGIN_DIR/runtime/lib/jq" --argjson p "$1" "include \"scrum\"; include \"plan\"; \$p | $2"; }
+
+test_waves_three() {
+  assert_json_eq '{"T1":1,"T5":1,"T2":2,"T3":2,"T4":3}' "$(jqp "$(plan5)" 'plan_waves')"
+}
+
+# s5task NUMBER POINTS LOGIN  An issue in Sprint 5, annotated like report_tasks.
+s5tasks() { jq -c '[.[] | {number: .[0], _pts: .[1], _who: [.[2]], _role: "new"}]' <<<"$1"; }
+
+test_load_one_person_over_capacity() {
+  local load
+  load="$(jqp "$(plan5 | jq -c '.features[0].tasks |= map(select(.id == "T2"))')" \
+    "plan_load([{\"login\":\"tuandt\",\"capacity\":10},{\"login\":\"an-nguyen\",\"capacity\":5}]; $(s5tasks '[[40,4,"an-nguyen"]]'); \"Sprint 5\")")"
+  assert_json_eq '{"login":"an-nguyen","capacity":5,"in_team":true,"current":4,"adding":2,"total":6,"over":true,"tasks":["T2"]}' \
+    "$(printf '%s' "$load" | jq -c '.[] | select(.login == "an-nguyen")')"
+  assert_eq "false" "$(printf '%s' "$load" | jq -r '.[] | select(.login == "tuandt") | .over')"
+}
+
+test_load_counts_people_outside_the_team() {
+  local load
+  load="$(jqp "$(plan5 | jq -c '.features[0].tasks[0].assignees = ["Minh-Ho"]')" \
+    "plan_load([{\"login\":\"tuandt\",\"capacity\":10}]; []; \"Sprint 5\")")"
+  assert_json_eq '{"login":"Minh-Ho","capacity":null,"in_team":false,"current":0,"adding":3,"total":3,"over":false,"tasks":["T1"]}' \
+    "$(printf '%s' "$load" | jq -c '.[] | select(.login == "Minh-Ho")')"
+}
+
+test_fit_sprint_over_capacity() {
+  local fit
+  # dependency order: T1 3, T5 3, T2 2, T3 5, T4 3 = 16; capacity 15 leaves T4 (the last, 3 pt) out
+  fit="$(jqp "$(plan5)" 'plan_fit(15; 0; "Sprint 5")')"
+  assert_eq "T1 T5 T2 T3" "$(printf '%s' "$fit" | jq -r '[.tasks[] | select(.fit == "sprint") | .id] | join(" ")')"
+  assert_eq "T4 over_capacity" "$(printf '%s' "$fit" | jq -r '.tasks[] | select(.fit == "backlog") | "\(.id) \(.reason)"')"
+  assert_eq "13 13" "$(printf '%s' "$fit" | jq -r '"\(.into) \(.after)"')"
+}
+
+test_fit_spec_scenario_fourteen_of_fifteen() {
+  # 16 points in dependency order, the last task has 2 points: 14 go in, the last stays out
+  local fit
+  fit="$(jqp "$(plan5 | jq -c '.features[0].tasks[3].points = 2 | .features[0].tasks[4].points = 4')" 'plan_fit(15; 0; "Sprint 5")')"
+  assert_eq "14" "$(printf '%s' "$fit" | jq -r .after)"
+  assert_eq "T4 over_capacity" "$(printf '%s' "$fit" | jq -r '.tasks[] | select(.fit == "backlog") | "\(.id) \(.reason)"')"
+}
+
+test_fit_dependent_of_a_backlog_task_stays_out() {
+  local fit
+  # capacity 5: T1 (3) and T5 (3) do not both fit; T5 out; T2 (2) fits; T3 (5) out; T4 depends on T2, fits? 3+2+3 = 8 > 5: out
+  fit="$(jqp "$(plan5 | jq -c '.features[0].tasks[1].points = 1 | .features[0].tasks[3].depends_on = ["T3"]')" 'plan_fit(5; 0; "Sprint 5")')"
+  assert_eq "T5 over_capacity,T3 over_capacity,T4 depends_on_backlog" \
+    "$(printf '%s' "$fit" | jq -r '[.tasks[] | select(.fit == "backlog") | "\(.id) \(.reason)"] | join(",")')"
+}
+
+test_fit_unknown_capacity_and_no_sprint() {
+  assert_eq "5" "$(jqp "$(plan5)" 'plan_fit(null; 0; "Sprint 5") | [.tasks[] | select(.fit == "sprint")] | length')"
+  assert_eq '"no_sprint"' "$(jqp "$(plan5)" 'plan_fit(15; 0; null) | [.tasks[].reason] | unique | join(",")')"
+}
+
+TEAM5='{"source":"config","members":[{"login":"tuandt","areas":[],"capacity":10},{"login":"an-nguyen","areas":[],"capacity":5}]}'
+insights() { # insights PLAN MILESTONES ISSUES
+  printf '%s' "$1" | jq -L "$PLUGIN_DIR/runtime/lib/jq" --argjson cfg "$(cfg5)" --arg today 2026-11-25 --argjson online true \
+    --argjson team "$TEAM5" --argjson ms "$2" --argjson sprint_issues "$3" -f "$PLUGIN_DIR/runtime/lib/jq/plan-insights.jq"
+}
+MS5='[{"number":5,"title":"Sprint 5","state":"open","description":"<!-- scrum:start=2026-11-23 end=2026-12-04 -->"}]'
+MS5V='[{"number":5,"title":"Sprint 5","state":"open","description":"<!-- scrum:start=2026-11-23 end=2026-12-04 -->"},
+       {"number":4,"title":"Sprint 4","state":"closed","closed_at":"2026-11-20T00:00:00Z","description":"<!-- scrum:velocity=15 -->"}]'
+s5issue() { jq -nc --argjson n "$1" --arg p "$2" --arg a "$3" '{number: $n, title: "x", state: "open", labels: [{name: "status: New"}, {name: "points: \($p)"}], assignees: [{login: $a}], milestone: {number: 5}}'; }
+
+test_insights_without_velocity() {
+  local out
+  out="$(insights "$(plan5)" "$MS5" "[$(s5issue 40 2 an-nguyen)]")"
+  assert_eq "null" "$(printf '%s' "$out" | jq -c .capacity)"
+  assert_contains "$(printf '%s' "$out" | jq -r '.warnings[]')" "the capacity of Sprint 5 is not known yet"
+  assert_eq "4 2" "$(printf '%s' "$out" | jq -r '.load[] | select(.login == "an-nguyen") | "\(.total) \(.adding)"')" "load still computed"
+  assert_json_eq '[["T1","T5"],["T2","T3"],["T4"]]' "$(printf '%s' "$out" | jq -c .wave_list)"
+}
+
+test_insights_with_velocity_warns_over_capacity() {
+  local out
+  out="$(insights "$(plan5)" "$MS5V" "[$(s5issue 40 3 an-nguyen)]")"
+  assert_eq "15 3 16 19 true" "$(printf '%s' "$out" | jq -r '"\(.capacity) \(.planned) \(.adding) \(.after) \(.over_sprint)"')"
+  assert_contains "$(printf '%s' "$out" | jq -r '.warnings[]')" "Sprint 5 would have 19 / 15 points after apply (over capacity by 4)"
+  assert_not_contains "$(printf '%s' "$out" | jq -r '.warnings[]')" "@an-nguyen" "5 of 5 is not over capacity"
+}
+
+test_insights_unknown_login_warning() {
+  local out
+  out="$(insights "$(plan5 | jq -c '.features[0].tasks[4].assignees = ["tuandtt"]')" "$MS5" "[]")"
+  assert_eq '["tuandtt"]' "$(printf '%s' "$out" | jq -c .unknown_logins)"
+  assert_contains "$(printf '%s' "$out" | jq -r '.warnings[]')" "tuandtt is not in the team (tuandt, an-nguyen)"
+}
+
+test_insights_offline() {
+  local out
+  out="$(plan5 | jq -L "$PLUGIN_DIR/runtime/lib/jq" --argjson cfg "$(cfg5)" --arg today 2026-11-25 --argjson online false \
+    --argjson team null --argjson ms null --argjson sprint_issues '[]' -f "$PLUGIN_DIR/runtime/lib/jq/plan-insights.jq")"
+  assert_eq "false null null" "$(printf '%s' "$out" | jq -r '"\(.online) \(.load) \(.fit)"')"
+  assert_eq "3" "$(printf '%s' "$out" | jq -r '.wave_list | length')"
+}
+
+check_env() {
+  setup_fake_gh
+  setup_repo 'points:
+  scale: [1, 2, 3, 5, 8]
+team:
+  - login: tuandt
+    capacity: 10
+  - login: an-nguyen
+    capacity: 5'
+  export SCRUM_TODAY=2026-11-25
+  printf '%s' "$MS5" > "$FAKE_GH_DIR/ms.json"
+  route 'api --paginate repos/acme/blog/milestones*' ms.json
+  printf '[%s]' "$(s5issue 40 3 an-nguyen)" > "$FAKE_GH_DIR/s5.json"
+  route 'api --paginate repos/acme/blog/issues?milestone=5*' s5.json
+  mkdir -p "$T/plans/comments"
+  plan5 > "$T/plans/comments/plan.json"
+}
+
+test_check_prints_waves_load_and_warnings() {
+  check_env
+  run_scrum plan check "$T/plans/comments/plan.json"
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "  1: T1, T5"
+  assert_contains "$OUT" "  3: T4"
+  assert_contains "$OUT" "Sprint 5: 3 points now + 16 from this plan = 19; capacity not known yet"
+  assert_contains "$OUT" "  @an-nguyen: 3 now + 2 from this plan = 5 / 5 pt"
+  assert_contains "$OUT" "  @tuandt: 0 now + 8 from this plan = 8 / 10 pt"
+  assert_contains "$OUT" "the capacity of Sprint 5 is not known yet"
+  assert_contains "$OUT" "scrum plan apply would do:"
+  assert_not_contains "$(gh_calls)" "assignees" "team is set: GitHub's list is not read"
+  assert_eq "" "$(gh_writes)"
+}
+
+test_check_person_over_capacity() {
+  check_env
+  printf '[%s]' "$(s5issue 40 4 an-nguyen)" > "$FAKE_GH_DIR/s5.json"
+  # scale has no 4; the label still counts as 4 points on GitHub
+  run_scrum plan check "$T/plans/comments/plan.json"
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "@an-nguyen would have 6 / 5 points in Sprint 5 (over capacity by 1)"
+}
+
+test_check_json_for_the_skill() {
+  check_env
+  run_scrum plan check "$T/plans/comments/plan.json" --json
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "5 16" "$(printf '%s' "$OUT" | jq -r '"\(.summary.tasks) \(.summary.points)"')"
+  assert_json_eq '[["T1","T5"],["T2","T3"],["T4"]]' "$(printf '%s' "$OUT" | jq -c .insights.wave_list)"
+  assert_eq "Sprint 5" "$(printf '%s' "$OUT" | jq -r .insights.sprint.title)"
+  assert_eq "config" "$(printf '%s' "$OUT" | jq -r .insights.team.source)"
+  assert_eq "true" "$(printf '%s' "$OUT" | jq -r '.actions | length > 0')"
+}
+
+test_check_offline_waves_only() {
+  check_env
+  broken_gh
+  run_scrum plan check "$T/plans/comments/plan.json" --offline
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "  2: T2, T3"
+  assert_contains "$OUT" "Load and capacity need GitHub"
+  assert_not_contains "$OUT" "would do"
+  run_scrum plan check "$T/plans/comments/plan.json" --offline --json
+  assert_eq "false null" "$(printf '%s' "$OUT" | jq -r '"\(.insights.online) \(.actions)"')"
+}
+
+test_check_unknown_login_warns() {
+  check_env
+  jq '.features[0].tasks[4].assignees = ["tuandtt"]' "$T/plans/comments/plan.json" > "$T/p.json"; mv "$T/p.json" "$T/plans/comments/plan.json"
+  run_scrum plan check "$T/plans/comments/plan.json" --offline
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "tuandtt is not in the team (tuandt, an-nguyen)"
+}
+
+# ---------- review (delta work-plan: plan-critic findings in the plan) ----------
+
+REVIEW='[{"kind":"too_large","text":"T3 split into T3 and T4","status":"fixed"},{"kind":"missing","text":"No edit task: out of scope","status":"kept"}]'
+
+test_validate_review_accepted() {
+  assert_eq "" "$(validate "$(plan3 | jq -c --argjson r "$REVIEW" '.review = $r')")"
+}
+
+test_validate_review_errors() {
+  local e
+  e="$(validate "$(plan3 | jq -c '.review = [{"kind":"","text":"x","status":"done"}, 3]')")"
+  assert_contains "$e" "review[0].kind is required"
+  assert_contains "$e" 'review[0].status: must be fixed or kept (got "done")'
+  assert_contains "$e" "review[1]: must be an object"
+  assert_contains "$(validate "$(plan3 | jq -c '.review = "ok"')")" "review: must be a list"
+}
+
+test_apply_ignores_review() {
+  apply_env
+  plan3 | jq --argjson r "$REVIEW" '.review = $r' > "$T/plan.json"
+  run_scrum plan apply "$T/plan.json"
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "4" "$(creates)"
+  assert_not_contains "$(grep '^STDIN' "$FAKE_GH_LOG")" "split into"
+  assert_json_eq "$REVIEW" "$(jq -c .review "$T/plan.json")" "review kept in the plan file"
+}
+
+# ---------- changes since the last view (delta work-plan "Thay đổi so với lần xem trước") ----------
+
+pdiff() { printf '%s' "$1" | jqt plan-diff -c --argjson prev "$2"; }
+
+test_diff_first_view_has_no_changes() {
+  local out
+  out="$(pdiff "$(plan5)" null)"
+  assert_eq "1 true 0" "$(printf '%s' "$out" | jq -r '"\(.revision) \(.first) \(.added + .removed + .changed | length)"')"
+  assert_eq "5" "$(printf '%s' "$out" | jq -r '.snapshot.tasks | length')"
+  assert_json_eq '{"id":"T2","title":"Comment form","points":2,"depends_on":["T1"],"assignees":["an-nguyen"],"sprint":"current"}' \
+    "$(printf '%s' "$out" | jq -c '.snapshot.tasks[1]')"
+}
+
+test_diff_assignee_changed_and_task_removed() {
+  local snap now out
+  snap="$(pdiff "$(plan5 | jq -c '.features[0].tasks += [{"id":"T7","title":"Weekly email","points":1}] | .features[0].tasks[3].assignees = ["an-nguyen"]')" null | jq -c .snapshot)"
+  now="$(plan5 | jq -c '.features[0].tasks[3].assignees = ["minh-ho"]')"
+  out="$(pdiff "$now" "$snap")"
+  assert_json_eq '[{"id":"T4","title":"Reply notifications","fields":[{"field":"assignees","from":["an-nguyen"],"to":["minh-ho"]}]}]' "$(printf '%s' "$out" | jq -c .changed)"
+  assert_json_eq '[{"id":"T7","title":"Weekly email"}]' "$(printf '%s' "$out" | jq -c .removed)"
+  assert_eq "2 false" "$(printf '%s' "$out" | jq -r '"\(.revision) \(.first)"')"
+}
+
+test_diff_added_points_deps_sprint() {
+  local snap out
+  snap="$(pdiff "$(plan5)" null | jq -c .snapshot)"
+  out="$(pdiff "$(plan5 | jq -c '.features[0].tasks[0].points = 5 | .features[0].tasks[4].depends_on = ["T1"] | .features[0].tasks[2].sprint = null | .features[0].tasks[1].title = "Form" | .features[0].tasks += [{"id":"T6","title":"Rate limit"}]')" "$snap")"
+  assert_json_eq '[{"id":"T6","title":"Rate limit"}]' "$(printf '%s' "$out" | jq -c .added)"
+  assert_eq "T1:points T2:title T3:sprint T5:depends_on" "$(printf '%s' "$out" | jq -r '[.changed[] | "\(.id):\(.fields | map(.field) | join(","))"] | join(" ")')"
+  assert_eq "current null" "$(printf '%s' "$out" | jq -r '.changed[] | select(.id == "T3") | "\(.fields[0].from) \(.fields[0].to)"')"
+}
+
+test_diff_unchanged_keeps_revision() {
+  local snap out
+  snap="$(pdiff "$(plan5)" null | jq -c '.snapshot | .revision = 3')"
+  out="$(pdiff "$(plan5)" "$snap")"
+  assert_eq "3 false 0" "$(printf '%s' "$out" | jq -r '"\(.revision) \(.first) \(.added + .removed + .changed | length)"')"
+}
+
+test_diff_issue_numbers_are_not_a_change() {
+  local snap
+  snap="$(pdiff "$(plan5)" null | jq -c .snapshot)"
+  assert_eq "1 0" "$(pdiff "$(plan5 | jq -c '.features[0].tasks[0].issue = 12')" "$snap" | jq -r '"\(.revision) \(.changed | length)"')"
+}
+
+test_check_twice_unchanged_then_changed() {
+  check_env
+  broken_gh
+  local dir="$T/plans/comments"
+  run_scrum plan check "$dir/plan.json" --offline
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "1" "$(jq -r .revision "$dir/.plan-snapshot.json")"
+  assert_contains "$(cat "$dir/plan.html")" 'data-part="changes"'
+  run_scrum plan check "$dir/plan.json" --offline
+  assert_eq "1" "$(jq -r .revision "$dir/.plan-snapshot.json")" "unchanged plan: same revision"
+  jq '.features[0].tasks[3].assignees = ["minh-ho"]' "$dir/plan.json" > "$T/p.json"; mv "$T/p.json" "$dir/plan.json"
+  run_scrum plan check "$dir/plan.json" --offline
+  assert_eq "2" "$(jq -r .revision "$dir/.plan-snapshot.json")"
+  assert_contains "$(cat "$dir/plan.html")" '<b>~ T4</b>'
+  assert_contains "$(cat "$dir/plan.html")" 'minh-ho'
+}
+
+# ---------- plan.html (delta work-plan "Bản xem HTML", "Trang tự chứa và an toàn", "Ngôn ngữ của bản xem HTML") ----------
+
+html_data() { # html_data PLAN LANG
+  local cfg ins
+  cfg="$(cfg5 | jq -c --arg l "$2" '.language = $l')"
+  ins="$(insights "$1" "$MS5V" "[$(s5issue 40 3 an-nguyen)]")"
+  printf '%s' "$1" | jq -L "$PLUGIN_DIR/runtime/lib/jq" --argjson cfg "$cfg" --argjson insights "$ins" \
+    --argjson diff "$(pdiff "$1" null)" --argjson actions '[{"op":"create_task","text":"create  task T1"},{"op":"link_blocked","text":"link"}]' \
+    --argjson action_errors '[]' --argjson strings "$(jq -c --arg l "$2" '.[$l]' "$PLUGIN_DIR/runtime/share/strings.json")" \
+    --arg now 2026-11-25T10:00:00Z --arg path docs/plans/comments -f "$PLUGIN_DIR/runtime/lib/jq/plan-html-data.jq"
+}
+
+test_html_data_numbers_match_the_plan() {
+  local d
+  d="$(html_data "$(plan5)" en)"
+  assert_json_eq '{"tasks":5,"points":16,"unestimated":0,"into":5,"into_points":16,"backlog":0,"waves":3}' "$(printf '%s' "$d" | jq -c .summary)"
+  assert_eq "3 0 15 19" "$(printf '%s' "$d" | jq -r '.tasks[] | select(.id == "T4") | "\(.wave) \(.feature_index)"' ) $(printf '%s' "$d" | jq -r '"\(.load.capacity) \(.load.after)"')"
+  assert_eq "1 1" "$(printf '%s' "$d" | jq -r '"\(.actions.tasks) \(.actions.link_blocked)"')"
+  assert_eq "Sprint 5" "$(printf '%s' "$d" | jq -r '.tasks[0].sprint.label')"
+  assert_eq "true 1" "$(printf '%s' "$d" | jq -r '"\(.diff.first) \(.diff.revision)"')"
+  assert_eq "Changes" "$(printf '%s' "$d" | jq -r .strings.plan_sec_changes_first)"
+}
+
+test_html_data_strings_follow_language() {
+  assert_eq "Thay đổi" "$(html_data "$(plan5)" vi | jq -r .strings.plan_sec_changes_first)"
+  assert_eq "Comment API" "$(html_data "$(plan5)" vi | jq -r '.tasks[0].title')" "plan text stays as written"
+}
+
+page_of() { html_data "$1" "$2" | jqt plan-html -r --rawfile t "$PLUGIN_DIR/runtime/share/plan.html"; }
+
+test_html_has_eight_parts_and_no_network() {
+  local page part
+  page="$(page_of "$(plan5)" en)"
+  for part in summary changes graph load tasks review actions assumptions; do
+    assert_contains "$page" "data-part=\"$part\""
+  done
+  assert_eq "8" "$(printf '%s' "$page" | grep -o 'data-part="[a-z]*"' | sort -u | wc -l | tr -d ' ')"
+  if printf '%s' "$page" | grep -Eiq '(src|href)[[:space:]]*=[[:space:]]*["'"'"']?(https?:)?//'; then _fail "a resource is loaded from the network"; fi
+  if printf '%s' "$page" | grep -Eiq '@import|url\((["'"'"'])?https?:'; then _fail "CSS loads from the network"; fi
+  assert_contains "$page" 'prefers-color-scheme: dark'
+  assert_contains "$page" 'prefers-reduced-motion: reduce'
+  assert_not_contains "$page" "__SCRUM_"
+}
+
+test_html_escapes_text_from_the_plan() {
+  local page
+  page="$(page_of "$(plan5 | jq -c '.features[0].tasks[0].title = "Fix <script>alert(1)</script> in comments" | .title = "A </script><b>x"')" en)"
+  assert_contains "$page" '<h3>Fix &lt;script&gt;alert(1)&lt;/script&gt; in comments</h3>'
+  assert_not_contains "$page" '<script>alert(1)'
+  assert_not_contains "$page" '</script><b>x'
+  # the script data has no "<": the title cannot close the data element
+  assert_eq "0" "$(printf '%s' "$page" | sed -n '/id="scrum-data"/p' | sed 's/^<script id="scrum-data" type="application\/json">//; s/<\/script>$//' | grep -c '<' || true)"
+}
+
+test_html_vietnamese_headings() {
+  local page
+  page="$(page_of "$(plan5)" vi)"
+  assert_contains "$page" 'lang="vi"'
+  assert_contains "$page" 'Thứ tự làm và chạy song song'
+  assert_contains "$page" '<h3>Comment API</h3>'
+}
+
+test_check_writes_html_next_to_plan_md() {
+  check_env
+  run_scrum plan check "$T/plans/comments/plan.json"
+  assert_status 0 "$STATUS" "$ERR"
+  [ -f "$T/plans/comments/plan.html" ] || _fail "plan.html not written"
+  assert_contains "$(cat "$T/plans/comments/plan.html")" 'People and capacity of Sprint 5'
+  assert_contains "$(cat "$T/plans/comments/plan.html")" 'When you approve, GitHub will have'
+}
+
+test_check_offline_html_says_what_needs_github() {
+  check_env
+  broken_gh
+  run_scrum plan check "$T/plans/comments/plan.json" --offline
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$(cat "$T/plans/comments/plan.html")" 'Load and capacity need GitHub'
+  assert_contains "$(cat "$T/plans/comments/plan.html")" 'What apply would do needs GitHub'
+  assert_not_contains "$(cat "$T/plans/comments/plan.html")" 'class="cap-track"'
+}
+
+test_render_writes_html() {
+  setup_repo 'version: 1'
+  broken_gh
+  plan3 > "$T/plan.json"
+  run_scrum plan render "$T/plan.json" --offline
+  assert_status 0 "$STATUS" "$ERR"
+  [ -f "$T/plan.html" ] || _fail "plan.html not written"
+  assert_contains "$OUT" "plan.html"
+}
+
+test_apply_html_shows_issue_numbers() {
+  apply_env
+  plan3 > "$T/plan.json"
+  run_scrum plan apply "$T/plan.json"
+  assert_status 0 "$STATUS" "$ERR"
+  [ -f "$T/plan.html" ] || _fail "plan.html not written"
+  assert_contains "$(cat "$T/plan.html")" '<span class="id">T1 · F1</span><span class="issue">#11</span>'
+  assert_contains "$(cat "$T/plan.html")" 'Issues created'
+}
+
+# ---------- .gitignore of the plan folder (delta work-plan "Bỏ qua file sinh ra trong thư mục plan") ----------
+
+test_init_writes_gitignore() {
+  setup_repo 'version: 1'
+  broken_gh
+  run_scrum plan init "Blog post comments"
+  assert_status 0 "$STATUS" "$ERR"
+  local g="$SCRUM_REPO_DIR/docs/plans/blog-post-comments/.gitignore"
+  [ -f "$g" ] || _fail "no .gitignore"
+  grep -qxF plan.html "$g" || _fail "plan.html not ignored"
+  grep -qxF .plan-snapshot.json "$g" || _fail "snapshot not ignored"
+  ! grep -qE '^plan\.(json|md)$' "$g" || _fail "plan.json or plan.md ignored"
+}
+
+test_init_keeps_existing_gitignore() {
+  setup_repo 'version: 1'
+  broken_gh
+  mkdir -p "$SCRUM_REPO_DIR/docs/plans/blog-post-comments"
+  printf 'mine\n' > "$SCRUM_REPO_DIR/docs/plans/blog-post-comments/.gitignore"
+  run_scrum plan init "Blog post comments"
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "mine" "$(cat "$SCRUM_REPO_DIR/docs/plans/blog-post-comments/.gitignore")"
+}
+
+test_check_reminds_an_old_folder() {
+  check_env
+  broken_gh
+  run_scrum plan check "$T/plans/comments/plan.json" --offline
+  assert_contains "$OUT" "should ignore"
+  [ ! -e "$T/plans/comments/.gitignore" ] || _fail "check wrote a .gitignore"
+  printf 'plan.html\n.plan-snapshot.json\n' > "$T/plans/comments/.gitignore"
+  run_scrum plan check "$T/plans/comments/plan.json" --offline
+  assert_not_contains "$OUT" "should ignore"
+}
+
+# ---------- spec scenarios checked end to end (tests added for the team-and-backlog-tasks change) ----------
+
+# delta task-management "Đề xuất người làm và sprint trong plan", scenario "Không có sprint đang mở":
+# every task is left for the backlog and the output points at /scrum-github:sprint-new.
+test_check_no_open_sprint_everything_to_the_backlog() {
+  check_env
+  printf '[{"number":4,"title":"Sprint 4","state":"closed","closed_at":"2026-11-20T00:00:00Z","description":"<!-- scrum:velocity=15 -->"}]' > "$FAKE_GH_DIR/ms.json"
+  # what /plan proposes then: the plan goes to the backlog
+  jq '.sprint = null' "$T/plans/comments/plan.json" > "$T/p.json"; mv "$T/p.json" "$T/plans/comments/plan.json"
+  run_scrum plan check "$T/plans/comments/plan.json" --json
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "null" "$(printf '%s' "$OUT" | jq -c .insights.sprint)"
+  assert_eq "5 no_sprint" "$(printf '%s' "$OUT" | jq -r '.insights.fit.tasks | "\([.[] | select(.fit == "backlog")] | length) \([.[].reason] | unique | join(","))"')"
+  run_scrum plan check "$T/plans/comments/plan.json"
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "/scrum-github:sprint-new"
+  assert_not_contains "$(gh_calls)" "issues?milestone" "no sprint: no sprint issues read"
+  [ -f "$T/plans/comments/plan.html" ] || _fail "plan.html not written"
+  assert_eq "" "$(gh_writes)"
+}
+
+# delta team "Nguồn danh sách team": an empty team block falls back to GitHub's assignees,
+# and logins from GitHub are not warned about.
+test_check_empty_team_uses_github_assignees() {
+  check_env
+  printf 'points:\n  scale: [1, 2, 3, 5, 8]\nteam: []\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  route_json 'api --paginate repos/acme/blog/assignees*' '[{"login":"tuandt"},{"login":"an-nguyen"}]'
+  run_scrum plan check "$T/plans/comments/plan.json" --json
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "github" "$(printf '%s' "$OUT" | jq -r .insights.team.source)"
+  assert_eq "[]" "$(printf '%s' "$OUT" | jq -c .insights.unknown_logins)"
+  assert_not_contains "$(printf '%s' "$OUT" | jq -r '.insights.warnings[]')" "not in the team"
+}
+
+# delta work-plan "Trang tự chứa và an toàn", end to end: a task title with HTML written by plan check.
+test_check_html_escapes_a_title_end_to_end() {
+  check_env
+  broken_gh
+  jq '.features[0].tasks[0].title = "Fix <script>alert(1)</script> in comments"' "$T/plans/comments/plan.json" > "$T/p.json"
+  mv "$T/p.json" "$T/plans/comments/plan.json"
+  run_scrum plan check "$T/plans/comments/plan.json" --offline
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$(cat "$T/plans/comments/plan.html")" 'Fix &lt;script&gt;alert(1)&lt;/script&gt; in comments'
+  assert_not_contains "$(cat "$T/plans/comments/plan.html")" '<script>alert(1)'
+}
+
+# delta work-plan "Ngôn ngữ của bản xem HTML", scenario "Tiếng Việt", end to end.
+test_check_html_in_vietnamese_end_to_end() {
+  check_env
+  broken_gh
+  printf 'language: vi\npoints:\n  scale: [1, 2, 3, 5, 8]\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  run_scrum plan check "$T/plans/comments/plan.json" --offline
+  assert_status 0 "$STATUS" "$ERR"
+  local page
+  page="$(cat "$T/plans/comments/plan.html")"
+  assert_contains "$page" 'lang="vi"'
+  assert_contains "$page" 'Thứ tự làm và chạy song song'
+  assert_contains "$page" 'Chi tiết từng task'
+  assert_contains "$page" 'Giả định và ngoài phạm vi'
+  assert_contains "$page" '<h3>Comment API</h3>' "task titles stay as written"
+  assert_not_contains "$page" 'Order of work and what runs in parallel'
+}
+
+# delta work-plan "Trang tự chứa và an toàn", scenario "Không có mạng": the page written by the
+# command loads nothing from a server.
+test_check_html_loads_nothing_from_the_network() {
+  check_env
+  run_scrum plan check "$T/plans/comments/plan.json"
+  assert_status 0 "$STATUS" "$ERR"
+  local page
+  page="$(cat "$T/plans/comments/plan.html")"
+  if printf '%s' "$page" | grep -Eiq '(src|href)[[:space:]]*=[[:space:]]*["'"'"']?(https?:)?//'; then _fail "a resource is loaded from the network"; fi
+  if printf '%s' "$page" | grep -Eiq '@import|url\((["'"'"'])?https?:|fetch\(|XMLHttpRequest'; then _fail "the page reaches the network"; fi
+  assert_contains "$page" 'data-part="graph"'
+}
+
+# delta task-management "Một lần duyệt plan", scenario "Duyệt một lần": the issue of T1 is created
+# with its assignee and its sprint in the same call.
+test_apply_creates_with_assignee_and_sprint() {
+  apply_env
+  plan3 | jq '.features[0].tasks[0].assignees = ["tuandt"] | .features[0].tasks[0].sprint = "Sprint 2"' > "$T/plan.json"
+  run_scrum plan apply "$T/plan.json"
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq '["tuandt"] 2' "$(grep '^STDIN' "$FAKE_GH_LOG" | sed 's/^STDIN //' | jq -r 'select(.title == "Store comments") | "\(.assignees | tojson) \(.milestone)"')"
+}
+
+# delta team "Nguồn danh sách team": "Mọi lệnh dùng danh sách team MUST cho biết danh sách đến từ
+# nguồn nào." plan check uses the team list for the load, so its text output must name the source.
+test_check_text_names_the_team_source() {
+  check_env
+  run_scrum plan check "$T/plans/comments/plan.json"
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "scrum.yml" "config source named"
+  printf 'points:\n  scale: [1, 2, 3, 5, 8]\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  route_json 'api --paginate repos/acme/blog/assignees*' '[{"login":"tuandt"},{"login":"an-nguyen"}]'
+  run_scrum plan check "$T/plans/comments/plan.json"
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "from GitHub" "github source named"
+}
+
+# ---------- review fixes ----------
+
+# A task that already has its issue is in "now" (the sprint's issues), not in the plan's segments.
+test_html_capacity_bar_counts_applied_tasks_once() {
+  local plan ins d page
+  plan="$(plan5 | jq -c '.features[0].tasks[0].issue = 40')"
+  ins="$(insights "$plan" "$MS5V" "[$(s5issue 40 3 tuandt)]")"
+  d="$(printf '%s' "$plan" | jq -L "$PLUGIN_DIR/runtime/lib/jq" --argjson cfg "$(cfg5)" --argjson insights "$ins" \
+    --argjson diff "$(pdiff "$plan" null)" --argjson actions '[]' --argjson action_errors '[]' \
+    --argjson strings "$(jq -c .en "$PLUGIN_DIR/runtime/share/strings.json")" --arg now 2026-11-25T10:00:00Z --arg path p \
+    -f "$PLUGIN_DIR/runtime/lib/jq/plan-html-data.jq")"
+  assert_eq "T2 T3 T4 T5" "$(printf '%s' "$d" | jq -r '[.load.into_tasks[].id] | join(" ")')"
+  assert_eq "3 13 16" "$(printf '%s' "$d" | jq -r '"\(.load.planned) \(.load.adding) \(.load.after)"')"
+  page="$(printf '%s' "$d" | jqt plan-html -r --rawfile t "$PLUGIN_DIR/runtime/share/plan.html")"
+  assert_not_contains "$page" '>T1 3</div>'
+}
+
+test_check_json_writes_no_page_or_snapshot() {
+  check_env
+  local dir="$T/plans/comments"
+  run_scrum plan check "$dir/plan.json" --json
+  assert_status 0 "$STATUS" "$ERR"
+  [ ! -e "$dir/plan.html" ] || _fail "--json wrote plan.html"
+  [ ! -e "$dir/.plan-snapshot.json" ] || _fail "--json wrote the snapshot"
+  assert_eq "null" "$(printf '%s' "$OUT" | jq -c .html)"
+  # the skill fills in its suggestions, then the first page has no change list
+  jq '.features[0].tasks[3].assignees = ["tuandt"]' "$dir/plan.json" > "$T/p.json"; mv "$T/p.json" "$dir/plan.json"
+  run_scrum plan check "$dir/plan.json"
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "1" "$(jq -r .revision "$dir/.plan-snapshot.json")"
+  assert_contains "$(cat "$dir/plan.html")" "nothing to compare yet"
+}
+
+test_check_milestones_unreadable_is_not_no_sprint() {
+  check_env
+  route_first 'api --paginate repos/acme/blog/milestones*' '!fail'
+  run_scrum plan check "$T/plans/comments/plan.json"
+  # the plan names the current sprint, so apply cannot be checked: the command fails, and says why
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "cannot read the sprints (milestones) from GitHub"
+  assert_not_contains "$OUT$ERR" "There is no open sprint"
+  assert_contains "$(cat "$T/plans/comments/plan.html")" "Could not read the sprints or their tasks from GitHub"
+}
+
+test_check_sprint_issues_unreadable_is_not_an_empty_sprint() {
+  check_env
+  route_first 'api --paginate repos/acme/blog/issues?milestone=5*' '!fail'
+  run_scrum plan check "$T/plans/comments/plan.json" --json
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "false true null" "$(printf '%s' "$OUT" | jq -r '"\(.insights.online) \(.insights.unreadable) \(.insights.load)"')"
+}
+
+test_apply_html_says_created() {
+  apply_env
+  plan3 > "$T/plan.json"
+  run_scrum plan apply "$T/plan.json"
+  assert_status 0 "$STATUS" "$ERR"
+  local page; page="$(cat "$T/plan.html")"
+  assert_contains "$page" "Created on GitHub"
+  assert_contains "$page" "issues created: 1 feature, 3 tasks"
+  assert_not_contains "$page" "When you approve"
+  assert_contains "$page" '<b>3</b><span>tasks into Sprint 1</span>'
+}
+
+test_apply_html_after_a_failure_says_stopped() {
+  apply_env
+  create_numbers 10 11 '!fail'
+  plan3 > "$T/plan.json"
+  run_scrum plan apply "$T/plan.json"
+  assert_status 1 "$STATUS"
+  assert_contains "$(cat "$T/plan.html")" "plan apply stopped part-way"
+}
+
+test_apply_reads_github_state_once() {
+  apply_env
+  plan3 > "$T/plan.json"
+  run_scrum plan apply "$T/plan.json"
+  assert_status 0 "$STATUS" "$ERR"
+  # one read for the actions, one for the views' estimates
+  assert_eq "2" "$(grep -c 'repos/acme/blog/milestones' "$FAKE_GH_LOG")"
+}
+
+test_fit_ties_follow_plan_order() {
+  local p
+  p='{"version":2,"title":"x","features":[{"id":"F1","title":"F","tasks":[{"id":"T2","title":"a","points":1},{"id":"T10","title":"b","points":1}]}]}'
+  assert_eq "T2 T10" "$(jqp "$p" 'plan_fit(null; 0; "Sprint 5") | [.tasks[].id] | join(" ")' | jq -r .)"
+}
+
+test_html_status_dot_does_not_pulse() {
+  assert_not_contains "$(cat "$PLUGIN_DIR/runtime/share/plan.html")" "pulse"
+}
+
+test_current_without_open_sprint_names_the_skill() {
+  apply_env
+  printf '[]' > "$FAKE_GH_DIR/ms.json"
+  plan3 > "$T/plan.json"
+  run_scrum plan apply "$T/plan.json"
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "/scrum-github:sprint-new"
+}
+
+test_check_milestones_unreadable_text_for_a_backlog_plan() {
+  check_env
+  route_first 'api --paginate repos/acme/blog/milestones*' '!fail'
+  jq '.sprint = null' "$T/plans/comments/plan.json" > "$T/p.json"; mv "$T/p.json" "$T/plans/comments/plan.json"
+  run_scrum plan check "$T/plans/comments/plan.json"
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "Could not read the sprints or their tasks from GitHub"
+  assert_not_contains "$OUT" "sprint-new"
+}

@@ -19,6 +19,7 @@ Setup
   uninstall [--dry-run] [--yes]                   Remove what init installed (keeps scrum.yml and edited files)
   doctor [--json]                                 Check tools, login, configuration and what is installed; read-only
   next [--json]                                   The one thing to do next, with its command; read-only
+  team [--json]                                   Team members, areas, capacity and load in the open sprint; read-only
 
 Backlog and sprints
   backlog [--json]                                Open tasks without a sprint, with points, parent and blockers
@@ -28,9 +29,12 @@ Backlog and sprints
                                                   Capacity from velocity, the backlog, and adding tasks to the sprint
 
 Tasks
-  task new --title T [--body B] [--points N] [--assignee LOGIN]... [--sprint S] [--bug]
+  task new --title T [--body B] [--points N] [--assignee LOGIN]... [--sprint S | --backlog] [--bug]
+                                                  In the open sprint, or the backlog when none is open
   task start NUMBER
   task list [--mine] [--sprint S | --backlog] [--status new|in_progress|in_review|done] [--json]
+  mine [--user LOGIN] [--json]                    Every open task of one person (all sprints and the backlog),
+                                                  pull requests waiting for their review, what to do next
   task move N... --sprint S | --backlog           Move tasks between sprints and the backlog (with a comment)
   task estimate N POINTS                          Replace the points label (checked against the scale)
   task assign N LOGIN... [--unassign]             Add or remove assignees
@@ -40,7 +44,8 @@ Plans (a plan file per requirement: <planning.dir>/<slug>/plan.json, see share/p
   plan init "<title>" [--slug SLUG]               Create the plan folder; print its paths as JSON (offline)
   plan validate FILE                              Check a plan; print features, tasks, points (offline)
   plan render FILE [--out PATH] [--offline]       Write the plan.md view with estimates
-  plan check FILE [--offline]                     validate + render + what apply would do; writes nothing to GitHub
+  plan check FILE [--offline] [--json]            validate, render, waves, load and capacity, what apply would do;
+                                                  writes nothing to GitHub
   plan apply FILE [--dry-run] [--update]          Create the missing epic, features and tasks, link them, record numbers
 
 Documents (offline)
@@ -162,6 +167,12 @@ case "$cmd" in
     ;;
   backlog)
     . "$SCRUM_ROOT/lib/cmd_backlog.sh"; cmd_backlog "$@"
+    ;;
+  team)
+    . "$SCRUM_ROOT/lib/cmd_team.sh"; cmd_team "$@"
+    ;;
+  mine)
+    . "$SCRUM_ROOT/lib/cmd_mine.sh"; cmd_mine "$@"
     ;;
   status)
     . "$SCRUM_ROOT/lib/cmd_report.sh"; cmd_status "$@"
