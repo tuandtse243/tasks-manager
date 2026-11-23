@@ -17,6 +17,16 @@ def sprint_ok: . == null or type == "string";
       (if ($p.sprint | sprint_ok) then empty else "sprint: must be a sprint name, \"current\", or empty for the backlog" end),
       (if ($p.assumptions // [] | str_list) then empty else "assumptions: must be a list of texts" end),
       (if ($p.out_of_scope // [] | str_list) then empty else "out_of_scope: must be a list of texts" end),
+      # review (optional, from plan-critic; plan apply ignores it)
+      (if $p.review == null then empty
+       elif ($p.review | type) != "array" then "review: must be a list of findings"
+       else ($p.review | to_entries[] | .key as $i | .value as $r
+             | if ($r | type) != "object" then "review[\($i)]: must be an object with kind, text and status"
+               else (if ($r.kind | nonempty) then empty else "review[\($i)].kind is required" end),
+                    (if ($r.text | nonempty) then empty else "review[\($i)].text is required" end),
+                    (if $r.status == "fixed" or $r.status == "kept" then empty else "review[\($i)].status: must be fixed or kept (got \($r.status | tojson))" end)
+               end)
+       end),
 
       # epic (optional)
       (if $p.epic == null then empty

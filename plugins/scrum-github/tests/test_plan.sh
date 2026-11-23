@@ -907,3 +907,228 @@ test_check_unknown_login_warns() {
   assert_status 0 "$STATUS" "$ERR"
   assert_contains "$OUT" "tuandtt is not in the team (tuandt, an-nguyen)"
 }
+
+# ---------- review (delta work-plan: plan-critic findings in the plan) ----------
+
+REVIEW='[{"kind":"too_large","text":"T3 split into T3 and T4","status":"fixed"},{"kind":"missing","text":"No edit task: out of scope","status":"kept"}]'
+
+test_validate_review_accepted() {
+  assert_eq "" "$(validate "$(plan3 | jq -c --argjson r "$REVIEW" '.review = $r')")"
+}
+
+test_validate_review_errors() {
+  local e
+  e="$(validate "$(plan3 | jq -c '.review = [{"kind":"","text":"x","status":"done"}, 3]')")"
+  assert_contains "$e" "review[0].kind is required"
+  assert_contains "$e" 'review[0].status: must be fixed or kept (got "done")'
+  assert_contains "$e" "review[1]: must be an object"
+  assert_contains "$(validate "$(plan3 | jq -c '.review = "ok"')")" "review: must be a list"
+}
+
+test_apply_ignores_review() {
+  apply_env
+  plan3 | jq --argjson r "$REVIEW" '.review = $r' > "$T/plan.json"
+  run_scrum plan apply "$T/plan.json"
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "4" "$(creates)"
+  assert_not_contains "$(grep '^STDIN' "$FAKE_GH_LOG")" "split into"
+  assert_json_eq "$REVIEW" "$(jq -c .review "$T/plan.json")" "review kept in the plan file"
+}
+
+# ---------- changes since the last view (delta work-plan "Thay đổi so với lần xem trước") ----------
+
+pdiff() { printf '%s' "$1" | jqt plan-diff -c --argjson prev "$2"; }
+
+test_diff_first_view_has_no_changes() {
+  local out
+  out="$(pdiff "$(plan5)" null)"
+  assert_eq "1 true 0" "$(printf '%s' "$out" | jq -r '"\(.revision) \(.first) \(.added + .removed + .changed | length)"')"
+  assert_eq "5" "$(printf '%s' "$out" | jq -r '.snapshot.tasks | length')"
+  assert_json_eq '{"id":"T2","title":"Comment form","points":2,"depends_on":["T1"],"assignees":["an-nguyen"],"sprint":"current"}' \
+    "$(printf '%s' "$out" | jq -c '.snapshot.tasks[1]')"
+}
+
+test_diff_assignee_changed_and_task_removed() {
+  local snap now out
+  snap="$(pdiff "$(plan5 | jq -c '.features[0].tasks += [{"id":"T7","title":"Weekly email","points":1}] | .features[0].tasks[3].assignees = ["an-nguyen"]')" null | jq -c .snapshot)"
+  now="$(plan5 | jq -c '.features[0].tasks[3].assignees = ["minh-ho"]')"
+  out="$(pdiff "$now" "$snap")"
+  assert_json_eq '[{"id":"T4","title":"Reply notifications","fields":[{"field":"assignees","from":["an-nguyen"],"to":["minh-ho"]}]}]' "$(printf '%s' "$out" | jq -c .changed)"
+  assert_json_eq '[{"id":"T7","title":"Weekly email"}]' "$(printf '%s' "$out" | jq -c .removed)"
+  assert_eq "2 false" "$(printf '%s' "$out" | jq -r '"\(.revision) \(.first)"')"
+}
+
+test_diff_added_points_deps_sprint() {
+  local snap out
+  snap="$(pdiff "$(plan5)" null | jq -c .snapshot)"
+  out="$(pdiff "$(plan5 | jq -c '.features[0].tasks[0].points = 5 | .features[0].tasks[4].depends_on = ["T1"] | .features[0].tasks[2].sprint = null | .features[0].tasks[1].title = "Form" | .features[0].tasks += [{"id":"T6","title":"Rate limit"}]')" "$snap")"
+  assert_json_eq '[{"id":"T6","title":"Rate limit"}]' "$(printf '%s' "$out" | jq -c .added)"
+  assert_eq "T1:points T2:title T3:sprint T5:depends_on" "$(printf '%s' "$out" | jq -r '[.changed[] | "\(.id):\(.fields | map(.field) | join(","))"] | join(" ")')"
+  assert_eq "current null" "$(printf '%s' "$out" | jq -r '.changed[] | select(.id == "T3") | "\(.fields[0].from) \(.fields[0].to)"')"
+}
+
+test_diff_unchanged_keeps_revision() {
+  local snap out
+  snap="$(pdiff "$(plan5)" null | jq -c '.snapshot | .revision = 3')"
+  out="$(pdiff "$(plan5)" "$snap")"
+  assert_eq "3 false 0" "$(printf '%s' "$out" | jq -r '"\(.revision) \(.first) \(.added + .removed + .changed | length)"')"
+}
+
+test_diff_issue_numbers_are_not_a_change() {
+  local snap
+  snap="$(pdiff "$(plan5)" null | jq -c .snapshot)"
+  assert_eq "1 0" "$(pdiff "$(plan5 | jq -c '.features[0].tasks[0].issue = 12')" "$snap" | jq -r '"\(.revision) \(.changed | length)"')"
+}
+
+test_check_twice_unchanged_then_changed() {
+  check_env
+  broken_gh
+  local dir="$T/plans/comments"
+  run_scrum plan check "$dir/plan.json" --offline
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "1" "$(jq -r .revision "$dir/.plan-snapshot.json")"
+  assert_contains "$(cat "$dir/plan.html")" 'data-part="changes"'
+  run_scrum plan check "$dir/plan.json" --offline
+  assert_eq "1" "$(jq -r .revision "$dir/.plan-snapshot.json")" "unchanged plan: same revision"
+  jq '.features[0].tasks[3].assignees = ["minh-ho"]' "$dir/plan.json" > "$T/p.json"; mv "$T/p.json" "$dir/plan.json"
+  run_scrum plan check "$dir/plan.json" --offline
+  assert_eq "2" "$(jq -r .revision "$dir/.plan-snapshot.json")"
+  assert_contains "$(cat "$dir/plan.html")" '<b>~ T4</b>'
+  assert_contains "$(cat "$dir/plan.html")" 'minh-ho'
+}
+
+# ---------- plan.html (delta work-plan "Bản xem HTML", "Trang tự chứa và an toàn", "Ngôn ngữ của bản xem HTML") ----------
+
+html_data() { # html_data PLAN LANG
+  local cfg ins
+  cfg="$(cfg5 | jq -c --arg l "$2" '.language = $l')"
+  ins="$(insights "$1" "$MS5V" "[$(s5issue 40 3 an-nguyen)]")"
+  printf '%s' "$1" | jq -L "$PLUGIN_DIR/runtime/lib/jq" --argjson cfg "$cfg" --argjson insights "$ins" \
+    --argjson diff "$(pdiff "$1" null)" --argjson actions '[{"op":"create_task","text":"create  task T1"},{"op":"link_blocked","text":"link"}]' \
+    --argjson action_errors '[]' --argjson strings "$(jq -c --arg l "$2" '.[$l]' "$PLUGIN_DIR/runtime/share/strings.json")" \
+    --arg now 2026-11-25T10:00:00Z --arg path docs/plans/comments -f "$PLUGIN_DIR/runtime/lib/jq/plan-html-data.jq"
+}
+
+test_html_data_numbers_match_the_plan() {
+  local d
+  d="$(html_data "$(plan5)" en)"
+  assert_json_eq '{"tasks":5,"points":16,"unestimated":0,"into":5,"into_points":16,"backlog":0,"waves":3}' "$(printf '%s' "$d" | jq -c .summary)"
+  assert_eq "3 0 15 19" "$(printf '%s' "$d" | jq -r '.tasks[] | select(.id == "T4") | "\(.wave) \(.feature_index)"' ) $(printf '%s' "$d" | jq -r '"\(.load.capacity) \(.load.after)"')"
+  assert_eq "1 1" "$(printf '%s' "$d" | jq -r '"\(.actions.tasks) \(.actions.link_blocked)"')"
+  assert_eq "Sprint 5" "$(printf '%s' "$d" | jq -r '.tasks[0].sprint.label')"
+  assert_eq "true 1" "$(printf '%s' "$d" | jq -r '"\(.diff.first) \(.diff.revision)"')"
+  assert_eq "Changes" "$(printf '%s' "$d" | jq -r .strings.plan_sec_changes_first)"
+}
+
+test_html_data_strings_follow_language() {
+  assert_eq "Thay đổi" "$(html_data "$(plan5)" vi | jq -r .strings.plan_sec_changes_first)"
+  assert_eq "Comment API" "$(html_data "$(plan5)" vi | jq -r '.tasks[0].title')" "plan text stays as written"
+}
+
+page_of() { html_data "$1" "$2" | jqt plan-html -r --rawfile t "$PLUGIN_DIR/runtime/share/plan.html"; }
+
+test_html_has_eight_parts_and_no_network() {
+  local page part
+  page="$(page_of "$(plan5)" en)"
+  for part in summary changes graph load tasks review actions assumptions; do
+    assert_contains "$page" "data-part=\"$part\""
+  done
+  assert_eq "8" "$(printf '%s' "$page" | grep -o 'data-part="[a-z]*"' | sort -u | wc -l | tr -d ' ')"
+  if printf '%s' "$page" | grep -Eiq '(src|href)[[:space:]]*=[[:space:]]*["'"'"']?(https?:)?//'; then _fail "a resource is loaded from the network"; fi
+  if printf '%s' "$page" | grep -Eiq '@import|url\((["'"'"'])?https?:'; then _fail "CSS loads from the network"; fi
+  assert_contains "$page" 'prefers-color-scheme: dark'
+  assert_contains "$page" 'prefers-reduced-motion: reduce'
+  assert_not_contains "$page" "__SCRUM_"
+}
+
+test_html_escapes_text_from_the_plan() {
+  local page
+  page="$(page_of "$(plan5 | jq -c '.features[0].tasks[0].title = "Fix <script>alert(1)</script> in comments" | .title = "A </script><b>x"')" en)"
+  assert_contains "$page" '<h3>Fix &lt;script&gt;alert(1)&lt;/script&gt; in comments</h3>'
+  assert_not_contains "$page" '<script>alert(1)'
+  assert_not_contains "$page" '</script><b>x'
+  # the script data has no "<": the title cannot close the data element
+  assert_eq "0" "$(printf '%s' "$page" | sed -n '/id="scrum-data"/p' | sed 's/^<script id="scrum-data" type="application\/json">//; s/<\/script>$//' | grep -c '<' || true)"
+}
+
+test_html_vietnamese_headings() {
+  local page
+  page="$(page_of "$(plan5)" vi)"
+  assert_contains "$page" 'lang="vi"'
+  assert_contains "$page" 'Thứ tự làm và chạy song song'
+  assert_contains "$page" '<h3>Comment API</h3>'
+}
+
+test_check_writes_html_next_to_plan_md() {
+  check_env
+  run_scrum plan check "$T/plans/comments/plan.json"
+  assert_status 0 "$STATUS" "$ERR"
+  [ -f "$T/plans/comments/plan.html" ] || _fail "plan.html not written"
+  assert_contains "$(cat "$T/plans/comments/plan.html")" 'People and capacity of Sprint 5'
+  assert_contains "$(cat "$T/plans/comments/plan.html")" 'When you approve, GitHub will have'
+}
+
+test_check_offline_html_says_what_needs_github() {
+  check_env
+  broken_gh
+  run_scrum plan check "$T/plans/comments/plan.json" --offline
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$(cat "$T/plans/comments/plan.html")" 'Load and capacity need GitHub'
+  assert_contains "$(cat "$T/plans/comments/plan.html")" 'What apply would do needs GitHub'
+  assert_not_contains "$(cat "$T/plans/comments/plan.html")" 'class="cap-track"'
+}
+
+test_render_writes_html() {
+  setup_repo 'version: 1'
+  broken_gh
+  plan3 > "$T/plan.json"
+  run_scrum plan render "$T/plan.json" --offline
+  assert_status 0 "$STATUS" "$ERR"
+  [ -f "$T/plan.html" ] || _fail "plan.html not written"
+  assert_contains "$OUT" "plan.html"
+}
+
+test_apply_html_shows_issue_numbers() {
+  apply_env
+  plan3 > "$T/plan.json"
+  run_scrum plan apply "$T/plan.json"
+  assert_status 0 "$STATUS" "$ERR"
+  [ -f "$T/plan.html" ] || _fail "plan.html not written"
+  assert_contains "$(cat "$T/plan.html")" '<span class="id">T1 · F1</span><span class="issue">#11</span>'
+  assert_contains "$(cat "$T/plan.html")" 'Issues created'
+}
+
+# ---------- .gitignore of the plan folder (delta work-plan "Bỏ qua file sinh ra trong thư mục plan") ----------
+
+test_init_writes_gitignore() {
+  setup_repo 'version: 1'
+  broken_gh
+  run_scrum plan init "Blog post comments"
+  assert_status 0 "$STATUS" "$ERR"
+  local g="$SCRUM_REPO_DIR/docs/plans/blog-post-comments/.gitignore"
+  [ -f "$g" ] || _fail "no .gitignore"
+  grep -qxF plan.html "$g" || _fail "plan.html not ignored"
+  grep -qxF .plan-snapshot.json "$g" || _fail "snapshot not ignored"
+  ! grep -qE '^plan\.(json|md)$' "$g" || _fail "plan.json or plan.md ignored"
+}
+
+test_init_keeps_existing_gitignore() {
+  setup_repo 'version: 1'
+  broken_gh
+  mkdir -p "$SCRUM_REPO_DIR/docs/plans/blog-post-comments"
+  printf 'mine\n' > "$SCRUM_REPO_DIR/docs/plans/blog-post-comments/.gitignore"
+  run_scrum plan init "Blog post comments"
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "mine" "$(cat "$SCRUM_REPO_DIR/docs/plans/blog-post-comments/.gitignore")"
+}
+
+test_check_reminds_an_old_folder() {
+  check_env
+  broken_gh
+  run_scrum plan check "$T/plans/comments/plan.json" --offline
+  assert_contains "$OUT" "should ignore"
+  [ ! -e "$T/plans/comments/.gitignore" ] || _fail "check wrote a .gitignore"
+  printf 'plan.html\n.plan-snapshot.json\n' > "$T/plans/comments/.gitignore"
+  run_scrum plan check "$T/plans/comments/plan.json" --offline
+  assert_not_contains "$OUT" "should ignore"
+}

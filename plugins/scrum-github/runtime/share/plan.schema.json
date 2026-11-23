@@ -36,7 +36,20 @@
       }
     },
     "assumptions": { "type": "array", "items": { "type": "string" } },
-    "out_of_scope": { "type": "array", "items": { "type": "string" } }
+    "out_of_scope": { "type": "array", "items": { "type": "string" } },
+    "review": {
+      "type": "array",
+      "description": "Optional. Findings of the plan-critic review, written by /scrum-github:plan after the review, shown in plan.html. `plan apply` ignores it.",
+      "items": {
+        "type": "object",
+        "required": ["kind", "text", "status"],
+        "properties": {
+          "kind": { "type": "string", "minLength": 1, "description": "missing, out_of_scope, too_large, dependency, untestable or fragile" },
+          "text": { "type": "string", "minLength": 1 },
+          "status": { "enum": ["fixed", "kept"], "description": "fixed: the plan was changed; kept: left as it is, with the reason in text" }
+        }
+      }
+    }
   },
   "$defs": {
     "id": {

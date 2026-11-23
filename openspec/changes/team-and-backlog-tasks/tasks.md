@@ -31,12 +31,12 @@
 
 ## 6. Bản xem HTML (design 8, 9, 10; spec work-plan "Bản xem HTML", "Trang tự chứa và an toàn", "Ngôn ngữ của bản xem HTML", "Thay đổi so với lần xem trước", "Bỏ qua file sinh ra trong thư mục plan")
 
-- [ ] 6.1 Thêm trường tuỳ chọn `review` vào `runtime/share/plan.schema.json` và `plan-validate.jq`; `plan apply` bỏ qua trường này. Kiểm tra: test plan có `review` vẫn hợp lệ và áp được; `bash tests/run.sh plan` xanh
-- [ ] 6.2 Tạo `plan-diff.jq` và ghi đọc `.plan-snapshot.json`: thêm, bỏ, đổi tiêu đề, điểm, phụ thuộc, người làm, sprint; số lần sửa; lần đầu không có thay đổi; ghi số issue không tính là sửa. Kiểm tra: test jq và test lệnh trong `tests/test_plan.sh` xanh
-- [ ] 6.3 Tạo `plan-html-data.jq` và chuỗi mới (en, vi) trong `runtime/share/strings.json`. Kiểm tra: test jq cho dữ liệu có đợt, tải, thao tác, thay đổi, chuỗi theo `language`; `bash tests/run.sh plan` xanh
-- [ ] 6.4 Tạo template `runtime/share/plan.html` (8 phần, phần chữ render sẵn, sơ đồ đợt và tải vẽ bằng JS với `textContent`, chuyển động CSS tắt khi giảm chuyển động, sáng và tối) theo bản mẫu đã duyệt. Kiểm tra: test trong `test_plan.sh` khẳng định file sinh ra có đủ 8 phần, không có `http://` hay `https://` trong `src` hoặc `href` của tài nguyên, và tiêu đề task chứa `<script>` bị thoát
-- [ ] 6.5 `plan check`, `plan render` và `plan apply` ghi `plan.html` cạnh `plan.md`; bản offline ghi chú phần cần mạng. Kiểm tra: test cho cả ba lệnh và cho `--offline`; `bash tests/run.sh plan` xanh
-- [ ] 6.6 `plan init` ghi `.gitignore` (`plan.html`, `.plan-snapshot.json`) khi chưa có; `plan check` nhắc khi thư mục cũ thiếu. Kiểm tra: test thư mục mới, `.gitignore` đã có không đổi; `bash tests/run.sh plan` xanh
+- [x] 6.1 Thêm trường tuỳ chọn `review` vào `runtime/share/plan.schema.json` và `plan-validate.jq`; `plan apply` bỏ qua trường này. Kiểm tra: test plan có `review` vẫn hợp lệ và áp được; `bash tests/run.sh plan` xanh
+- [x] 6.2 Tạo `plan-diff.jq` và ghi đọc `.plan-snapshot.json`: thêm, bỏ, đổi tiêu đề, điểm, phụ thuộc, người làm, sprint; số lần sửa; lần đầu không có thay đổi; ghi số issue không tính là sửa. Kiểm tra: test jq và test lệnh trong `tests/test_plan.sh` xanh
+- [x] 6.3 Tạo `plan-html-data.jq` và chuỗi mới (en, vi) trong `runtime/share/strings.json`. Kiểm tra: test jq cho dữ liệu có đợt, tải, thao tác, thay đổi, chuỗi theo `language`; `bash tests/run.sh plan` xanh
+- [x] 6.4 Tạo template `runtime/share/plan.html` (8 phần, phần chữ render sẵn, sơ đồ đợt và tải vẽ bằng JS với `textContent`, chuyển động CSS tắt khi giảm chuyển động, sáng và tối) theo bản mẫu đã duyệt. Kiểm tra: test trong `test_plan.sh` khẳng định file sinh ra có đủ 8 phần, không có `http://` hay `https://` trong `src` hoặc `href` của tài nguyên, và tiêu đề task chứa `<script>` bị thoát
+- [x] 6.5 `plan check`, `plan render` và `plan apply` ghi `plan.html` cạnh `plan.md`; bản offline ghi chú phần cần mạng. Kiểm tra: test cho cả ba lệnh và cho `--offline`; `bash tests/run.sh plan` xanh
+- [x] 6.6 `plan init` ghi `.gitignore` (`plan.html`, `.plan-snapshot.json`) khi chưa có; `plan check` nhắc khi thư mục cũ thiếu. Kiểm tra: test thư mục mới, `.gitignore` đã có không đổi; `bash tests/run.sh plan` xanh
 
 ## 7. Skill plan một lần duyệt (design 7, 11; spec task-management "Đề xuất người làm và sprint trong plan", "Một lần duyệt plan")
 
