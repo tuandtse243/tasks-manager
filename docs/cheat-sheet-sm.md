@@ -68,7 +68,11 @@ same section.
 |---|---|---|
 | Burndown and velocity report | `/scrum-github:sprint-report` | `/scrum-github:sprint-report` |
 | Close the sprint, record velocity, carry over unfinished tasks | `/scrum-github:sprint-close` | `/scrum-github:sprint-close` |
+| Publish a version (tag and GitHub Release) from the Done tasks | `/scrum-github:release` | `/scrum-github:release --sprint "Sprint 5"` |
 
-Closing the sprint posts a summary on the issue `Sprint N digest` for the review.
+Closing the sprint posts a summary on the issue `Sprint N digest` for the review, and suggests a
+release when the sprint had Done tasks. `release` suggests the version (major for a task labelled
+`breaking`, minor when a task is not a bug, patch for bugs only), writes the notes from the tasks
+and their pull requests, and creates the tag and the release only after you agree.
 
 A command fails on login or network: `/scrum-github:doctor`.

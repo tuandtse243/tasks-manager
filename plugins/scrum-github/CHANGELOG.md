@@ -4,6 +4,37 @@ All notable changes to the `scrum-github` plugin. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the plugin uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0] - 2026-11-23
+
+### Added
+
+- **Releasing a version.** The skill `/scrum-github:release` and the command
+  `scrum release [VERSION] [--since TAG] [--sprint S…] [--draft] [--notes-file FILE] [--json] [--yes]`
+  publish a version from the Done tasks. The command finds the latest version tag (`v1.2.3` or
+  `1.2.3`) on the default branch, gathers the tasks closed as completed since then (or those of
+  the sprints named with `--sprint`) with the merged pull requests that closed them, suggests the
+  next version (major for a task labelled `breaking`, minor for any task that is not a bug, patch
+  otherwise) and writes release notes: breaking changes, features grouped by parent feature, bug
+  fixes, each line with the task and pull request numbers, in the configured `language`. Without
+  `--yes` it only prints them. With `--yes` it creates an annotated tag on the head commit of the
+  default branch on GitHub and a GitHub Release (a draft with `--draft`). The skill shows the
+  preview, explains the version, lets you change the version or edit the notes, and publishes
+  only after you agree.
+- The configuration block `release`: `tag_prefix` (default `v`, may be empty), `breaking_label`
+  (default `breaking`) and `first_version` (default `0.1.0`, the first release when there is no
+  version tag yet).
+- `scrum sprint close` suggests `/scrum-github:release --sprint "<sprint>"` after closing a
+  sprint with Done tasks, and `scrum next` suggests `/scrum-github:release` when the last closed
+  sprint has Done tasks closed after the latest version tag.
+
+### Notes
+
+- Creating the tag needs `contents: write` on the token that runs the command; a 403 points to
+  `/scrum-github:doctor`. A run that created the tag but not the release can be run again: it
+  creates only the release.
+- The command does not edit version files or `CHANGELOG.md` in the repository, does not deploy and
+  does not publish packages.
+
 ## [0.11.0] - 2026-11-23
 
 ### Added

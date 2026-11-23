@@ -22,7 +22,7 @@ Paths are relative to `plugins/scrum-github/`. Run tests with `bash tests/run.sh
 
 ## 5. Version and docs
 
-- [ ] 5.1 Version 0.12.0, CHANGELOG, plugin README, `docs/adoption-guide.md` (command table and a flow for releasing), cheat sheets where relevant. Verify: `bash tests/run.sh manifest`, `init` and `docs` green
+- [x] 5.1 Version 0.12.0, CHANGELOG, plugin README, `docs/adoption-guide.md` (command table and a flow for releasing), cheat sheets where relevant. Verify: `bash tests/run.sh manifest`, `init` and `docs` green
 
 ## 6. Integration check
 

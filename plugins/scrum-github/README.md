@@ -21,6 +21,7 @@ This plugin automates the six steps of the guide "Quản lý dự án theo Scrum
 | 4. Link a PR | Write `Solve #1` | `task-pr` writes the description with `Closes #`; PR template; a check that fails without a link |
 | 5. Sprint review | Change labels, close issues | Status follows PR/issue events; `sprint-close` records velocity and carries over unfinished tasks |
 | 6. Track progress | Filter by label | `sprint-status`, `sprint-report` (HTML burndown), daily digest |
+| (after the guide) Release | Tag and write release notes by hand | `release` suggests the version and writes the notes from the Done tasks; creates the tag and the GitHub Release after you agree |
 
 > The guide writes `Solve #1`. GitHub does not treat "Solve" as a closing keyword, so the
 > issue never closes. This plugin uses `Closes #1` and its PR check points out `Solve`.
@@ -96,7 +97,8 @@ the full path, and the skills now use the full path from the first call). Elsewh
 | `/scrum-github:task-pr` | `gh pr create` / `gh pr edit`, after you approve | Write the pull request description for the task of the current branch |
 | `/scrum-github:sprint-status` | `scrum status [SPRINT]` | Table by person and status with points; work and review minutes left when tasks have time estimates |
 | `/scrum-github:sprint-report` | `scrum report [SPRINT] [--out FILE]` | Self-contained HTML burndown and velocity |
-| `/scrum-github:sprint-close` | `scrum sprint close [SPRINT] [--yes] [--create-next]` | Record velocity, carry over open tasks, close the milestone |
+| `/scrum-github:sprint-close` | `scrum sprint close [SPRINT] [--yes] [--create-next]` | Record velocity, carry over open tasks, close the milestone; suggests a release when the sprint had Done tasks |
+| `/scrum-github:release` | `scrum release [VERSION] [--since TAG] [--sprint S]… [--draft] [--notes-file FILE] [--json] [--yes]` | Suggest the next version from the Done tasks since the last version tag (or of the sprints), write the release notes, and with `--yes` create the tag and the GitHub Release. See "Releasing a version" |
 | `/scrum-github:project-setup` | `bash wizards/project-board.sh`, then `scrum project init` | Turn on the project board: a wizard for the steps only you can do |
 
 Plan files have their own commands too (all but `check` and `apply` work offline):
@@ -490,6 +492,48 @@ continues the existing plan and keeps its ids and issue numbers.
 
 Deleting an `issue` number or changing an `id` and applying again creates a duplicate: the CLI
 cannot detect it, so read the `--dry-run` output first.
+
+## Releasing a version
+
+`/scrum-github:release` (or `scrum release`) publishes a version of the target repository from the
+tasks that are done. Without `--yes` it only prints; with `--yes` it writes to GitHub.
+
+1. **Previous version.** The tag `<release.tag_prefix>X.Y.Z` (or `X.Y.Z`) with the highest version
+   that is on the default branch (GitHub's compare says `ahead` or `identical`; at most 20 tags are
+   checked, newest first; a tag on another branch is skipped). Tags read through the API, so a
+   clone without tags works too. `--since TAG` names it instead.
+2. **Tasks.** The tasks closed as completed after that tag's commit date, or with `--sprint S`
+   (repeatable) the Done tasks of those sprints. Not planned, epics, features, meta issues and
+   pull requests are left out. Each task comes with the merged pull requests that closed it (from
+   its timeline: a merged pull request whose body closes it), read for at most 100 tasks; a task
+   past that, or whose timeline cannot be read, has no pull request number.
+3. **Version.** Without `VERSION`: major when a task has the `release.breaking_label` label,
+   otherwise minor when a task has no `labels.bug` label, otherwise patch (labels compared without
+   case); `release.first_version` when there is no version tag yet. A `VERSION` you give (`1.5.0`
+   or `v1.5.0`) must be `X.Y.Z` and greater than the previous version, otherwise the command stops
+   before writing.
+4. **Notes.** Markdown in the `language` of the configuration: breaking changes, features (tasks
+   without a parent first, then one heading per parent feature, from GitHub's sub-issue link or
+   "Part of #N" in the body), bug fixes; empty groups are left out. Each line is
+   `- Title (#12, PR #40)`. A link comparing the previous and the new tag ends the notes.
+   `--notes-file FILE` replaces them with your own text.
+5. **Publish** (`--yes`). An annotated tag "Release vX.Y.Z" on the head commit of the default branch
+   on GitHub (`git/tags`, then `git/refs`), then a GitHub Release with the notes (a draft with
+   `--draft`). If the tag already exists with a release, the command stops. If the tag exists
+   without a release (a run that failed after creating it), the command keeps the tag and creates
+   only the release; run the same command again.
+
+`--json` prints `{previous, suggested, version, tag, bump, reasons, tasks, notes, draft, branch,
+tag_exists, nothing}`; `bump` is `first`, `major`, `minor`, `patch` or `given`, and `reasons` holds
+the task numbers that are breaking, features and bugs. Creating a tag needs `contents: write` on
+the token; a 403 points to `/scrum-github:doctor`. The command does not edit version files or
+`CHANGELOG.md`, deploy, publish packages or sign tags.
+
+After closing a sprint with Done tasks, `scrum sprint close` suggests
+`/scrum-github:release --sprint "<sprint>"`. `scrum next` suggests `/scrum-github:release` when
+the most recently closed sprint has Done tasks closed after the latest version tag: before
+creating a new sprint when none is open, otherwise after your own task in progress. It reads the
+tags only when no step above it applies, and skips the step when they cannot be read.
 
 ## Project board (GitHub Projects)
 
