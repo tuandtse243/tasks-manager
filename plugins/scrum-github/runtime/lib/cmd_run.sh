@@ -425,3 +425,75 @@ cmd_run_status() {
          + (if ($w.to_merge | length) > 0 then "; merge \($w.to_merge | map("#\(.)") | join(", "))" else "" end)
      end)'
 }
+
+# ---------- finish ----------
+
+# scrum run finish [--wave W] [--run ID]  (design 7; spec "Một PR gói review", "Một PR mỗi đợt")
+# Pushes the integration branch only (never the branch of a task) and opens the pull request.
+# With --wave W the pull request holds the tasks of wave W: the integration branch at this point
+# is pushed as <branch>-wave-W, based on the branch of the pull request of the wave before.
+cmd_run_finish() {
+  local id="" wave="" repo file st dir int waves pending merged n issue issues='{}' after=null base head pr body_file url number
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --wave) wave="${2:-}"; shift ;;
+      --run) id="${2:-}"; shift ;;
+      *) die "unknown option for run finish: $1" ;;
+    esac
+    shift
+  done
+  case "$wave" in "") ;; *[!0-9]*|0) die "--wave must be a wave number (got \"$wave\")" ;; esac
+  require_tools
+  load_config
+  id="$(run_resolve "$id")"
+  file="$(run_file "$id")"
+  st="$(cat "$file")"
+  int="$(printf '%s' "$st" | jq -r .branch)"
+  waves="$(printf '%s' "$st" | jq '.waves | length')"
+  [ -z "$wave" ] || [ "$wave" -le "$waves" ] || die "run $id has $waves wave(s), not $wave"
+  # Every task in the pull request's scope must be settled (merged, failed or left out) first.
+  pending="$(printf '%s' "$st" | jq -r --arg w "$wave" '[.tasks[] | select($w == "" or .wave == ($w | tonumber))
+    | select(.state != "merged" and .state != "failed" and .state != "excluded") | "#\(.number) (\(.state))"] | join(", ")')"
+  [ -z "$pending" ] || die "not every task is settled: $pending. Merge each task that is done (scrum run merge N), or record it as failed, before finishing"
+  merged="$(printf '%s' "$st" | jq -r --arg w "$wave" '[.tasks[] | select(.state == "merged" and ($w == "" or .wave == ($w | tonumber))) | .number] | sort | .[]')"
+  if [ -z "$merged" ]; then
+    info "No task of run $id${wave:+ in wave $wave} is merged, so nothing is pushed and no pull request is opened."
+    if [ -z "$wave" ] || [ "$wave" -ge "$waves" ]; then run_apply "$id" finish --arg now "$(now_iso)"; fi
+    return 0
+  fi
+  repo="$(printf '%s' "$st" | jq -r .repo)"
+  for n in $merged; do
+    issue="$(gh_get "repos/$repo/issues/$n" 2>/dev/null)" || issue=""
+    [ -n "$issue" ] || { warn "cannot read #$n; its acceptance criteria are left out of the description"; continue; }
+    issues="$(printf '%s' "$issues" | jq -c --arg n "$n" --argjson i "$issue" '.[$n] = $i')"
+  done
+
+  base="$(printf '%s' "$st" | jq -r .base)"
+  head="$int"
+  if [ -n "$wave" ]; then
+    head="$int-wave-$wave"
+    after="$(printf '%s' "$st" | jq -c --argjson w "$wave" '[.prs[] | select(.wave != null and .wave < $w)] | sort_by(.wave) | .[-1] // null')"
+    [ "$after" = null ] || base="$(printf '%s' "$after" | jq -r .head)"
+  fi
+  dir="$(repo_dir)"
+  if [ "$head" != "$int" ]; then git -C "$dir" branch -f "$head" "$int" >/dev/null || die "cannot create $head"; fi
+  pr="$(jqlib run-pr-body -n --argjson state "$st" --argjson issues "$issues" --argjson cfg "$CONFIG_JSON" \
+    --argjson strings "$(strings_json)" --argjson wave "${wave:-null}" --argjson after "$after")"
+  body_file="$(mktemp "${TMPDIR:-/tmp}/scrum-pr.XXXXXX")"
+  printf '%s' "$pr" | jq -r .body > "$body_file"
+
+  # Only the integration branch goes to the remote (spec "Không push nhánh task").
+  git -C "$dir" push -q origin "refs/heads/$head:refs/heads/$head" || { rm -f "$body_file"; die "cannot push $head to origin"; }
+  info "Pushed $head to origin."
+  if ! url="$(ghx pr create --repo "$repo" --base "$base" --head "$head" --title "$(printf '%s' "$pr" | jq -r .title)" --body-file "$body_file")"; then
+    die "pushed $head, but could not open the pull request. The description is in $body_file; open it with: gh pr create --base $base --head $head --body-file $body_file"
+  fi
+  rm -f "$body_file"
+  url="$(printf '%s' "$url" | tail -1)"
+  number="${url##*/}"
+  case "$number" in ""|*[!0-9]*) number=null ;; esac
+  run_apply "$id" pr --arg wave "$wave" --arg now "$(now_iso)" \
+    --arg pr "$(jq -nc --argjson n "$number" --arg u "$url" --arg b "$base" --arg h "$head" '{number: $n, url: $u, base: $b, head: $h}')"
+  info "Opened the pull request${wave:+ of wave $wave} into $base: $url"
+  if [ "$after" != null ]; then info "It is based on #$(printf '%s' "$after" | jq -r .number) (wave $(printf '%s' "$after" | jq -r .wave)), which must be merged first."; fi
+}

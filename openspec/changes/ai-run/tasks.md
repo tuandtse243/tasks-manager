@@ -23,8 +23,8 @@
 
 ## 4. Finish và PR (design 7; spec ai-run "Một PR gói review", "Một PR mỗi đợt")
 
-- [ ] 4.1 `run-pr-body.jq`: mục cho từng task (acceptance, ước lượng so với thực tế, test tay, chỗ cần nhìn kỹ, `Closes`), task lỗi và bị loại; test jq. Kiểm tra: `bash tests/run.sh run` xanh
-- [ ] 4.2 `scrum run finish [--wave W]`: push nhánh tích hợp, `gh pr create --body-file`, không có task merge thì không push; `--wave` nhắm vào nhánh của PR trước. Test với `fake-gh` và remote git tạm (bare repo). Kiểm tra: chỉ nhánh tích hợp có trên remote
+- [x] 4.1 `run-pr-body.jq`: mục cho từng task (acceptance, ước lượng so với thực tế, test tay, chỗ cần nhìn kỹ, `Closes`), task lỗi và bị loại; test jq. Kiểm tra: `bash tests/run.sh run` xanh
+- [x] 4.2 `scrum run finish [--wave W]`: push nhánh tích hợp, `gh pr create --body-file`, không có task merge thì không push; `--wave` nhắm vào nhánh của PR trước. Test với `fake-gh` và remote git tạm (bare repo). Kiểm tra: chỉ nhánh tích hợp có trên remote
 
 ## 5. Agent và skill (design 2, 8; spec ai-run "Mỗi task một worktree local", "Chạy tiếp sau khi dừng", "Xác nhận trước khi chạy")
 

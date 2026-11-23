@@ -494,3 +494,171 @@ test_cmd_run_status() {
   assert_status 1 "$STATUS"
   assert_contains "$ERR" "there is no run nope"
 }
+
+# ---------- run-pr-body.jq ----------
+
+pr_body() { # pr_body STATE ISSUES [WAVE] [AFTER] [LANG]
+  jq -n -L "$PLUGIN_DIR/runtime/lib/jq" --argjson state "$1" --argjson issues "$2" --argjson cfg "$(defaults)" \
+    --argjson strings "$(jq -c --arg l "${5:-en}" '.[$l]' "$PLUGIN_DIR/runtime/share/strings.json")" \
+    --argjson wave "${3:-null}" --argjson after "${4:-null}" -f "$PLUGIN_DIR/runtime/lib/jq/run-pr-body.jq"
+}
+# 102 and 107 merged (wave 1), 103 failed (wave 2), 110 left out at the start.
+pr_state() {
+  new_state \
+    | st started --arg n 102 --arg now 2026-11-23T10:00:00Z | jq .state \
+    | st "done" --arg n 102 --arg now 2026-11-23T10:41:00Z --arg branch a --argjson notes '{"manual_test":["open /posts","add a comment"],"look_closely":"the migration"}' | jq .state \
+    | st merged --arg n 102 --arg now x --arg sha s1 | jq .state \
+    | st "done" --arg n 107 --arg now x --arg branch b | jq .state \
+    | st merged --arg n 107 --arg now x --arg sha s2 | jq .state \
+    | st failed --arg n 103 --arg now x --arg reason "tests fail" | jq .state \
+    | jq '.excluded = [{"number":110,"title":"Task 110","reason":"has no ai-ready label"}]'
+}
+pr_issues() {
+  jq -n --argjson a "$(ri 102 New)" --argjson b "$(ri 107 New | jq '.body = "Plain text.\n\n### Subtasks\n\n- [ ] not acceptance"')" '{"102": $a, "107": $b}'
+}
+
+# spec "Một PR gói review: PR cho hai task"
+test_pr_body_two_tasks() {
+  local out body
+  out="$(pr_body "$(pr_state)" "$(pr_issues)")"
+  body="$(printf '%s' "$out" | jq -r .body)"
+  assert_eq "Sprint 5: 2 tasks by AI (#102, #107)" "$(printf '%s' "$out" | jq -r .title)"
+  assert_eq "[102,107]" "$(printf '%s' "$out" | jq -c .numbers)"
+  assert_contains "$body" "## #102 Task 102
+
+Closes #102
+
+**Acceptance criteria**
+
+- [ ] Works for 102
+- [ ] Has tests
+
+**Time**: estimate AI ~20m · Review ~10m; actual 41m
+
+**How to test by hand**
+
+- open /posts
+- add a comment
+
+**Look closely at**
+
+the migration"
+  assert_contains "$body" "## #107 Task 107
+
+Closes #107"
+  assert_contains "$body" "The issue has no acceptance criteria"
+  assert_not_contains "$body" "not acceptance"
+  assert_contains "$body" "estimate no estimate; actual unknown"
+  assert_contains "$body" "## Not in this pull request
+
+- #103 Task 103: the agent could not finish it (tests fail); back in New
+- #104 Task 104: left out (blocked by #103, which was not finished)
+- #110 Task 110: left out (has no ai-ready label)"
+  assert_not_contains "$body" "Closes #103"
+  assert_contains "$body" "Time of the merged tasks: estimate 20m, actual 41m."
+}
+
+test_pr_body_in_vietnamese() {
+  local body
+  body="$(pr_body "$(pr_state)" "$(pr_issues)" null null vi | jq -r .body)"
+  assert_contains "$body" "**Tiêu chí nghiệm thu**"
+  assert_contains "$body" "Closes #102"
+}
+
+# spec "Một PR mỗi đợt": the second names the first
+test_pr_body_per_wave() {
+  local out
+  out="$(pr_body "$(pr_state)" "$(pr_issues)" 2 '{"number":200,"wave":1}')"
+  assert_eq "[]" "$(printf '%s' "$out" | jq -c .numbers)"
+  assert_contains "$(printf '%s' "$out" | jq -r .body)" "**Merge #200 first:** this pull request is based on its branch (wave 1)."
+  assert_not_contains "$(printf '%s' "$out" | jq -r .body)" "#110"
+  assert_eq "Sprint 5, wave 1: 2 tasks by AI (#102, #107)" "$(pr_body "$(pr_state)" "$(pr_issues)" 1 | jq -r .title)"
+}
+
+# ---------- scrum run finish ----------
+
+finish_env() { # a run of #102 and #107 (wave 1) and #103 (wave 2)
+  git_env
+  # gh with the --body-file content logged as "BODY ..." (the runtime removes the file)
+  cat > "$T/gh-body" <<'GH'
+#!/usr/bin/env bash
+prev=""
+for a in "$@"; do
+  if [ "$prev" = "--body-file" ]; then printf 'BODY %s\n' "$(tr '\n' ' ' < "$a")" >> "$FAKE_GH_LOG"; fi
+  prev="$a"
+done
+exec "$TESTS_DIR/fake-gh" "$@"
+GH
+  chmod +x "$T/gh-body"
+  export SCRUM_GH="$T/gh-body"
+  route_json 'pr create*' 'https://github.com/acme/blog/pull/200'
+  run_scrum run start
+  agent_work 102 a.txt "from 102"
+  agent_work 107 b.txt "from 107"
+}
+
+# spec "Một PR gói review: PR cho hai task" and "Mỗi task một worktree local: Không push nhánh task"
+test_cmd_run_finish_one_pull_request() {
+  finish_env
+  run_scrum run record 102 --done --branch agent-102
+  run_scrum run record 107 --done --branch agent-107
+  run_scrum run merge 102
+  run_scrum run merge 107
+  run_scrum run finish
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "not every task is settled: #103 (pending)"
+  run_scrum run record 103 --failed --reason "no time"
+  : > "$FAKE_GH_LOG"
+  run_scrum run finish
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "main
+$INT" "$(git --git-dir="$T/remote.git" for-each-ref --format='%(refname:short)' refs/heads)"
+  assert_eq "$(git -C "$SCRUM_REPO_DIR" rev-parse "$INT")" "$(git --git-dir="$T/remote.git" rev-parse "$INT")"
+  assert_contains "$(gh_calls)" "pr create --repo acme/blog --base main --head $INT --title Sprint 5: 2 tasks by AI (#102, #107) --body-file"
+  assert_contains "$OUT" "Opened the pull request into main: https://github.com/acme/blog/pull/200"
+  assert_eq '200 main' "$(jq -r '.prs[0] | "\(.number) \(.base)"' "$(state_file)")"
+  assert_eq "false" "$(jq '.finished_at == null' "$(state_file)")"
+  run_scrum run status
+  assert_contains "$OUT" "(finished)"
+}
+
+# spec "Một PR gói review: Không có gì để mở PR"
+test_cmd_run_finish_nothing_merged() {
+  finish_env
+  run_scrum run record 102 --failed --reason "tests fail"
+  run_scrum run record 107 --failed --reason "tests fail"
+  : > "$FAKE_GH_LOG"
+  run_scrum run finish
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "No task of run $RUN_ID is merged, so nothing is pushed and no pull request is opened."
+  assert_eq "main" "$(git --git-dir="$T/remote.git" for-each-ref --format='%(refname:short)' refs/heads)"
+  assert_not_contains "$(gh_calls)" "pr create"
+  assert_eq "false" "$(jq '.finished_at == null' "$(state_file)")"
+}
+
+# spec "Một PR mỗi đợt: Hai đợt"
+test_cmd_run_finish_per_wave() {
+  finish_env
+  printf 'https://github.com/acme/blog/pull/201' > "$FAKE_GH_DIR/r_wave2.json"
+  route_first 'pr create*--head run/sprint-5-tuandt-wave-2*' r_wave2.json
+  run_scrum run record 102 --done --branch agent-102
+  run_scrum run record 107 --done --branch agent-107
+  run_scrum run merge 102
+  run_scrum run merge 107
+  run_scrum run finish --wave 1
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$(gh_calls)" "pr create --repo acme/blog --base main --head $INT-wave-1"
+  assert_eq "true" "$(jq '.finished_at == null' "$(state_file)")" "one wave to go"
+  agent_work 103 c.txt "from 103"
+  run_scrum run record 103 --done --branch agent-103
+  run_scrum run merge 103
+  run_scrum run finish --wave 2
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$(gh_calls)" "pr create --repo acme/blog --base $INT-wave-1 --head $INT-wave-2"
+  assert_contains "$OUT" "It is based on #200 (wave 1), which must be merged first."
+  assert_contains "$(gh_calls)" "Merge #200 first"
+  assert_eq "main
+$INT-wave-1
+$INT-wave-2" "$(git --git-dir="$T/remote.git" for-each-ref --format='%(refname:short)' refs/heads)"
+  assert_eq "false" "$(jq '.finished_at == null' "$(state_file)")"
+}
