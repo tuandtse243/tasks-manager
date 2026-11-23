@@ -32,6 +32,9 @@ Run it from the root of the target repository. It only reads from GitHub.
 5. For a task to start, give the command `/scrum-github:task-start N` and ask whether to run it.
    Run it only after the user agrees; do not start, assign or move anything on your own. For a
    task to continue, just name it (it is already started).
+6. When the output says AI agents can work some of the tasks (New tasks of the open sprint
+   labelled `ai-ready`), say so and offer `/scrum-github:run`: it shows the run plan first and
+   asks before anything starts. Run it only after the user agrees.
 
 "blocked-by not checked" means the task is past the first 50 read, or GitHub did not return its
 blockers; it does not mean the task is free, so it is never suggested as next.

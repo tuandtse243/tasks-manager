@@ -28,9 +28,9 @@
 
 ## 5. Agent và skill (design 2, 8; spec ai-run "Mỗi task một worktree local", "Chạy tiếp sau khi dừng", "Xác nhận trước khi chạy")
 
-- [ ] 5.1 `agents/implementer.md` (đầu vào, quy tắc không push và không làm ngoài phạm vi, đầu ra JSON). Kiểm tra: `claude plugin validate plugins/scrum-github` đạt hoặc ghi lý do môi trường
-- [ ] 5.2 `skills/run/SKILL.md`: dry-run, xác nhận kèm cảnh báo chạy mã, start, vòng đợt (checkout nhánh tích hợp, tối đa K agent `isolation: worktree`, record, merge, test, hỏi khi conflict hoặc test đỏ), finish, chạy tiếp, `--pr-per-wave`. Kiểm tra: test skill trong `test_cli.sh`; đọc lại skill thấy đủ các bước của spec
-- [ ] 5.3 `my-tasks` và `next` gợi ý `/scrum-github:run` khi có task `ai-ready`; test `next-step.jq`. Kiểm tra: `bash tests/run.sh next` xanh
+- [x] 5.1 `agents/implementer.md` (đầu vào, quy tắc không push và không làm ngoài phạm vi, đầu ra JSON). Kiểm tra: `claude plugin validate plugins/scrum-github` đạt hoặc ghi lý do môi trường
+- [x] 5.2 `skills/run/SKILL.md`: dry-run, xác nhận kèm cảnh báo chạy mã, start, vòng đợt (checkout nhánh tích hợp, tối đa K agent `isolation: worktree`, record, merge, test, hỏi khi conflict hoặc test đỏ), finish, chạy tiếp, `--pr-per-wave`. Kiểm tra: test skill trong `test_cli.sh`; đọc lại skill thấy đủ các bước của spec
+- [x] 5.3 `my-tasks` và `next` gợi ý `/scrum-github:run` khi có task `ai-ready`; test `next-step.jq`. Kiểm tra: `bash tests/run.sh next` xanh
 
 ## 6. Phiên bản và tài liệu
 

@@ -27,6 +27,7 @@ else
       | [$t[] | select(._role == "in_progress" and (._who | length) == 0)] as $orphans
       | [$t[] | select(._role == "new")] as $new
       | ([$new[] | select(._who | index($me))] + [$new[] | select((._who | length) == 0)]) as $pickable
+      | [$new[] | select(._who | index($me)) | select(has_label($cfg.labels.ai_ready // ""))] as $ai_ready
       | if ($t | length) == 0 and $backlog_count > 0 then
           step("fill"; "\($s.title) has no tasks yet, and \($backlog_count) task\(if $backlog_count == 1 then " waits" else "s wait" end) in the backlog. Choose what fits its capacity.";
                "/scrum-github:sprint-fill"; [])
@@ -39,6 +40,9 @@ else
         elif ($orphans | length) > 0 then
           step("assign"; "\($orphans | refs) \(if ($orphans | length) == 1 then "is" else "are" end) In progress but assigned to nobody.";
                "gh issue edit \($orphans[0].number) --add-assignee LOGIN"; [$orphans[].number])
+        elif ($ai_ready | length) > 0 then
+          step("run"; "\($ai_ready | refs) \(if ($ai_ready | length) == 1 then "is" else "are" end) yours and labelled \($cfg.labels.ai_ready): AI agents can work \(if ($ai_ready | length) == 1 then "it" else "them in parallel" end), each in its own worktree, and open one pull request for your review.";
+               "/scrum-github:run"; [$ai_ready[].number])
         elif ($pickable | length) > 0 then
           ($pickable[0]) as $p
           | step("start"; "Pick up #\($p.number) \"\($p.title)\"\(if ($p._who | index($me)) then " (assigned to you)" else "" end).";

@@ -338,3 +338,20 @@ test_cmd_mine_broken_estimate_block() {
   assert_status 0 "$STATUS" "$ERR"
   assert_contains "$OUT" "1 task without a time estimate, not counted: #104."
 }
+
+# change ai-run: ai-ready New tasks of the open sprint, and the hint to /scrum-github:run
+test_mine_ai_ready_tasks() {
+  local issues out
+  issues="$(jq -s . <(mi 45 New 3 5 ai-ready) <(mi 47 New 1 5) <(mi 60 New 3 6 ai-ready))"
+  out="$(mine_jq "$issues" '{"45":[],"47":[]}')"
+  assert_eq "[45]" "$(printf '%s' "$out" | jq -c .ai_ready)"
+  assert_eq "true" "$(printf '%s' "$out" | jq -c '.groups[0].tasks[0].ai_ready')"
+}
+
+test_cmd_mine_points_to_run() {
+  mine_env
+  jq -s . <(mi 45 New 3 5 ai-ready) <(mi 47 New 1 5) > "$FAKE_GH_DIR/mine.json"
+  run_scrum mine
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "AI agents can work one of them (labelled ai-ready): #45. Run them: /scrum-github:run"
+}

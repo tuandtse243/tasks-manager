@@ -8,8 +8,9 @@
 #          groups: [{key: in_progress|in_review|current|sprint|backlog, title, sprint, tasks: [task]}],
 #          next: {number, title, action: "continue"|"start"}|null, order: [numbers],
 #          reviews: [{number, title, author, url}]|null,
-#          time: {tasks, estimated, missing, missing_numbers, work_minutes, review_minutes, waves}|null}
-# task: {number, title, points, status, role, sprint, blocked_by: [numbers]|null, estimate|null}
+#          time: {tasks, estimated, missing, missing_numbers, work_minutes, review_minutes, waves}|null,
+#          ai_ready: [numbers of the New tasks of the open sprint labelled labels.ai_ready]}
+# task: {number, title, points, status, role, sprint, blocked_by: [numbers]|null, estimate|null, ai_ready}
 # time (spec my-work "Thời gian trong việc của một người"): the open tasks in the open sprint;
 # work by waves of the blocking graph between them, like the plan view; null without them.
 include "scrum";
@@ -27,7 +28,8 @@ include "scrum";
         due: (if .milestone == null then null
               else ($msinfo[.milestone.number | tostring].end // (.milestone.due_on // "" | .[0:10]) | if . == "" then null else . end) end),
         blocked_by: ((.number | tostring) as $k | if $blocked | has($k) then $blocked[$k] else null end),
-        estimate: issue_estimate } ]
+        estimate: issue_estimate,
+        ai_ready: has_label($cfg.labels.ai_ready // "") } ]
 | sort_by(.number) as $tasks
 
 # groups, in the order of the spec
@@ -88,6 +90,7 @@ include "scrum";
     groups: $groups,
     next: $next,
     order: [$ordered[].number],
+    ai_ready: [$current[] | select(.ai_ready) | .number],
     reviews: (if $prs == null then null
               else [$prs[] | {number, title, author: (.user.login // null), url: (.html_url // null)}] | sort_by(.number) end),
     time: $time }

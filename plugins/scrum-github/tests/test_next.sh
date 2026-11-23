@@ -175,3 +175,19 @@ test_cmd_next_skips_backlog_when_sprint_has_tasks() {
   run_scrum next
   assert_not_contains "$(gh_calls)" "milestone=none"
 }
+
+# change ai-run: my New tasks labelled ai-ready point to /scrum-github:run
+test_next_run_ai_ready_tasks() {
+  local list
+  list="$( { issue 4 New 3 alice | jq -c '.labels += [{name: "ai-ready"}]'
+             issue 5 New 1 alice
+             issue 6 New 1 bob | jq -c '.labels += [{name: "ai-ready"}]'; } | issues)"
+  next_of true true "$SPRINT" "$list"
+  assert_eq "run" "$(step_id)"
+  assert_eq "/scrum-github:run" "$(printf '%s' "$STEP" | jq -r .command)"
+  assert_eq "[4]" "$(printf '%s' "$STEP" | jq -c .issues)"
+  # without the label: start as before
+  list="$( { issue 5 New 1 alice; issue 6 New 1 bob | jq -c '.labels += [{name: "ai-ready"}]'; } | issues)"
+  next_of true true "$SPRINT" "$list"
+  assert_eq "start" "$(step_id)"
+}
