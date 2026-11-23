@@ -15,11 +15,11 @@
 
 ## 3. State, start, record, merge, status (design 1, 4, 5, 6; spec ai-run)
 
-- [ ] 3.1 `run-state.jq` và đọc ghi `.scrum/run/<id>.json` (ghi atomic), thêm `.scrum/` vào `.git/info/exclude`. Kiểm tra: test jq chuyển trạng thái task
-- [ ] 3.2 `scrum run start`: dừng khi có thay đổi chưa commit, tạo nhánh tích hợp từ nhánh mặc định, giao task chưa có người, In progress. Test trên repo git tạm cộng `fake-gh`. Kiểm tra: `bash tests/run.sh run` xanh
-- [ ] 3.3 `scrum run record N --started | --done --branch B [--notes FILE] | --failed --reason R`: thời gian thật, comment khối `actual`, task lỗi về New kèm comment, task phụ thuộc task lỗi bị loại. Kiểm tra: test cho xong, lỗi, phụ thuộc lỗi
-- [ ] 3.4 `scrum run merge N`: `--no-ff`, conflict thì `--abort` và ghi `conflict`, nhánh tích hợp không đổi. Test merge sạch và conflict trên repo tạm. Kiểm tra: `bash tests/run.sh run` xanh
-- [ ] 3.5 `scrum run status [ID]` và tìm lần chạy chưa xong. Kiểm tra: test in trạng thái từng task
+- [x] 3.1 `run-state.jq` và đọc ghi `.scrum/run/<id>.json` (ghi atomic), thêm `.scrum/` vào `.git/info/exclude`. Kiểm tra: test jq chuyển trạng thái task
+- [x] 3.2 `scrum run start`: dừng khi có thay đổi chưa commit, tạo nhánh tích hợp từ nhánh mặc định, giao task chưa có người, In progress. Test trên repo git tạm cộng `fake-gh`. Kiểm tra: `bash tests/run.sh run` xanh
+- [x] 3.3 `scrum run record N --started | --done --branch B [--notes FILE] | --failed --reason R`: thời gian thật, comment khối `actual`, task lỗi về New kèm comment, task phụ thuộc task lỗi bị loại. Kiểm tra: test cho xong, lỗi, phụ thuộc lỗi
+- [x] 3.4 `scrum run merge N`: `--no-ff`, conflict thì `--abort` và ghi `conflict`, nhánh tích hợp không đổi. Test merge sạch và conflict trên repo tạm. Kiểm tra: `bash tests/run.sh run` xanh
+- [x] 3.5 `scrum run status [ID]` và tìm lần chạy chưa xong. Kiểm tra: test in trạng thái từng task
 
 ## 4. Finish và PR (design 7; spec ai-run "Một PR gói review", "Một PR mỗi đợt")
 

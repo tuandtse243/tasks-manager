@@ -198,6 +198,11 @@ case "$cmd" in
     . "$SCRUM_ROOT/lib/cmd_run.sh"
     case "$sub" in
       plan) cmd_run_plan "$@" ;;
+      start) cmd_run_start "$@" ;;
+      record) cmd_run_record "$@" ;;
+      merge) cmd_run_merge "$@" ;;
+      finish) cmd_run_finish "$@" ;;
+      status) cmd_run_status "$@" ;;
       *) die "unknown run command '${sub}'. Use: scrum run plan | start | record | merge | finish | status" ;;
     esac
     ;;

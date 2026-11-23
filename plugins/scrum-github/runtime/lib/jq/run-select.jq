@@ -8,7 +8,7 @@
 #    --argjson numbers [N...] | null (null: the default choice)
 # Output: {login, sprint: {number, title}|null, mode: "default"|"numbers",
 #          candidates: [numbers that pass every check but the blockers],
-#          tasks: [{number, title, wave, points, estimate, role, assignees}],
+#          tasks: [{number, title, wave, deps (blocking tasks of the run), points, estimate, role, assignees}],
 #          waves: [[numbers]], excluded: [{number, title, reason}],
 #          eta: {work_minutes, review_minutes, estimated, missing, missing_numbers, waves}}
 # The default choice: open tasks assigned to LOGIN in the open sprint, status New, labelled
@@ -62,7 +62,9 @@ include "scrum";
 | [$cand[] | select(. as $t | $sel.keep | index($t.number))] as $chosen
 | ([$chosen[].number]) as $set
 | ([$chosen[] | {number, deps: [($blocked[.number | tostring] // [])[] | select(. as $b | $set | index($b))]}] | wave_map) as $wave
-| [ $chosen[] | {number, title, wave: $wave[.number | tostring], points: task_points($cfg),
+| [ $chosen[] | {number, title, wave: $wave[.number | tostring],
+                 deps: [($blocked[.number | tostring] // [])[] | select(. as $b | $set | index($b))],
+                 points: task_points($cfg),
                  estimate: issue_estimate, role: task_role($cfg), assignees: assignee_logins} ]
   | sort_by(.wave, .number) as $tasks
 | ($tasks | eta_by_waves($cfg.planning.merge_minutes // 5)) as $eta
