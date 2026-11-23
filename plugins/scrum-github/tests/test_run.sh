@@ -461,7 +461,7 @@ test_cmd_run_record_checks() {
   assert_contains "$ERR" "there is no local branch nope"
   run_scrum run record 102 --failed
   assert_status 1 "$STATUS"
-  assert_contains "$ERR" "--failed needs --reason"
+  assert_contains "$ERR" "--failed needs a reason"
   run_scrum run record 999 --started
   assert_status 1 "$STATUS"
   assert_contains "$ERR" "#999 is not a task of run $RUN_ID"
@@ -570,7 +570,7 @@ test_pr_body_per_wave() {
   local out
   out="$(pr_body "$(pr_state)" "$(pr_issues)" 2 '{"number":200,"wave":1}')"
   assert_eq "[]" "$(printf '%s' "$out" | jq -c .numbers)"
-  assert_contains "$(printf '%s' "$out" | jq -r .body)" "**Merge #200 first:** this pull request is based on its branch (wave 1)."
+  assert_contains "$(printf '%s' "$out" | jq -r .body)" "**Merge #200 first.** This pull request is based on its branch (wave 1). Once #200 is merged, change the base of this pull request to \`main\`"
   assert_not_contains "$(printf '%s' "$out" | jq -r .body)" "#110"
   assert_eq "Sprint 5, wave 1: 2 tasks by AI (#102, #107)" "$(pr_body "$(pr_state)" "$(pr_issues)" 1 | jq -r .title)"
 }
@@ -592,7 +592,7 @@ GH
   chmod +x "$T/gh-body"
   export SCRUM_GH="$T/gh-body"
   route_json 'pr create*' 'https://github.com/acme/blog/pull/200'
-  run_scrum run start
+  run_scrum run start "$@"
   agent_work 102 a.txt "from 102"
   agent_work 107 b.txt "from 107"
 }
@@ -638,7 +638,7 @@ test_cmd_run_finish_nothing_merged() {
 
 # spec "Một PR mỗi đợt: Hai đợt"
 test_cmd_run_finish_per_wave() {
-  finish_env
+  finish_env --pr-per-wave
   printf 'https://github.com/acme/blog/pull/201' > "$FAKE_GH_DIR/r_wave2.json"
   route_first 'pr create*--head run/sprint-5-tuandt-wave-2*' r_wave2.json
   run_scrum run record 102 --done --branch agent-102
@@ -699,7 +699,8 @@ test_review_only_estimate_in_eta_and_pr_body() {
     | st merged --arg n 103 --arg now x --arg sha s | jq .state)"
   body="$(pr_body "$s" "$(jq -n --argjson a "$(ri 103 New)" '{"103": $a}')" | jq -r .body)"
   assert_contains "$body" "**Time**: estimate Review ~15m; actual 12m"
-  assert_contains "$body" "Time of the merged tasks: estimate no estimate, actual 12m."
+  assert_contains "$body" "Review time of the merged tasks: estimate 15m. Actual time of the work: 12m."
+  assert_not_contains "$body" "estimate no estimate"
 }
 
 # ---------- spec scenarios end to end, and edge cases ----------
@@ -789,6 +790,9 @@ test_cmd_run_state_file_valid_after_each_step() {
   # a second run later adds no second line
   git -C "$SCRUM_REPO_DIR" checkout -q main
   git -C "$SCRUM_REPO_DIR" branch -D -q "$INT"
+  # the first run's branch is done: deleted on origin too
+  git --git-dir="$T/remote.git" branch -D -q "$INT"
+  git -C "$SCRUM_REPO_DIR" update-ref -d "refs/remotes/origin/$INT"
   export SCRUM_NOW=2026-11-23T12:00:00Z
   run_scrum run start 107
   assert_status 0 "$STATUS" "$ERR"
@@ -924,7 +928,7 @@ test_cmd_run_merge_from_another_branch() {
 # spec "Một PR gói review: Không có gì để mở PR", per wave: a wave with nothing merged opens
 # nothing, and the run is closed only after the last wave.
 test_cmd_run_finish_per_wave_nothing_merged() {
-  finish_env
+  finish_env --pr-per-wave
   run_scrum run record 102 --failed --reason "tests fail"
   run_scrum run record 107 --failed --reason "tests fail"
   : > "$FAKE_GH_LOG"
@@ -987,4 +991,230 @@ test_cmd_run_start_uses_run_config() {
   assert_status 0 "$STATUS" "$ERR"
   assert_eq "ai/2026-11-23-tuandt" "$(git -C "$SCRUM_REPO_DIR" rev-parse --abbrev-ref HEAD)"
   assert_eq "2 make test false" "$(jq -r '"\(.max_parallel) \(.test_command) \(.pr_per_wave)"' "$(state_file)")"
+}
+
+# ---------- review fixes ----------
+
+# Agent text never goes on a command line: the reason of a failure comes from a file.
+test_cmd_run_record_failed_reason_from_files() {
+  git_env
+  run_scrum run start
+  printf '{"result":"failed","reason":"tests fail: $(touch %s/pwned) `id`"}' "$T" > "$T/notes.json"
+  run_scrum run record 102 --failed --notes "$T/notes.json"
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq 'tests fail: $(touch '"$T"'/pwned) `id`' "$(jq -r '.tasks["102"].reason' "$(state_file)")"
+  [ ! -e "$T/pwned" ] || _fail "the reason was run"
+  printf 'the agent stopped:\nno JSON at all\n' > "$T/last.txt"
+  run_scrum run record 107 --failed --reason-file "$T/last.txt"
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "the agent stopped: no JSON at all" "$(jq -r '.tasks["107"].reason' "$(state_file)")"
+  printf '{"result":"failed"}' > "$T/empty.json"
+  run_scrum run record 103 --failed --notes "$T/empty.json"
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "--failed needs a reason"
+}
+
+# start runs the plan the user confirmed, or nothing.
+test_cmd_run_start_expect_differs_changes_nothing() {
+  git_env
+  run_scrum run start 102,107 --expect 102,107,103
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "the tasks to run changed since the plan you confirmed: planned #102, #103, #107, now #102, #107"
+  assert_eq "" "$(git -C "$SCRUM_REPO_DIR" branch --list "$INT")"
+  assert_eq "" "$(gh_writes)"
+  [ ! -d "$SCRUM_REPO_DIR/.scrum" ] || _fail "state written"
+  run_scrum run start 102,107,103 --expect 0103,107,102
+  assert_status 0 "$STATUS" "$ERR"
+}
+
+test_cmd_run_start_no_upstream_and_safe_branch() {
+  git_env
+  run_scrum run start
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "" "$(git -C "$SCRUM_REPO_DIR" config "branch.$INT.merge" || true)" "no upstream"
+  assert_eq "$(git -C "$SCRUM_REPO_DIR" rev-parse HEAD)" "$(jq -r .base_sha "$(state_file)")"
+}
+
+test_cmd_run_start_refuses_the_default_branch_and_work_on_origin() {
+  git_env
+  printf 'run:\n  branch_pattern: main\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  git -C "$SCRUM_REPO_DIR" commit -q -am "pattern"
+  run_scrum run start
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "the default branch"
+  printf 'version: 1\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  git -C "$SCRUM_REPO_DIR" commit -q -am "back"
+  # origin has the integration branch with work that is not on main
+  git -C "$SCRUM_REPO_DIR" checkout -q -b "$INT"
+  printf 'x\n' > "$SCRUM_REPO_DIR/x.txt"; git -C "$SCRUM_REPO_DIR" add x.txt; git -C "$SCRUM_REPO_DIR" commit -q -m x
+  git -C "$SCRUM_REPO_DIR" push -q origin "$INT" 2>/dev/null
+  git -C "$SCRUM_REPO_DIR" checkout -q main; git -C "$SCRUM_REPO_DIR" branch -D -q "$INT"
+  run_scrum run start
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "origin already has a branch $INT with other work"
+  assert_eq "" "$(gh_writes)"
+}
+
+test_cmd_run_start_warns_when_fetch_fails() {
+  git_env
+  git -C "$SCRUM_REPO_DIR" remote set-url origin "$T/nowhere.git"
+  run_scrum run start
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$ERR" "cannot fetch main from origin"
+}
+
+test_cmd_run_finish_refuses_diverged_origin_and_warns_on_task_branches() {
+  finish_env
+  run_scrum run record 102 --done --branch agent-102
+  run_scrum run record 107 --failed --reason x
+  run_scrum run record 103 --failed --reason x
+  run_scrum run merge 102
+  # a task branch someone pushed by hand
+  git -C "$SCRUM_REPO_DIR" push -q origin agent-102 2>/dev/null
+  # origin has the integration branch with a commit the local one does not have
+  git -C "$T/wt102" push -q origin "agent-102:refs/heads/$INT" 2>/dev/null
+  git -C "$T/wt102" commit -q --allow-empty -m other
+  git -C "$T/wt102" push -q -f origin "agent-102:refs/heads/$INT" 2>/dev/null
+  run_scrum run finish
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "origin/$INT has commits that $INT does not have; nothing was pushed"
+  git --git-dir="$T/remote.git" branch -D -q "$INT"
+  git -C "$SCRUM_REPO_DIR" update-ref -d "refs/remotes/origin/$INT"
+  run_scrum run finish
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$ERR" "these task branches are on origin, though a run never pushes them: agent-102"
+}
+
+# Parallel record calls do not lose each other's changes.
+test_cmd_run_record_in_parallel_keeps_every_change() {
+  git_env
+  run_scrum run start
+  "$BASH" "$SCRUM" run record 102 --started >/dev/null 2>&1 &
+  "$BASH" "$SCRUM" run record 107 --started >/dev/null 2>&1 &
+  "$BASH" "$SCRUM" run record 103 --started >/dev/null 2>&1 &
+  wait
+  assert_eq "running running running" "$(task_state 102) $(task_state 107) $(task_state 103)"
+  [ ! -d "$(state_file).lock" ] || _fail "lock left behind"
+  mkdir "$(state_file).lock"
+  SCRUM_RUN_LOCK_TRIES=2 run_scrum run record 102 --started
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "another scrum run command is changing this run"
+}
+
+# --pr-per-wave: one pull request per wave, in order, and never one for the whole run.
+test_cmd_run_per_wave_bookkeeping() {
+  finish_env --pr-per-wave
+  run_scrum run record 102 --done --branch agent-102
+  run_scrum run record 107 --done --branch agent-107
+  run_scrum run merge 102
+  run_scrum run merge 107
+  run_scrum run status --json
+  assert_eq "[1] 2" "$(printf '%s' "$OUT" | jq -r '"\(.pr_due | tojson) \(.next_wave)"')"
+  run_scrum run status
+  assert_contains "$OUT" "Next: open the pull request of wave 1: scrum run finish --wave 1"
+  run_scrum run finish
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "opens one pull request per wave. Use: scrum run finish --wave W (waves still without one: 1, 2)"
+  run_scrum run finish --wave 2
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "wave 1 is not closed yet; first: scrum run finish --wave 1"
+  run_scrum run finish --wave 1
+  assert_status 0 "$STATUS" "$ERR"
+  run_scrum run finish --wave 1
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "wave 1 of run $RUN_ID is already closed (pull request #200)"
+  run_scrum run status --json
+  assert_eq "[]" "$(printf '%s' "$OUT" | jq -c .pr_due)"
+}
+
+test_cmd_run_one_pr_run_refuses_wave() {
+  finish_env
+  run_scrum run finish --wave 1
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "opens one pull request for all its waves"
+}
+
+# The agent's own times are the actual time.
+test_cmd_run_record_uses_the_agent_times() {
+  finish_env
+  run_scrum run record 102 --started
+  printf '{"result":"done","started_at":"2026-11-23T10:05:00Z","ended_at":"2026-11-23T10:30:00Z"}' > "$T/n.json"
+  export SCRUM_NOW=2026-11-23T11:30:00Z
+  run_scrum run record 102 --done --branch agent-102 --notes "$T/n.json"
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "25 2026-11-23T10:05:00Z" "$(jq -r '.tasks["102"] | "\(.minutes) \(.started_at)"' "$(state_file)")"
+  printf '{"result":"failed","reason":"r","started_at":"bad","ended_at":"2026-11-23T10:30:00Z"}' > "$T/n2.json"
+  run_scrum run record 107 --started
+  export SCRUM_NOW=2026-11-23T11:40:00Z
+  run_scrum run record 107 --failed --notes "$T/n2.json"
+  assert_eq "10" "$(jq -r '.tasks["107"].minutes' "$(state_file)")" "bad times: the recorded ones"
+}
+
+# A task merged by hand (or before a stop) is recorded with its merge commit.
+test_cmd_run_merge_already_merged() {
+  finish_env
+  run_scrum run record 102 --done --branch agent-102
+  git -C "$SCRUM_REPO_DIR" merge -q --no-ff -m "by hand" agent-102
+  local sha; sha="$(git -C "$SCRUM_REPO_DIR" rev-parse HEAD)"
+  run_scrum run merge 102
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "is already merged"
+  assert_eq "merged $sha" "$(jq -r '.tasks["102"] | "\(.state) \(.merge_commit)"' "$(state_file)")"
+}
+
+test_cmd_run_record_done_rejects_wrong_branches() {
+  finish_env
+  run_scrum run record 102 --done --branch "$INT"
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "is the integration or default branch"
+  run_scrum run record 102 --done --branch main
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "is the integration or default branch"
+  git -C "$SCRUM_REPO_DIR" checkout -q --orphan stray
+  git -C "$SCRUM_REPO_DIR" commit -q --allow-empty -m stray
+  git -C "$SCRUM_REPO_DIR" checkout -q -f "$INT"
+  run_scrum run record 102 --done --branch stray
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "does not start from the run's integration branch"
+  assert_eq "pending" "$(task_state 102)"
+}
+
+# A merge git refuses without a conflict is recorded with git's own reason.
+test_cmd_run_merge_failure_reason() {
+  finish_env
+  run_scrum run record 102 --done --branch agent-102
+  printf 'in the way\n' > "$SCRUM_REPO_DIR/a.txt"
+  run_scrum run merge 102
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "commit.gpgsign"
+  assert_contains "$(jq -r '.tasks["102"].reason' "$(state_file)")" "merge failed: "
+}
+
+test_cmd_run_option_checks() {
+  git_env
+  run_scrum run start --max-parallel 00
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "--max-parallel must be a whole number greater than 0"
+  run_scrum run start --max-parallel
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "--max-parallel needs a value"
+  run_scrum run start --max-parallel 03
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "3" "$(jq -r .max_parallel "$(state_file)")"
+  run_scrum run record 0102 --started
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "running" "$(task_state 102)"
+  run_scrum run record 102 --done --branch
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "--branch needs a value"
+}
+
+test_select_in_review_named_and_label_case() {
+  local cfg issues out
+  cfg="$(defaults | jq -c '.statuses.in_review = "In review"')"
+  issues="$(jq -s . <(ri 5 'In review') <(ri 6 New AI-Ready))"
+  out="$(jq -n -L "$PLUGIN_DIR/runtime/lib/jq" --argjson cfg "$cfg" --arg login tuandt --argjson issues "$issues" \
+    --argjson sprint "$S5" --argjson blocked '{"6":[]}' --argjson numbers '[5]' -f "$PLUGIN_DIR/runtime/lib/jq/run-select.jq")"
+  assert_eq "5 is already In review" "$(printf '%s' "$out" | jq -r '.excluded[] | "\(.number) \(.reason)"')"
+  assert_eq "[[6]]" "$(select_jq "$issues" '{"6":[]}' | jq -c .waves)" "the label is not case-sensitive"
 }

@@ -12,9 +12,12 @@
 # Task states: pending -> running -> done -> merged; failed; conflict (merge aborted, may be merged
 # again); excluded (blocked by a task that failed or was left out).
 #
-# ops: new ($id $branch $base $now $max_parallel $pr_per_wave $test_command $repo)
+# ops: new ($id $branch $base $base_sha $now $max_parallel $pr_per_wave $test_command $repo)
 #      started ($n $now) | done ($n $now $branch $notes) | failed ($n $now $reason $notes)
-#      merged ($n $now $sha) | conflict ($n $now $files) | pr ($wave $pr $now) | finish ($now) | view
+#      merged ($n $now $sha) | conflict ($n $now $files $reason) | pr ($wave $pr $now)
+#      | wave_closed ($wave $now) | finish ($now) | view
+# done and failed take the agent's own started_at and ended_at from $notes when they are valid
+# timestamps (ended not before started), so the time does not depend on when the result is recorded.
 include "scrum";
 
 def args: $ARGS.named;
@@ -23,6 +26,13 @@ def epoch: if . == null then null else fromdateiso8601 end;
 def minutes_between($a; $b): if $a == null or $b == null then null else ((($b | epoch) - ($a | epoch)) / 60 | round) end;
 def task_ref($n): .tasks[$n | tostring];
 def s: args.strings // {};
+def iso_ok: type == "string" and ((try fromdateiso8601 catch null) != null);
+# [started, ended] of a task that ends now: the agent's own times when it gave valid ones.
+def times($t):
+  (args.notes // {}) as $n
+  | if ($n | type) == "object" and ($n.started_at | iso_ok) and ($n.ended_at | iso_ok)
+       and ($n.ended_at | fromdateiso8601) >= ($n.started_at | fromdateiso8601)
+    then [$n.started_at, $n.ended_at] else [$t.started_at, args.now] end;
 
 # Comment with the actual time (spec ai-run "Thời gian thật"): the line, the estimate when there
 # is one, and the data in a hidden HTML comment, between scrum:actual markers.
@@ -59,7 +69,8 @@ if args.op == "new" then
   . as $sel
   | { state: {
         version: 1, id: args.id, repo: args.repo, login: $sel.login, branch: args.branch, base: args.base,
-        sprint: $sel.sprint, created_at: args.now, finished_at: null,
+        base_sha: (args.base_sha // null),
+        sprint: $sel.sprint, created_at: args.now, finished_at: null, waves_closed: [],
         max_parallel: (args.max_parallel | tonumber), pr_per_wave: (args.pr_per_wave == "true"),
         test_command: (args.test_command // ""),
         waves: $sel.waves, excluded: $sel.excluded,
@@ -82,8 +93,9 @@ elif args.op == "done" then
   | (check_state($t; ["pending", "running"]; "recorded as done")) as $err
   | if $err then $err
     else .id as $run
-      | .tasks[num | tostring] += {state: "done", branch: args.branch, ended_at: args.now,
-                                   minutes: minutes_between($t.started_at; args.now), reason: null,
+      | times($t) as $tm
+      | .tasks[num | tostring] += {state: "done", branch: args.branch, started_at: $tm[0], ended_at: $tm[1],
+                                   minutes: minutes_between($tm[0]; $tm[1]), reason: null,
                                    notes: (args.notes // null)}
       | . as $st
       | {state: $st, effects: (no_effects + {comment: {number: num, body: actual_body($st.tasks[num | tostring]; "done"; $run)}})} end
@@ -93,8 +105,9 @@ elif args.op == "failed" then
   | (check_state($t; ["pending", "running", "done", "conflict"]; "recorded as failed")) as $err
   | if $err then $err
     else .id as $run
-      | .tasks[num | tostring] += {state: "failed", ended_at: args.now,
-                                   minutes: (if $t.state == "pending" or $t.state == "running" then minutes_between($t.started_at; args.now) else $t.minutes end),
+      | (if $t.state == "pending" or $t.state == "running" then times($t) else [$t.started_at, $t.ended_at] end) as $tm
+      | .tasks[num | tostring] += {state: "failed", started_at: $tm[0], ended_at: $tm[1],
+                                   minutes: minutes_between($tm[0]; $tm[1]),
                                    reason: args.reason,
                                    notes: (args.notes // $t.notes)}
       | . as $st
@@ -120,14 +133,22 @@ elif args.op == "conflict" then
   | (check_state($t; ["done", "conflict"]; "merged")) as $err
   | if $err then $err
     else .tasks[num | tostring] += {state: "conflict", conflict_files: (args.files | split("\n") | map(select(. != ""))),
-                                    reason: "merge conflict"}
+                                    reason: (args.reason // "merge conflict")}
          | {state: ., effects: no_effects} end
 
 elif args.op == "pr" then
   (args.pr | fromjson) as $pr
   | (args.wave | if . == "" or . == null then null else tonumber end) as $w
   | .prs += [$pr + {wave: $w}]
+  | (if $w == null then . else .waves_closed = ((.waves_closed // []) + [$w] | unique) end)
   | (if $w == null or $w >= (.waves | length) then .finished_at = args.now else . end)
+  | {state: ., effects: no_effects}
+
+elif args.op == "wave_closed" then
+  # --pr-per-wave: a wave with nothing merged is closed without a pull request.
+  (args.wave | tonumber) as $w
+  | .waves_closed = ((.waves_closed // []) + [$w] | unique)
+  | (if $w >= (.waves | length) then .finished_at = args.now else . end)
   | {state: ., effects: no_effects}
 
 elif args.op == "finish" then
@@ -144,6 +165,12 @@ elif args.op == "view" then
                to_merge: [.[] | select(.state == "done" or .state == "conflict") | .number],
                tasks: map({number, title, state, branch, minutes, reason, conflict_files})}],
       next_wave: ([$all[] | select(settled | not) | .wave] | min),
+      # --pr-per-wave: settled waves whose pull request is not opened yet (scrum run finish --wave W),
+      # to do before the next wave starts.
+      pr_due: (if .pr_per_wave | not then []
+               else [range(1; (.waves | length) + 1) as $w
+                     | select(($st.waves_closed // []) | index($w) | not)
+                     | select(all($all[] | select(.wave == $w); settled)) | $w] end),
       counts: ($all | group_by(.state) | map({key: .[0].state, value: length}) | from_entries),
       excluded: $st.excluded, prs: $st.prs }
 else

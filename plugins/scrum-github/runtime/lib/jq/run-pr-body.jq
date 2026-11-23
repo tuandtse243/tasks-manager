@@ -50,11 +50,12 @@ def wave_ok: $wave == null or .wave == $wave;
       ] | join("\n\n");
   ([$merged[] | .estimate | clean_estimate | select(. != null) | .work_minutes // 0] | add // 0) as $est_work
 | ([$merged[] | .minutes | select(. != null)] | add // 0) as $act
+| ([$merged[] | .estimate | clean_estimate | select(. != null) | .review_minutes // 0] | add // 0) as $est_review
 | { title: (if $wave == null then tr(s; "run_pr_title"; {sprint: $sprint, tasks: $tasks_text, numbers: $nums})
            else tr(s; "run_pr_title_wave"; {sprint: $sprint, wave: $wave, tasks: $tasks_text, numbers: $nums}) end),
     numbers: [$merged[].number],
     body: ([ tr(s; "run_pr_intro"; {run: $state.id, branch: $state.branch}),
-             (if $after != null then tr(s; "run_pr_after"; {pr: $after.number, wave: $after.wave}) else empty end),
+             (if $after != null then tr(s; "run_pr_after"; {pr: $after.number, wave: $after.wave, base: $state.base}) else empty end),
              ($merged[] | section(.)),
              (if ($out | length) + ($left | length) > 0 then
                 "## \(tr(s; "run_pr_not_included"))\n\n"
@@ -63,8 +64,9 @@ def wave_ok: $wave == null or .wave == $wave;
                                 else "- " + tr(s; "run_pr_left_out"; {number: .number, title: .title, reason: (.reason // "?")}) end),
                      ($left[] | "- " + tr(s; "run_pr_left_out"; {number: .number, title: (.title // "?"), reason: .reason})) ] | join("\n"))
               else empty end),
-             (if ($merged | length) > 0 and ($est_work > 0 or $act > 0) then
-                tr(s; "run_pr_totals"; {estimate: (if $est_work > 0 then $est_work | fmt_duration else tr(s; "run_pr_no_estimate") end),
-                                        actual: ($act | fmt_duration)})
+             (if ($merged | length) == 0 then empty
+              elif $est_work > 0 then tr(s; "run_pr_totals"; {estimate: ($est_work | fmt_duration), actual: ($act | fmt_duration)})
+              elif $est_review > 0 then tr(s; "run_pr_totals_review"; {estimate: ($est_review | fmt_duration), actual: ($act | fmt_duration)})
+              elif $act > 0 then tr(s; "run_pr_totals"; {estimate: tr(s; "run_pr_no_estimate"), actual: ($act | fmt_duration)})
               else empty end)
            ] | join("\n\n")) + "\n" }

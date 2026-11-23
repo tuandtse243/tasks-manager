@@ -47,6 +47,8 @@ def closing_refs($repo):
 # ---------- labels and tasks ----------
 def label_names: [.labels[]? | if type == "object" then .name else . end];
 def has_label($n): label_names | any(.[]; . == $n);
+# GitHub label names are not case-sensitive; "" matches nothing.
+def has_label_ci($n): ($n // "" | ascii_downcase) as $l | $l != "" and (label_names | any(.[]; ascii_downcase == $l));
 def status_label($cfg; $role): $cfg.statuses.label_prefix + $cfg.statuses[$role];
 # The optional fourth status (statuses.in_review); off when it is not a non-empty text.
 def review_on($cfg): ($cfg.statuses.in_review | type) == "string" and ($cfg.statuses.in_review | length) > 0;

@@ -114,3 +114,26 @@ test_implementer_agent() {
   assert_contains "$s" '"look_closely"'
   assert_contains "$s" '"manual_test"'
 }
+
+# Review fixes: agent text stays off command lines, the confirmed plan is what starts, records one
+# at a time, the base commit is checked, the agent's times and dependencies.
+test_run_skill_and_agent_safety() {
+  local s a
+  s="$(cat "$PLUGIN_DIR/skills/run/SKILL.md")"
+  a="$(cat "$PLUGIN_DIR/agents/implementer.md")"
+  assert_contains "$s" "Never put text written by an agent or taken from an issue on a command line"
+  assert_contains "$s" "--expect N,N,..."
+  assert_contains "$s" "one at
+a time, never several at once"
+  assert_contains "$s" "scrum run record N --failed --notes <file>"
+  assert_not_contains "$s" '--reason "<reason>"'
+  assert_contains "$s" "commit noted in step 1"
+  assert_contains "$s" "which other people may have written"
+  assert_contains "$s" "hold work
+that is not merged anywhere"
+  assert_contains "$a" "git merge-base --is-ancestor <base commit> HEAD"
+  assert_contains "$a" "worktree not based on the integration branch"
+  assert_contains "$a" "install the dependencies there"
+  assert_contains "$a" '"started_at"'
+  assert_contains "$a" "Never push"
+}

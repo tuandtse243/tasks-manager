@@ -26,6 +26,7 @@ include "scrum";
     elif .state != "open" then "is closed"
     elif (is_task($cfg) | not) then "is a feature, epic or meta issue, not a task"
     elif task_role($cfg) == "done" then "is already \($cfg.statuses.done)"
+    elif task_role($cfg) == "in_review" then "is already \($cfg.statuses.in_review)"
     else null end;
 
   ( if $explicit then
@@ -37,8 +38,8 @@ include "scrum";
       [ $issues[] | select(.state == "open" and is_task($cfg))
         | select(any(.assignees[]?; same_login(.login; $login)))
         | select($cur != null and (.milestone.number // null) == $cur and task_role($cfg) == "new") ]
-      | {cand: [.[] | select(has_label($ai))],
-         out: [.[] | select(has_label($ai) | not) | brief + {reason: "has no \($ai) label"}]}
+      | {cand: [.[] | select(has_label_ci($ai))],
+         out: [.[] | select(has_label_ci($ai) | not) | brief + {reason: "has no \($ai) label"}]}
     end ) as $first
 
 # Blockers: drop, until nothing changes, every task that an open task outside the run blocks.

@@ -29,7 +29,7 @@ include "scrum";
               else ($msinfo[.milestone.number | tostring].end // (.milestone.due_on // "" | .[0:10]) | if . == "" then null else . end) end),
         blocked_by: ((.number | tostring) as $k | if $blocked | has($k) then $blocked[$k] else null end),
         estimate: issue_estimate,
-        ai_ready: has_label($cfg.labels.ai_ready // "") } ]
+        ai_ready: has_label_ci($cfg.labels.ai_ready) } ]
 | sort_by(.number) as $tasks
 
 # groups, in the order of the spec

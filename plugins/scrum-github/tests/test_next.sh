@@ -191,3 +191,21 @@ test_next_run_ai_ready_tasks() {
   next_of true true "$SPRINT" "$list"
   assert_eq "start" "$(step_id)"
 }
+
+# change ai-run: an unfinished run comes first; ai-ready tasks all blocked are not suggested to /run
+test_next_unfinished_run_and_blocked_ai_ready() {
+  local list
+  list="$( { issue 4 'In progress' 3 alice | jq -c '.labels += [{name: "ai-ready"}]'
+             issue 5 New 1 alice | jq -c '.labels += [{name: "AI-Ready"}]'; } | issues)"
+  STEP="$(jqt next-step -n --argjson init true --argjson pushed true --argjson sprint "$SPRINT" --argjson issues "$list" \
+    --arg me alice --arg today 2026-11-19 --argjson cfg "$(defaults)" --argjson backlog_count 0 --argjson run_open '{"id":"20261119-0900-alice"}')"
+  assert_eq "run-resume" "$(step_id)"
+  assert_contains "$(printf '%s' "$STEP" | jq -r .message)" "run 20261119-0900-alice of AI agents is not finished"
+  list="$( { issue 5 New 1 alice | jq -c '.labels += [{name: "AI-Ready"}]'; } | issues)"
+  STEP="$(jqt next-step -n --argjson init true --argjson pushed true --argjson sprint "$SPRINT" --argjson issues "$list" \
+    --arg me alice --arg today 2026-11-19 --argjson cfg "$(defaults)" --argjson backlog_count 0 --argjson ai_blocked '{"5":[3]}')"
+  assert_eq "start" "$(step_id)" "the only ai-ready task is blocked"
+  STEP="$(jqt next-step -n --argjson init true --argjson pushed true --argjson sprint "$SPRINT" --argjson issues "$list" \
+    --arg me alice --arg today 2026-11-19 --argjson cfg "$(defaults)" --argjson backlog_count 0 --argjson ai_blocked '{"5":[]}')"
+  assert_eq "run" "$(step_id)" "label names are not case-sensitive"
+}

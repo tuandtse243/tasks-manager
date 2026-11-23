@@ -7,15 +7,38 @@
 
 # ---------- choosing the tasks ----------
 
+# run_num ARG  "#0102" -> 102 (leading zeros dropped), or dies when it is not an issue number.
+run_num() {
+  local n="${1#\#}"
+  case "$n" in ""|*[!0-9]*) die "not an issue number: $1" ;; esac
+  n="$(printf '%s' "$n" | sed 's/^0*//')"
+  [ -n "$n" ] || die "not an issue number: $1"
+  printf '%s' "$n"
+}
+
 # run_numbers_json "102,107 103"  -> [102,107,103], or dies on a word that is not a number.
 run_numbers_json() {
   local list='[]' n
   for n in $(printf '%s' "$1" | tr ',' ' '); do
-    n="${n#\#}"
-    case "$n" in ""|*[!0-9]*) die "not an issue number: $n" ;; esac
+    n="$(run_num "$n")" || exit 1
     list="$(jq -nc --argjson l "$list" --argjson n "$n" '$l + [$n]')"
   done
   printf '%s' "$list"
+}
+
+# run_optval OPTION VALUE  The value of an option, or dies when it is missing.
+run_optval() {
+  case "$2" in ""|--*) die "$1 needs a value" ;; esac
+  printf '%s' "$2"
+}
+
+# run_count VALUE OPTION  A whole number greater than 0 (leading zeros dropped), or dies.
+run_count() {
+  local k
+  case "$1" in ""|*[!0-9]*) die "$2 must be a whole number greater than 0 (got \"$1\")" ;; esac
+  k="$(printf '%s' "$1" | sed 's/^0*//')"
+  [ -n "$k" ] || die "$2 must be a whole number greater than 0 (got \"$1\")"
+  printf '%s' "$k"
 }
 
 # run_select REPO LOGIN NUMBERS_JSON|null  Prints the output of run-select.jq (read-only).
@@ -131,16 +154,39 @@ run_resolve() {
   printf '%s' "$id"
 }
 
-# run_apply ID OP [jq args]  Applies one change of run-state.jq to the state file (written
-# atomically) and sets RUN_EFFECTS; dies with the reason when the change is not allowed.
+# run_lock FILE / run_unlock  One scrum run command at a time changes a state file: a lock
+# folder next to it (mkdir is atomic), waited for up to 30 seconds, removed on exit.
+RUN_LOCK=""
+RUN_LOCK_TRIES="${SCRUM_RUN_LOCK_TRIES:-300}"
+run_lock() {
+  local lock="$1.lock" i=0
+  while ! mkdir "$lock" 2>/dev/null; do
+    i=$((i + 1))
+    [ "$i" -lt "$RUN_LOCK_TRIES" ] || die "another scrum run command is changing this run (lock $lock). If none is running, remove that folder"
+    sleep 0.1
+  done
+  RUN_LOCK="$lock"
+  trap 'if [ -n "$RUN_LOCK" ]; then rmdir "$RUN_LOCK" 2>/dev/null; fi' EXIT
+}
+run_unlock() {
+  if [ -n "$RUN_LOCK" ]; then rmdir "$RUN_LOCK" 2>/dev/null || true; fi
+  RUN_LOCK=""
+  trap - EXIT
+}
+
+# run_apply ID OP [jq args]  Applies one change of run-state.jq to the state file (read and
+# written under the lock, written atomically) and sets RUN_EFFECTS; dies with the reason when the
+# change is not allowed.
 run_apply() {
   local id="$1" op="$2" file out err
   shift 2
   file="$(run_file "$id")"
+  run_lock "$file"
   out="$(jqlib run-state --arg op "$op" --argjson strings "$(strings_json)" "$@" < "$file")" || die "cannot update run $id"
   err="$(printf '%s' "$out" | jq -r '.error // empty')"
   [ -z "$err" ] || die "$err"
   printf '%s\n' "$out" | jq '.state' | write_atomic "$file"
+  run_unlock
   RUN_EFFECTS="$(printf '%s' "$out" | jq -c .effects)"
 }
 
@@ -171,6 +217,20 @@ run_notes() {
   else jq -Rsc '{text: .}' "$1"; fi
 }
 
+# run_reason_from FILE  A failure reason from a file written by the skill: .reason of a JSON
+# object, else the text itself; on one line, at most 500 characters. Agent text never goes on a
+# command line (spec safety): the skill writes it to a file and passes the path.
+run_reason_from() {
+  [ -f "$1" ] || die "no file $1"
+  if jq -e 'type == "object" and (.reason | type) == "string" and .reason != ""' "$1" >/dev/null 2>&1; then
+    jq -r '.reason' "$1"
+  elif jq -e 'type == "object"' "$1" >/dev/null 2>&1; then
+    printf ''
+  else
+    cat "$1"
+  fi | tr '\n\r\t' '   ' | sed 's/^ *//; s/ *$//' | cut -c1-500
+}
+
 # run_issue_to_new REPO N  Status back to New (after a failure).
 run_issue_to_new() {
   local issue
@@ -182,18 +242,20 @@ run_issue_to_new() {
 
 # scrum run start [N,N...] [--max-parallel K] [--pr-per-wave]  (spec ai-run "Bắt đầu lần chạy")
 cmd_run_start() {
-  local nums="" numbers=null k="" per_wave=false repo login dir unfinished default base now id branch pattern sprint_title n issue file
+  local nums="" numbers=null k="" per_wave=false expect="" repo login dir unfinished default base now id branch pattern sprint_title n issue file base_sha diff
   while [ $# -gt 0 ]; do
     case "$1" in
-      --max-parallel) k="${2:-}"; shift ;;
+      --max-parallel) k="$(run_optval --max-parallel "${2:-}")"; shift ;;
+      --expect) expect="$(run_optval --expect "${2:-}")"; shift ;;
       --pr-per-wave) per_wave=true ;;
       -*) die "unknown option for run start: $1" ;;
       *) nums="$nums $1" ;;
     esac
     shift
   done
-  case "$k" in "") ;; *[!0-9]*|0) die "--max-parallel must be a whole number greater than 0 (got \"$k\")" ;; esac
+  [ -z "$k" ] || k="$(run_count "$k" --max-parallel)"
   [ -z "$nums" ] || numbers="$(run_numbers_json "$nums")"
+  [ -z "$expect" ] || expect="$(run_numbers_json "$expect")"
   require_tools
   load_config
   [ -n "$k" ] || k="$(config_get .run.max_parallel)"
@@ -211,10 +273,19 @@ cmd_run_start() {
     print_run_plan >&2
     die "no task to run"
   fi
+  # The run must be the plan the user confirmed (--expect, the skill always passes it).
+  if [ -n "$expect" ]; then
+    diff="$(printf '%s' "$RUN_SEL" | jq -r --argjson e "$expect" '([.tasks[].number] | sort) as $now | ($e | unique) as $want
+      | if $now == $want then empty
+        else "the tasks to run changed since the plan you confirmed: planned \($want | map("#\(.)") | join(", ")), now \($now | map("#\(.)") | join(", "))"
+             + ([.excluded[] | select(.number as $x | $want | index($x)) | " (#\(.number): \(.reason))"] | join("")) end')"
+    [ -z "$diff" ] || die "$diff. Nothing was changed; show the plan again: scrum run plan"
+  fi
 
   default="$(ghx repo view "$repo" --json defaultBranchRef -q .defaultBranchRef.name 2>/dev/null || true)"
   [ -n "$default" ] || default="main"
-  git -C "$dir" fetch -q origin "$default" 2>/dev/null || true
+  git -C "$dir" fetch -q origin "$default" 2>/dev/null \
+    || warn "cannot fetch $default from origin; the integration branch starts from the copy of $default you already have"
   if git -C "$dir" rev-parse --verify -q "refs/remotes/origin/$default" >/dev/null; then base="origin/$default"
   elif git -C "$dir" rev-parse --verify -q "refs/heads/$default" >/dev/null; then base="$default"
   else die "cannot find the default branch $default (locally or on origin)"; fi
@@ -228,17 +299,25 @@ cmd_run_start() {
     'include "scrum"; ($s | slug_text | if . == "" then "no-sprint" else . end) as $sl
      | $p | gsub("\\{sprint\\}"; $sl) | gsub("\\{login\\}"; $l) | gsub("\\{date\\}"; $d)')"
   git check-ref-format --branch "$branch" >/dev/null 2>&1 || die "run.branch_pattern gives \"$branch\", which is not a valid branch name"
+  [ "$branch" != "$default" ] || die "run.branch_pattern gives \"$branch\", the default branch; the integration branch must be another one"
   if git -C "$dir" show-ref --verify --quiet "refs/heads/$branch"; then
     die "the branch $branch already exists. Delete it (git branch -D $branch) if its work is merged, or put {date} in run.branch_pattern"
   fi
-  git -C "$dir" checkout -q -b "$branch" "$base" || die "cannot create $branch from $base"
+  if git -C "$dir" rev-parse --verify -q "refs/remotes/origin/$branch" >/dev/null \
+     && ! git -C "$dir" merge-base --is-ancestor "refs/remotes/origin/$branch" "$base" 2>/dev/null; then
+    die "origin already has a branch $branch with other work; the run would overwrite it or fail to push. Delete it on origin if it is done, or put {date} in run.branch_pattern"
+  fi
+  # --no-track: the integration branch never has origin/<default> as its upstream, so a plain
+  # git push from it cannot reach the default branch.
+  git -C "$dir" checkout -q --no-track -b "$branch" "$base" || die "cannot create $branch from $base"
+  base_sha="$(git -C "$dir" rev-parse HEAD)"
   info "Created the integration branch $branch from $base."
 
   mkdir -p "$(run_dir)"
   run_exclude_state "$dir"
   file="$(run_file "$id")"
   printf '%s' "$RUN_SEL" | jqlib run-state --arg op new --argjson strings "$(strings_json)" \
-    --arg id "$id" --arg branch "$branch" --arg base "$default" --arg now "$now" --arg max_parallel "$k" \
+    --arg id "$id" --arg branch "$branch" --arg base "$default" --arg base_sha "$base_sha" --arg now "$now" --arg max_parallel "$k" \
     --arg pr_per_wave "$per_wave" --arg test_command "$(config_get .run.test_command)" --arg repo "$repo" \
     | jq '.state' | write_atomic "$file"
   info "Saved the run in .scrum/run/$id.json."
@@ -258,28 +337,34 @@ cmd_run_start() {
 
 # ---------- record ----------
 
-# scrum run record N --started | --done --branch B [--notes FILE] | --failed --reason R [--notes FILE] [--run ID]
+# scrum run record N --started | --done --branch B [--notes FILE]
+#                    | --failed (--reason R | --reason-file FILE | --notes FILE) [--run ID]
+# --failed takes its reason from --reason, else from --reason-file, else from .reason of the
+# --notes JSON: the skill never puts the agent's words on a command line.
 cmd_run_record() {
-  local usage="usage: scrum run record N --started | --done --branch B [--notes FILE] | --failed --reason R [--notes FILE] [--run ID]"
-  local n="" what="" branch="" reason="" notes_file="" id="" notes repo body x
+  local usage="usage: scrum run record N --started | --done --branch B [--notes FILE] | --failed (--reason R | --reason-file FILE | --notes FILE) [--run ID]"
+  local n="" what="" branch="" reason="" reason_file="" notes_file="" id="" notes repo body x st int base base_sha
   while [ $# -gt 0 ]; do
     case "$1" in
       --started) what="${what}started" ;;
       --done) what="${what}done" ;;
       --failed) what="${what}failed" ;;
-      --branch) branch="${2:-}"; shift ;;
-      --reason) reason="${2:-}"; shift ;;
-      --notes) notes_file="${2:-}"; shift ;;
-      --run) id="${2:-}"; shift ;;
+      --branch) branch="$(run_optval --branch "${2:-}")"; shift ;;
+      --reason) reason="$(run_optval --reason "${2:-}")"; shift ;;
+      --reason-file) reason_file="$(run_optval --reason-file "${2:-}")"; shift ;;
+      --notes) notes_file="$(run_optval --notes "${2:-}")"; shift ;;
+      --run) id="$(run_optval --run "${2:-}")"; shift ;;
       -*) die "unknown option for run record: $1" ;;
-      *) [ -z "$n" ] || die "$usage"; n="${1#\#}"; case "$n" in ""|*[!0-9]*) die "not an issue number: $1" ;; esac ;;
+      *) [ -z "$n" ] || die "$usage"; n="$(run_num "$1")" ;;
     esac
     shift
   done
   [ -n "$n" ] || die "$usage"
   case "$what" in started|done|failed) ;; *) die "$usage" ;; esac
   [ "$what" != "done" ] || [ -n "$branch" ] || die "--done needs --branch, the branch the agent worked on"
-  [ "$what" != failed ] || [ -n "$reason" ] || die "--failed needs --reason"
+  if [ "$what" = failed ] && [ -z "$reason" ] && [ -n "$reason_file" ]; then reason="$(run_reason_from "$reason_file")"; fi
+  if [ "$what" = failed ] && [ -z "$reason" ] && [ -n "$notes_file" ]; then reason="$(run_reason_from "$notes_file")"; fi
+  [ "$what" != failed ] || [ -n "$reason" ] || die "--failed needs a reason: --reason, --reason-file, or --notes with a reason"
   notes="$(run_notes "$notes_file")"
   if [ "$what" = started ]; then require_tools nogh; else require_tools; fi
   load_config
@@ -292,6 +377,17 @@ cmd_run_record() {
       ;;
     done)
       git -C "$(repo_dir)" rev-parse --verify -q "refs/heads/$branch" >/dev/null || die "there is no local branch $branch"
+      # The branch must be the agent's: not the integration or default branch, and grown from
+      # the commit the run started at.
+      st="$(cat "$(run_file "$id")")"
+      int="$(printf '%s' "$st" | jq -r .branch)"; base="$(printf '%s' "$st" | jq -r .base)"
+      base_sha="$(printf '%s' "$st" | jq -r '.base_sha // empty')"
+      if [ "$branch" = "$int" ] || [ "$branch" = "$base" ] || [ "$branch" = "origin/$base" ]; then
+        die "$branch is the integration or default branch, not the branch the agent of #$n worked on"
+      fi
+      if [ -n "$base_sha" ] && ! git -C "$(repo_dir)" merge-base --is-ancestor "$base_sha" "refs/heads/$branch" 2>/dev/null; then
+        die "the branch $branch does not start from the run's integration branch (it lacks $(printf '%s' "$base_sha" | cut -c1-12)); it is not the work of this run"
+      fi
       run_apply "$id" "done" --arg n "$n" --arg now "$(now_iso)" --arg branch "$branch" --argjson notes "$notes"
       repo="$(jq -r .repo "$(run_file "$id")")"
       body="$(printf '%s' "$RUN_EFFECTS" | jq -r '.comment.body')"
@@ -320,12 +416,12 @@ cmd_run_record() {
 
 # scrum run merge N [--run ID]  (design 5; spec "Merge theo đợt")
 cmd_run_merge() {
-  local n="" id="" task dir int tbranch title before files log sha
+  local n="" id="" task dir int tbranch title before files log sha tip line reason
   while [ $# -gt 0 ]; do
     case "$1" in
-      --run) id="${2:-}"; shift ;;
+      --run) id="$(run_optval --run "${2:-}")"; shift ;;
       -*) die "unknown option for run merge: $1" ;;
-      *) [ -z "$n" ] || die "usage: scrum run merge N [--run ID]"; n="${1#\#}"; case "$n" in ""|*[!0-9]*) die "not an issue number: $1" ;; esac ;;
+      *) [ -z "$n" ] || die "usage: scrum run merge N [--run ID]"; n="$(run_num "$1")" ;;
     esac
     shift
   done
@@ -350,6 +446,18 @@ cmd_run_merge() {
   fi
   before="$(git -C "$dir" rev-parse HEAD)"
   if [ "$(git -C "$dir" rev-list --count "$before..$tbranch")" = 0 ]; then
+    # Already merged (for example the merge commit was made, then the command stopped): find the
+    # merge commit whose second parent is the tip of the task branch, and record it.
+    tip="$(git -C "$dir" rev-parse "$tbranch")"
+    sha="$(git -C "$dir" rev-list --merges --parents "$tbranch..$before" | while read -r line; do
+      set -- $line
+      if [ "${3:-}" = "$tip" ]; then printf '%s' "$1"; break; fi
+    done)"
+    if [ -n "$sha" ]; then
+      run_apply "$id" merged --arg n "$n" --arg now "$(now_iso)" --arg sha "$sha"
+      info "#$n ($tbranch) is already merged into $int: $(git -C "$dir" rev-parse --short "$sha"). Recorded."
+      return 0
+    fi
     die "the branch $tbranch of #$n has no commit that $int does not have; nothing to merge. If the agent changed nothing: scrum run record $n --failed --reason \"no changes\""
   fi
   log="$(mktemp "${TMPDIR:-/tmp}/scrum-merge.XXXXXX")"
@@ -366,17 +474,25 @@ cmd_run_merge() {
   if [ "$(git -C "$dir" rev-parse HEAD)" != "$before" ]; then
     warn "$int moved during the merge; check it with: git log $int"
   fi
-  run_apply "$id" conflict --arg n "$n" --arg now "$(now_iso)" --arg files "$files"
+  if [ -n "$files" ]; then
+    reason="merge conflict"
+  else
+    line="$(grep -v '^[[:space:]]*$' "$log" | head -1 | cut -c1-200)"
+    reason="merge failed: ${line:-git merge failed}"
+  fi
+  run_apply "$id" conflict --arg n "$n" --arg now "$(now_iso)" --arg files "$files" --arg reason "$reason"
   {
     if [ -n "$files" ]; then
       printf 'scrum: error: merging #%s (%s) into %s conflicts in:\n' "$n" "$tbranch" "$int"
       printf '%s\n' "$files" | sed 's/^/  /'
+      printf 'The merge was undone; %s is as it was. Either leave #%s out (scrum run record %s --failed --reason "merge conflict"),\n' "$int" "$n" "$n"
+      printf 'or merge %s into %s, fix the conflict there, commit, and run: scrum run merge %s\n' "$int" "$tbranch" "$n"
     else
       printf 'scrum: error: merging #%s (%s) into %s failed:\n' "$n" "$tbranch" "$int"
       sed 's/^/  /' "$log"
+      printf 'The merge was undone; %s is as it was. When git cannot sign the merge commit (commit.gpgsign) or a hook\n' "$int"
+      printf 'refuses it, fix that and run: scrum run merge %s. Or leave #%s out (scrum run record %s --failed --reason "merge failed").\n' "$n" "$n" "$n"
     fi
-    printf 'The merge was undone; %s is as it was. Either leave #%s out (scrum run record %s --failed --reason "merge conflict"),\n' "$int" "$n" "$n"
-    printf 'or merge %s into %s, fix the conflict there, commit, and run: scrum run merge %s\n' "$int" "$tbranch" "$n"
   } >&2
   rm -f "$log"
   exit 1
@@ -416,9 +532,11 @@ cmd_run_status() {
       (.tasks[] | "  #\(.number)  \(.state)  \(.title)\(mins)\(why)\(if (.conflict_files | length) > 0 then " in \(.conflict_files | join(", "))" else "" end)")),
     (if (.excluded | length) > 0 then "", "Left out at the start:", (.excluded[] | "  #\(.number)  \(.title // "?"): \(.reason)") else empty end),
     (if (.prs | length) > 0 then "", "Pull requests:", (.prs[] | "  #\(.number)\(if .wave then " (wave \(.wave))" else "" end)  \(.url // "")") else empty end),
-    (if .finished or .next_wave != null then empty
+    (if .finished or (.pr_due | length) == 0 then empty
+     else "", "Next: open the pull request of wave \(.pr_due[0]): scrum run finish --wave \(.pr_due[0])" end),
+    (if .finished or .next_wave != null or (.pr_due | length) > 0 then empty
      else "", "Next: every task is settled. Open the pull request: scrum run finish" end),
-    (if .finished or .next_wave == null then empty
+    (if .finished or .next_wave == null or (.pr_due | length) > 0 then empty
      else .next_wave as $nw | (.waves[] | select(.wave == $nw)) as $w
        | "", "Next: wave \($nw)"
          + (if ($w.to_run | length) > 0 then "; run \($w.to_run | map("#\(.)") | join(", "))" else "" end)
@@ -433,16 +551,16 @@ cmd_run_status() {
 # With --wave W the pull request holds the tasks of wave W: the integration branch at this point
 # is pushed as <branch>-wave-W, based on the branch of the pull request of the wave before.
 cmd_run_finish() {
-  local id="" wave="" repo file st dir int waves pending merged n issue issues='{}' after=null base head pr body_file url number
+  local id="" wave="" repo file st dir int waves pending merged n issue issues='{}' after=null base head pr body_file url number per_wave open_wave remote b on_origin=""
   while [ $# -gt 0 ]; do
     case "$1" in
-      --wave) wave="${2:-}"; shift ;;
-      --run) id="${2:-}"; shift ;;
+      --wave) wave="$(run_optval --wave "${2:-}")"; shift ;;
+      --run) id="$(run_optval --run "${2:-}")"; shift ;;
       *) die "unknown option for run finish: $1" ;;
     esac
     shift
   done
-  case "$wave" in "") ;; *[!0-9]*|0) die "--wave must be a wave number (got \"$wave\")" ;; esac
+  [ -z "$wave" ] || wave="$(run_count "$wave" --wave)"
   require_tools
   load_config
   id="$(run_resolve "$id")"
@@ -451,6 +569,20 @@ cmd_run_finish() {
   int="$(printf '%s' "$st" | jq -r .branch)"
   waves="$(printf '%s' "$st" | jq '.waves | length')"
   [ -z "$wave" ] || [ "$wave" -le "$waves" ] || die "run $id has $waves wave(s), not $wave"
+  # One pull request per wave, never two for the same work.
+  per_wave="$(printf '%s' "$st" | jq -r '.pr_per_wave')"
+  if [ "$per_wave" = true ] && [ -z "$wave" ]; then
+    die "run $id opens one pull request per wave. Use: scrum run finish --wave W$(printf '%s' "$st" | jq -r '[range(1; (.waves | length) + 1) as $w | select((.waves_closed // []) | index($w) | not) | $w] | if length > 0 then " (waves still without one: \(map(tostring) | join(", ")))" else "" end')"
+  fi
+  if [ "$per_wave" != true ] && [ -n "$wave" ]; then
+    die "run $id opens one pull request for all its waves; use: scrum run finish (without --wave)"
+  fi
+  if [ -n "$wave" ]; then
+    [ "$(printf '%s' "$st" | jq --argjson w "$wave" '(.waves_closed // []) | index($w) != null')" = false ] \
+      || die "wave $wave of run $id is already closed$(printf '%s' "$st" | jq -r --argjson w "$wave" '[.prs[] | select(.wave == $w)] | if length > 0 then " (pull request #\(.[0].number))" else "" end')"
+    open_wave="$(printf '%s' "$st" | jq -r --argjson w "$wave" '[range(1; $w) as $x | select((.waves_closed // []) | index($x) | not) | $x] | .[0] // empty')"
+    [ -z "$open_wave" ] || die "wave $open_wave is not closed yet; first: scrum run finish --wave $open_wave"
+  fi
   # Every task in the pull request's scope must be settled (merged, failed or left out) first.
   pending="$(printf '%s' "$st" | jq -r --arg w "$wave" '[.tasks[] | select($w == "" or .wave == ($w | tonumber))
     | select(.state != "merged" and .state != "failed" and .state != "excluded") | "#\(.number) (\(.state))"] | join(", ")')"
@@ -458,7 +590,8 @@ cmd_run_finish() {
   merged="$(printf '%s' "$st" | jq -r --arg w "$wave" '[.tasks[] | select(.state == "merged" and ($w == "" or .wave == ($w | tonumber))) | .number] | sort | .[]')"
   if [ -z "$merged" ]; then
     info "No task of run $id${wave:+ in wave $wave} is merged, so nothing is pushed and no pull request is opened."
-    if [ -z "$wave" ] || [ "$wave" -ge "$waves" ]; then run_apply "$id" finish --arg now "$(now_iso)"; fi
+    if [ -n "$wave" ]; then run_apply "$id" wave_closed --arg wave "$wave" --arg now "$(now_iso)"
+    else run_apply "$id" finish --arg now "$(now_iso)"; fi
     return 0
   fi
   repo="$(printf '%s' "$st" | jq -r .repo)"
@@ -476,7 +609,22 @@ cmd_run_finish() {
     [ "$after" = null ] || base="$(printf '%s' "$after" | jq -r .head)"
   fi
   dir="$(repo_dir)"
+  # Never push onto the default branch, nor over work on origin that is not in the local branch.
+  if [ "$head" = "$base" ] || [ "$head" = "$(printf '%s' "$st" | jq -r .base)" ]; then
+    die "$head is the base of the pull request; the run pushes only its integration branch"
+  fi
   if [ "$head" != "$int" ]; then git -C "$dir" branch -f "$head" "$int" >/dev/null || die "cannot create $head"; fi
+  git -C "$dir" fetch -q origin "refs/heads/$head:refs/remotes/origin/$head" >/dev/null 2>&1 || true
+  if git -C "$dir" rev-parse --verify -q "refs/remotes/origin/$head" >/dev/null \
+     && ! git -C "$dir" merge-base --is-ancestor "refs/remotes/origin/$head" "refs/heads/$head" 2>/dev/null; then
+    die "origin/$head has commits that $head does not have; nothing was pushed. Look at them with: git log $head..origin/$head"
+  fi
+  # A task branch must never be on origin (spec "Không push nhánh task"): say so when one is.
+  remote="$(git -C "$dir" ls-remote --heads origin 2>/dev/null | sed 's|.*refs/heads/||')" || remote=""
+  for b in $(printf '%s' "$st" | jq -r '[.tasks[].branch | strings] | unique | .[]'); do
+    if printf '%s\n' "$remote" | grep -qxF "$b"; then on_origin="$on_origin $b"; fi
+  done
+  [ -z "$on_origin" ] || warn "these task branches are on origin, though a run never pushes them:$on_origin. Check who pushed them, and delete them there if they are not wanted"
   pr="$(jqlib run-pr-body -n --argjson state "$st" --argjson issues "$issues" --argjson cfg "$CONFIG_JSON" \
     --argjson strings "$(strings_json)" --argjson wave "${wave:-null}" --argjson after "$after")"
   body_file="$(mktemp "${TMPDIR:-/tmp}/scrum-pr.XXXXXX")"

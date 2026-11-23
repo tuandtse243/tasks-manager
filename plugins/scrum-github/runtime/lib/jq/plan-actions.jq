@@ -84,12 +84,12 @@ include "plan";
           | ($cfg.labels.ai_ready // "") as $ai
           | (if $kind == "task" then
                ([$labels[] | select(startswith($cfg.points.label_prefix) | not)
-                 | select(($item.ai_ready == false and $ai != "" and . == $ai) | not)]
+                 | select(($item.ai_ready == false and $ai != "" and ascii_downcase == ($ai | ascii_downcase)) | not)]
                 + (if $want_points != null then [points_label($cfg; $want_points)] else [] end)
-                + (if $item.ai_ready == true and $ai != "" and (($labels | index($ai)) == null) then [$ai] else [] end))
+                + (if $item.ai_ready == true and $ai != "" and ($cur | has_label_ci($ai) | not) then [$ai] else [] end))
              else $labels end) as $want_labels
           | ($kind == "task" and $ai != "" and $item.ai_ready != null
-             and (($labels | index($ai)) != null) != $item.ai_ready) as $ai_changed
+             and ($cur | has_label_ci($ai)) != $item.ai_ready) as $ai_changed
           | ($kind == "task" and ($cur | task_points($cfg)) != $want_points
              and (([$labels[] | select(startswith($cfg.points.label_prefix))] | length) > 0 or $want_points != null)) as $points_changed
           | ($cur.milestone.number // null) as $cur_ms

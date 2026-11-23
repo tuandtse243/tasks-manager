@@ -48,14 +48,17 @@ Running tasks with AI agents (driven by /scrum-github:run; state in .scrum/run/<
   run plan [N,N...] [--json]                      Tasks and waves of a run, what is left out and why, time
                                                   estimate; read-only. Default: my New ai-ready tasks of
                                                   the open sprint
-  run start [N,N...] [--max-parallel K] [--pr-per-wave]
+  run start [N,N...] [--expect N,N...] [--max-parallel K] [--pr-per-wave]
                                                   Create the integration branch, save the run, assign the
-                                                  tasks and set them In progress
-  run record N --started | --done --branch B [--notes FILE] | --failed --reason R [--notes FILE]
+                                                  tasks and set them In progress; --expect: stop unless
+                                                  the tasks are exactly these (the confirmed plan)
+  run record N --started | --done --branch B [--notes FILE]
+             | --failed (--reason R | --reason-file FILE | --notes FILE)
                                                   Record what an agent did and its actual time
   run merge N                                     Merge the task's branch into the integration branch
                                                   (--no-ff); a conflict is aborted and recorded
   run finish [--wave W]                           Push the integration branch, open the pull request
+                                                  (--wave W for each wave of a --pr-per-wave run)
   run status [ID] [--json]                        Each task of a run (default: the unfinished one)
   Each of record, merge and finish takes [--run ID] (default: the unfinished run).
 
