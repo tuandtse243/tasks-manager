@@ -104,14 +104,16 @@ For the wave W (`next_wave` of `scrum run status --json`, then the next one):
    **fail**, stop before the next wave: show the failure and ask the user how to go on (fix it
    on the integration branch and test again, leave a task out, or stop here and continue later
    with `/scrum-github:run`). Do not start the next wave on a red test.
-6. With `--pr-per-wave` (the state's `pr_per_wave` is true), when the wave has merged tasks and
-   its tests pass: `scrum run finish --wave W`. It pushes the integration branch at this point as
-   `<branch>-wave-W` and opens a pull request based on the one of the wave before, which it names
-   to merge first.
+6. With `--pr-per-wave` (the state's `pr_per_wave` is true), once the wave is settled and its
+   tests pass: `scrum run finish --wave W`, also when nothing of the wave was merged (it then
+   opens nothing, and after the last wave it closes the run). It pushes the integration branch
+   at this point as `<branch>-wave-W` and opens a pull request based on the one of the wave
+   before, which it names to merge first.
 
 ## 6. Finish
 
-Without `--pr-per-wave`, after the last wave: `scrum run finish`. It refuses while a task is not
+Without `--pr-per-wave`, after the last wave: `scrum run finish` (with `--pr-per-wave` the
+last `finish --wave` already closed the run). It refuses while a task is not
 settled (merge it or record it as failed), pushes only the integration branch and opens one pull
 request into the default branch with `Closes #N` for each merged task. When no task was merged
 it pushes nothing and opens nothing.

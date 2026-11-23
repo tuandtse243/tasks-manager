@@ -662,3 +662,24 @@ $INT-wave-1
 $INT-wave-2" "$(git --git-dir="$T/remote.git" for-each-ref --format='%(refname:short)' refs/heads)"
   assert_eq "false" "$(jq '.finished_at == null' "$(state_file)")"
 }
+
+# spec "Chạy tiếp sau khi dừng: Bị ngắt giữa đợt 2"
+test_cmd_run_resume_after_wave_1() {
+  finish_env
+  run_scrum run record 102 --done --branch agent-102
+  run_scrum run record 107 --done --branch agent-107
+  run_scrum run merge 102
+  run_scrum run merge 107
+  run_scrum run record 103 --started
+  # the session stops here; later:
+  run_scrum run status --json
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "2 [103] [] false" "$(printf '%s' "$OUT" | jq -r '"\(.next_wave) \(.waves[1].to_run | tojson) \(.waves[0].to_run + .waves[0].to_merge | tojson) \(.finished)"')"
+  export SCRUM_NOW=2026-11-23T11:00:00Z
+  run_scrum run record 103 --started
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "2026-11-23T11:00:00Z" "$(jq -r '.tasks["103"].started_at' "$(state_file)")" "the timer starts again"
+  run_scrum run record 102 --started
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "#102 is merged; it cannot be started"
+}
