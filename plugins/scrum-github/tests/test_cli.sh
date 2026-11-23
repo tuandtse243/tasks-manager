@@ -67,3 +67,13 @@ test_the_old_init_name_is_gone() {
   hits="$(grep -rl 'scrum-init' "$PLUGIN_DIR/skills" "$PLUGIN_DIR/agents" "$PLUGIN_DIR/reference" "$PLUGIN_DIR/runtime" || true)"
   assert_eq "" "$hits"
 }
+
+# spec my-work "Skill việc của tôi": runs scrum mine, offers task-start and waits for the user.
+test_my_tasks_skill() {
+  local f="$PLUGIN_DIR/skills/my-tasks/SKILL.md"
+  [ -f "$f" ] || _fail "no skills/my-tasks/SKILL.md"
+  assert_eq "name: my-tasks" "$(sed -n 2p "$f")"
+  assert_contains "$(cat "$f")" '`scrum mine`'
+  assert_contains "$(cat "$f")" '/scrum-github:task-start N'
+  assert_contains "$(cat "$f")" 'Run it only after the user agrees'
+}

@@ -88,6 +88,7 @@ the full path, and the skills now use the full path from the first call). Elsewh
 | `/scrum-github:discover` | `scrum plan init`, `scrum doc check FILE` | Clarify a vague idea through research and an interview; writes `docs/plans/<slug>/brief.md` |
 | `/scrum-github:plan` | `scrum plan init`, `scrum plan check FILE`, `scrum plan apply FILE` | Break a requirement into an epic, features and tasks in a plan file; after approval create the issues |
 | `/scrum-github:task-new` | `scrum task new --title T [--points N] [--assignee LOGIN] [--sprint S \| --backlog] [--bug]` | Create a task in the open sprint, or in the backlog when none is open (or with `--backlog`); says where it went |
+| `/scrum-github:my-tasks` | `scrum mine [--user LOGIN] [--json]` | Every open task of one person in every sprint and the backlog, what blocks them, pull requests waiting for their review, and the task to do next; offers to start it. Read-only |
 | `/scrum-github:task-start` | `scrum task start N` | Assign yourself, set In progress, create branch `feat/N-slug` |
 | `/scrum-github:task` | `scrum task list [--mine] [--sprint S \| --backlog] [--status ROLE]`, `scrum task move N… --sprint S \| --backlog`, `scrum task estimate N P`, `scrum task assign N LOGIN… [--unassign]`, `scrum task drop N [--reason T]` | See tasks; move, re-estimate, assign or drop them without editing labels by hand |
 | `/scrum-github:task-pr` | `gh pr create` / `gh pr edit`, after you approve | Write the pull request description for the task of the current branch |

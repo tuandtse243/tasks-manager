@@ -20,9 +20,9 @@
 
 ## 4. Việc của tôi (design 5; spec my-work)
 
-- [ ] 4.1 Tạo `runtime/lib/jq/mine.jq`: lọc task, nhóm theo thứ tự spec, task bị chặn, đề xuất (In progress trước, rồi task New không bị chặn của sprint đang mở theo đợt), PR chờ review hoặc "chưa đọc được". Test jq trong `tests/test_mine.sh`. Kiểm tra: `bash tests/run.sh mine` xanh
-- [ ] 4.2 Tạo `runtime/lib/cmd_mine.sh` và lệnh `scrum mine [--user LOGIN] [--json]`: đọc issue theo assignee, milestones, `blocked_map`, search PR chờ review (lỗi thì bỏ qua). Test với `fake-gh`: task ở nhiều sprint và backlog, không có sprint mở, `--user`, không có việc, search lỗi, không có lời gọi ghi. Kiểm tra: `bash tests/run.sh mine` xanh
-- [ ] 4.3 Tạo `skills/my-tasks/SKILL.md` (trình bày, nói task nên làm, đề nghị `/scrum-github:task-start N` và chờ đồng ý); thêm vào README và `docs/huong-dan-ap-dung.md` gốc repo. Kiểm tra: `claude plugin validate .` đạt; test skill trong `test_cli.sh` xanh
+- [x] 4.1 Tạo `runtime/lib/jq/mine.jq`: lọc task, nhóm theo thứ tự spec, task bị chặn, đề xuất (In progress trước, rồi task New không bị chặn của sprint đang mở theo đợt), PR chờ review hoặc "chưa đọc được". Test jq trong `tests/test_mine.sh`. Kiểm tra: `bash tests/run.sh mine` xanh
+- [x] 4.2 Tạo `runtime/lib/cmd_mine.sh` và lệnh `scrum mine [--user LOGIN] [--json]`: đọc issue theo assignee, milestones, `blocked_map`, search PR chờ review (lỗi thì bỏ qua). Test với `fake-gh`: task ở nhiều sprint và backlog, không có sprint mở, `--user`, không có việc, search lỗi, không có lời gọi ghi. Kiểm tra: `bash tests/run.sh mine` xanh
+- [x] 4.3 Tạo `skills/my-tasks/SKILL.md` (trình bày, nói task nên làm, đề nghị `/scrum-github:task-start N` và chờ đồng ý); thêm vào README và `docs/huong-dan-ap-dung.md` gốc repo. Kiểm tra: `claude plugin validate .` đạt; test skill trong `test_cli.sh` xanh
 
 ## 5. Số liệu plan: đợt, tải, capacity (design 6; spec work-plan "Đợt theo phụ thuộc", "Tải và capacity khi kiểm tra plan")
 

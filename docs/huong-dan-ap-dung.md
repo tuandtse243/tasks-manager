@@ -79,7 +79,8 @@ khi thiết lập, repo dự án có sẵn script tại `.github/scrum/bin/scrum
 | `project-scan` | Tech lead, một lần cho dự án có mã sẵn; làm mới khi mã đổi nhiều | `scrum context status` | `/scrum-github:project-scan` |
 | `discover` | PO, khi yêu cầu còn mơ hồ | (không có) | `/scrum-github:discover cho người dùng bình luận dưới bài viết` |
 | `plan` | PO, SM: biến yêu cầu thành task | `scrum plan check FILE`, `scrum plan apply FILE` | `/scrum-github:plan docs/plans/blog-comments/brief.md` |
-| `task-new` | Bất kỳ ai: thêm một task hay bug | `scrum task new --title T [--points N] [--assignee LOGIN] [--bug]` | `/scrum-github:task-new bug: nút Lưu không phản hồi trên Safari, 2 điểm, giao cho an-nguyen` |
+| `task-new` | Bất kỳ ai: thêm một task hay bug (vào sprint đang mở, hoặc backlog khi chưa có sprint mở) | `scrum task new --title T [--points N] [--assignee LOGIN] [--sprint S \| --backlog] [--bug]` | `/scrum-github:task-new bug: nút Lưu không phản hồi trên Safari, 2 điểm, giao cho an-nguyen` |
+| `my-tasks` | Dev: xem hết việc của mình và nên làm gì tiếp | `scrum mine [--user LOGIN]` | `/scrum-github:my-tasks` |
 | `task-start` | Dev: nhận task | `scrum task start N` | `/scrum-github:task-start 12` |
 | `task` | Bất kỳ ai: xem, chuyển sprint, đổi điểm, giao, bỏ task | `scrum task list\|move\|estimate\|assign\|drop` | `/scrum-github:task đổi #12 thành 3 điểm` |
 | `task-pr` | Dev: viết mô tả PR và mở PR | (dùng `gh pr create`) | `/scrum-github:task-pr` |
