@@ -44,7 +44,14 @@ All notable changes to the `scrum-github` plugin. The format follows
 - `plan.json` tasks take `ai_ready` (`true` or `false`): `plan apply` labels the issue, and
   `plan apply --update` adds or removes the label to match the plan.
 - `scrum mine` and `scrum next` (and their skills) point to `/scrum-github:run` when you have New
-  tasks labelled `ai-ready` in the open sprint.
+  tasks labelled `ai-ready` in the open sprint that nothing open blocks; `scrum next` asks to
+  continue an unfinished run first. Label names are compared without case.
+- Safety of a run: `start --expect` runs only the confirmed plan; the integration branch has no
+  upstream and is never the default branch; `start` and `finish` refuse to overwrite work on
+  origin, and `finish` warns when a task branch is on origin; failure reasons come from files
+  (`--notes`, `--reason-file`), never from agent text on a command line; `record --done` checks
+  the branch; records and merges take a lock on the run's state; the agent checks that its
+  worktree starts from the integration branch and reports its own start and end time.
 
 ## [0.10.0] - 2026-11-23
 

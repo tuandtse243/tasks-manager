@@ -7,11 +7,15 @@ Chạy các task được giao cho mình bằng agent, song song trong các work
 ## ADDED Requirements
 
 ### Requirement: Chọn task để chạy
-`scrum run plan` SHALL chọn mặc định các task đang mở được giao cho người dùng hiện tại, trong sprint đang mở, trạng thái New và có label `ai-ready`. Với danh sách số task, lệnh SHALL chọn đúng các task đó. Task bị chặn bởi một task đang mở không nằm trong lần chạy MUST bị loại, kèm lý do. Task đã đóng, issue không phải task, hoặc pull request MUST bị loại, kèm lý do.
+`scrum run plan` SHALL chọn mặc định các task đang mở được giao cho người dùng hiện tại, trong sprint đang mở, trạng thái New và có label `ai-ready`. Với danh sách số task, lệnh SHALL chọn đúng các task đó. Task bị chặn bởi một task đang mở không nằm trong lần chạy MUST bị loại, kèm lý do. Số người dùng nêu mà không chạy được (task đã đóng, đã In review hoặc Done, không phải task, pull request) MUST bị loại, kèm lý do; cách chọn mặc định không liệt kê chúng.
 
 #### Scenario: Mặc định
 - **WHEN** người dùng có #102, #107 (New, `ai-ready`) và #110 (New, không có `ai-ready`) trong sprint đang mở
 - **THEN** lần chạy gồm #102 và #107, không gồm #110
+
+#### Scenario: Số nêu không phải task
+- **WHEN** người dùng chạy `scrum run plan 5,6`, với #5 là pull request và #6 là feature
+- **THEN** cả hai bị loại, mỗi số kèm lý do
 
 #### Scenario: Bị chặn bởi task ngoài lần chạy
 - **WHEN** người dùng chạy `scrum run plan 103` và #103 bị chặn bởi #102 đang mở

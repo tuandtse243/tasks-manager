@@ -286,9 +286,13 @@ What it does, in order:
    a wave do not block each other. It prints the waves, what is left out, and the time estimate
    by waves when the tasks have one. `--dry-run` stops here.
 2. **Confirm.** The skill shows this with the safety warning and waits for your answer.
-3. **Start.** `scrum run start` stops when the working tree has uncommitted changes. It creates
+3. **Start.** `scrum run start N,N --expect N,N` runs exactly the tasks the user confirmed: it
+   stops, changing nothing, when the choice differs from them now, when the working tree has
+   uncommitted changes, or when the integration branch exists locally or holds other work on
+   origin. It creates
    the **integration branch** `run.branch_pattern` (`run/{sprint}-{login}`, for example
-   `run/sprint-5-tuandt`) from the latest default branch, saves the run in
+   `run/sprint-5-tuandt`) from the latest default branch, with no upstream (never the default
+   branch itself), saves the run in
    `.scrum/run/<id>.json` (the id is `YYYYMMDD-HHMM-<login>`, UTC; `.scrum/` is added to
    `.git/info/exclude`, so `.gitignore` is not touched), assigns you the tasks nobody has, and
    sets every task In progress.
@@ -297,9 +301,14 @@ What it does, in order:
    branch, at most `--max-parallel` (`run.max_parallel`, 3) at a time. The agent follows the
    issue's acceptance criteria, writes and runs tests, commits with `#N`, never pushes, stays in
    the task's scope, and reports `{result, reason, manual_test, look_closely}`.
-   `scrum run record N --started` / `--done --branch B --notes FILE` / `--failed --reason R`
-   keeps what happened and the **actual time** (from start to done or failed), posted on the
-   issue as an `actual` block next to the estimate:
+   `scrum run record N --started` / `--done --branch B --notes FILE` /
+   `--failed --notes FILE` (or `--reason-file FILE`, or `--reason R`) keeps what happened and the
+   **actual time** (the agent's own `started_at` and `ended_at` when it reports them, else from
+   `--started` to the record), posted on the issue as an `actual` block next to the estimate. The
+   skill writes what an agent says to a file and passes the path; agent text never goes on a
+   command line. `--done` refuses the integration and default branches and a branch that does not
+   grow from the run's start. Records and merges of one run wait for each other (a lock next to
+   the state file), so none is lost:
 
    ```
    <!-- scrum:actual -->
@@ -310,9 +319,11 @@ What it does, in order:
    ```
 
    `scrum run merge N` merges each done task into the integration branch with
-   `git merge --no-ff` (one merge commit per task). Then the skill runs `run.test_command` (or the
+   `git merge --no-ff` (one merge commit per task); a task already merged by hand is recorded
+   with its merge commit. Then the skill runs `run.test_command` (or the
    repository's tests it finds) on the integration branch before the next wave.
-5. **Finish.** `scrum run finish` pushes the integration branch only and opens one pull request
+5. **Finish.** `scrum run finish` pushes the integration branch only (never over commits on
+   origin it does not have, and it warns when a task branch is on origin) and opens one pull request
    into the default branch, the **review pack**: for each merged task its acceptance criteria as
    checkboxes (from the issue), the estimate against the actual time, how to test it by hand and
    what to look at closely (from the agent), and `Closes #N`; then the tasks that failed or were
@@ -324,6 +335,8 @@ When things go wrong:
 - **A task fails** (its tests fail, or the agent cannot do it, or changed nothing): it gets a
   comment with the reason and the actual time, goes back to New and stays out of the pull
   request. The tasks it blocks are left out (with a comment, back to New); the others go on.
+- **A merge fails without a conflict** (commit signing, a hook): it is undone the same way and
+  recorded as `merge failed: <git's message>`; fix the cause and merge again.
 - **A merge conflicts**: the merge is undone, the integration branch is unchanged, the task is
   recorded as `conflict`, and the skill asks you: leave it out, or fix the conflict on the task's
   branch and run `scrum run merge N` again.
@@ -336,7 +349,10 @@ When things go wrong:
 `--pr-per-wave` opens one pull request per wave instead, right after the wave is merged and
 tested: `scrum run finish --wave W` pushes the integration branch at that point as
 `<branch>-wave-W`, based on the branch of the previous wave's pull request, and says that one
-must be merged first.
+must be merged first and that the base must then be changed to the default branch (`Closes #N`
+only closes tasks there). Each wave gets one pull request, in order: `finish` without `--wave`
+refuses on such a run, `finish --wave W` refuses a wave already closed or one after a wave still
+open, and `scrum run status` names the wave whose pull request is due before the next wave starts.
 
 Mark tasks for agents with the `ai-ready` label (`scrum init` creates it), or with
 `"ai_ready": true` on a plan task (`plan apply` adds the label, `plan apply --update` adds or

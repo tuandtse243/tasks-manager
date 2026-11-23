@@ -583,7 +583,11 @@ Khi có chuyện:
 | Lần chạy bị ngắt | Gọi lại `/scrum-github:run`: nó đề nghị chạy tiếp, bỏ qua task đã xong, chạy lại task dở. `scrum run status` xem từng task |
 
 `--pr-per-wave` mở một PR cho mỗi đợt; PR đợt sau dựa trên nhánh của PR đợt trước và ghi rõ phải merge
-PR đó trước.
+PR đó trước, rồi đổi base về nhánh mặc định trước khi merge (`Closes #N` chỉ đóng task khi merge vào
+nhánh mặc định).
+
+Lệnh chỉ chạy đúng các task bạn đã xác nhận: nếu danh sách đổi (task bị đóng, bị chặn) thì nó dừng và
+không đổi gì. Lời của agent không bao giờ được đưa vào dòng lệnh: skill ghi ra file rồi đưa đường dẫn.
 
 ---
 
