@@ -179,37 +179,95 @@ print_actions() {
     "\([.[] | select(.op | startswith("create"))] | length) to create, \([.[] | select(.op == "update")] | length) to update, \([.[] | select(.op | startswith("link"))] | length) links, \([.[] | select(.op == "skip")] | length) unchanged."'
 }
 
+# ---------- waves, load and capacity (design 6) ----------
+
+# plan_insights ONLINE MILESTONES REPO  Sets PLAN_INSIGHTS (plan-insights.jq). Online, it reads the
+# team (GitHub only when team is empty) and the issues of the open sprint.
+plan_insights() {
+  local online="$1" ms="$2" repo="${3:-}" team=null sprint issues='[]'
+  if [ "$online" = true ]; then
+    . "$SCRUM_ROOT/lib/cmd_team.sh"
+    team="$(team_members "$repo")"
+    sprint="$(open_sprint "$ms")"
+    if [ "$sprint" != null ]; then
+      issues="$(fetch_milestone_issues "$repo" "$(printf '%s' "$sprint" | jq -r .number)" 2>/dev/null)" || issues='[]'
+      [ -n "$issues" ] || issues='[]'
+    fi
+  else
+    ms=null
+  fi
+  PLAN_INSIGHTS="$(printf '%s' "$PLAN_JSON" | jqlib plan-insights -c --argjson cfg "$CONFIG_JSON" --arg today "$(today)" \
+    --argjson online "$online" --argjson team "$team" --argjson ms "$ms" --argjson sprint_issues "$issues")"
+}
+
+# print_insights  PLAN_INSIGHTS for a person.
+print_insights() {
+  printf '%s' "$PLAN_INSIGHTS" | jq -r '
+    def reason: if . == "over_capacity" then "over capacity" elif . == "depends_on_backlog" then "depends on a task left for the backlog" elif . == "no_sprint" then "no open sprint" else . end;
+    "Waves (the tasks of one wave can be worked on in parallel):",
+    (.wave_list | to_entries[] | "  \(.key + 1): \(.value | join(", "))"),
+    (if .online | not then "Load and capacity need GitHub; run plan check without --offline to see them."
+     elif .sprint == null then "There is no open sprint: no load or capacity to show. Create one with /scrum-github:sprint-new."
+     else
+       "\(.sprint.title): \(.planned) points now + \(.adding) from this plan = \(.after)"
+         + (if .capacity == null then "; capacity not known yet (no closed sprint has a velocity)"
+            else " / \(.capacity) (capacity: average velocity of the last \(.velocity.sprints | length) closed sprint\(if (.velocity.sprints | length) == 1 then "" else "s" end))"
+                 + (if .over_sprint then ", over capacity" else "" end) end),
+       "Load in \(.sprint.title):",
+       (if (.load | length) == 0 then "  (nobody)" else empty end),
+       (.load[] | "  @\(.login)\(if .in_team then "" else " (not in the team)" end): \(.current) now + \(.adding) from this plan = "
+          + (if .capacity == null then "\(.total) pt" else "\(.total) / \(.capacity) pt" end)
+          + (if .over then ", over capacity" else "" end)),
+       ([.fit.tasks[] | select(.fit == "sprint") | .id]) as $in
+       | ([.fit.tasks[] | select(.fit == "backlog") | "\(.id) (\(.reason | reason))"]) as $out
+       | "Fits in \(.sprint.title) in dependency order: \(if ($in | length) == 0 then "none" else $in | join(", ") end)"
+         + (if .capacity == null then "" else " (\(.fit.after) / \(.capacity))" end)
+         + (if ($out | length) > 0 then "; better left in the backlog: \($out | join(", "))" else "" end)
+     end),
+    (if (.warnings | length) > 0 then "Warnings:", (.warnings[] | "  - " + .) else empty end)'
+}
+
 # ---------- scrum plan check ----------
 
 cmd_plan_check() {
-  local file="" offline=0
+  local file="" offline=0 json=0
   while [ $# -gt 0 ]; do
     case "$1" in
       --offline) offline=1 ;;
+      --json) json=1 ;;
       -*) die "unknown option for plan check: $1" ;;
       *) file="$1" ;;
     esac
     shift
   done
-  [ -n "$file" ] || die "usage: scrum plan check FILE [--offline]"
+  [ -n "$file" ] || die "usage: scrum plan check FILE [--offline] [--json]"
   require_tools nogh
   load_config
   plan_load "$file"
-  info "The plan is valid: $(plan_summary)."
-  local view ms="[]"
+  local view ms="[]" repo="" out
   view="$(plan_view_path "$file")"
+  PLAN_ACTIONS=null
   if [ "$offline" = 1 ]; then
-    plan_render_to "$file" "$view" "[]" || die "cannot write $view"
-    info "Wrote $view."
+    plan_insights false null
+  else
+    require_tools
+    repo="$(repo_slug)"
+    ms="$(plan_try_milestones)"
+    plan_insights true "$ms" "$repo"
+  fi
+  plan_render_to "$file" "$view" "$ms" || die "cannot write $view"
+  [ "$offline" = 1 ] || plan_actions "$repo" false
+  if [ "$json" = 1 ]; then
+    out="$(printf '%s' "$PLAN_JSON" | jq -c '[.features[] | .tasks[]] as $t | {features: (.features | length), tasks: ($t | length), points: ([$t[].points // 0] | add)}')"
+    jq -n --arg plan "$file" --arg view "$view" --argjson summary "$out" --argjson insights "$PLAN_INSIGHTS" --argjson actions "$PLAN_ACTIONS" \
+      '{plan: $plan, view: $view, summary: $summary, insights: $insights, actions: $actions}'
     return 0
   fi
-  require_tools
-  local repo
-  repo="$(repo_slug)"
-  ms="$(plan_try_milestones)"
-  plan_render_to "$file" "$view" "$ms" || die "cannot write $view"
+  info "The plan is valid: $(plan_summary)."
   info "Wrote $view."
-  plan_actions "$repo" false
+  info ""
+  print_insights
+  [ "$offline" = 0 ] || return 0
   info ""
   info "scrum plan apply would do:"
   print_actions

@@ -44,7 +44,8 @@ Plans (a plan file per requirement: <planning.dir>/<slug>/plan.json, see share/p
   plan init "<title>" [--slug SLUG]               Create the plan folder; print its paths as JSON (offline)
   plan validate FILE                              Check a plan; print features, tasks, points (offline)
   plan render FILE [--out PATH] [--offline]       Write the plan.md view with estimates
-  plan check FILE [--offline]                     validate + render + what apply would do; writes nothing to GitHub
+  plan check FILE [--offline] [--json]            validate, render, waves, load and capacity, what apply would do;
+                                                  writes nothing to GitHub
   plan apply FILE [--dry-run] [--update]          Create the missing epic, features and tasks, link them, record numbers
 
 Documents (offline)

@@ -720,3 +720,190 @@ test_apply_view_keeps_velocity() {
   assert_contains "$(cat "$T/plan.md")" "Velocity: 10 points per sprint"
   assert_contains "$(cat "$T/plan.md")" "#11"
 }
+
+# ---------- waves, load and capacity (delta work-plan "Đợt theo phụ thuộc", "Tải và capacity khi kiểm tra plan") ----------
+
+# Five tasks: T2 and T3 depend on T1, T4 on T2, T5 on nothing. Scale 1, 2, 3, 5, 8.
+plan5() {
+  cat <<'EOF2'
+{"version": 2, "title": "Blog post comments", "sprint": "current", "epic": null,
+ "features": [{"id": "F1", "title": "Comments", "issue": null, "tasks": [
+   {"id": "T1", "title": "Comment API", "points": 3, "assignees": ["tuandt"], "issue": null},
+   {"id": "T2", "title": "Comment form", "points": 2, "depends_on": ["T1"], "assignees": ["an-nguyen"], "issue": null},
+   {"id": "T3", "title": "Moderation queue", "points": 5, "depends_on": ["T1"], "assignees": ["tuandt"], "issue": null},
+   {"id": "T4", "title": "Reply notifications", "points": 3, "depends_on": ["T2"], "issue": null},
+   {"id": "T5", "title": "Comment count", "points": 3, "issue": null}]}],
+ "assumptions": [], "out_of_scope": []}
+EOF2
+}
+cfg5() { defaults | jq -c '.points.scale = [1, 2, 3, 5, 8] | .team = [{"login": "tuandt", "capacity": 10}, {"login": "an-nguyen", "capacity": 5}]'; }
+jqp() { jq -n -L "$PLUGIN_DIR/runtime/lib/jq" --argjson p "$1" "include \"scrum\"; include \"plan\"; \$p | $2"; }
+
+test_waves_three() {
+  assert_json_eq '{"T1":1,"T5":1,"T2":2,"T3":2,"T4":3}' "$(jqp "$(plan5)" 'plan_waves')"
+}
+
+# s5task NUMBER POINTS LOGIN  An issue in Sprint 5, annotated like report_tasks.
+s5tasks() { jq -c '[.[] | {number: .[0], _pts: .[1], _who: [.[2]], _role: "new"}]' <<<"$1"; }
+
+test_load_one_person_over_capacity() {
+  local load
+  load="$(jqp "$(plan5 | jq -c '.features[0].tasks |= map(select(.id == "T2"))')" \
+    "plan_load([{\"login\":\"tuandt\",\"capacity\":10},{\"login\":\"an-nguyen\",\"capacity\":5}]; $(s5tasks '[[40,4,"an-nguyen"]]'); \"Sprint 5\")")"
+  assert_json_eq '{"login":"an-nguyen","capacity":5,"in_team":true,"current":4,"adding":2,"total":6,"over":true,"tasks":["T2"]}' \
+    "$(printf '%s' "$load" | jq -c '.[] | select(.login == "an-nguyen")')"
+  assert_eq "false" "$(printf '%s' "$load" | jq -r '.[] | select(.login == "tuandt") | .over')"
+}
+
+test_load_counts_people_outside_the_team() {
+  local load
+  load="$(jqp "$(plan5 | jq -c '.features[0].tasks[0].assignees = ["Minh-Ho"]')" \
+    "plan_load([{\"login\":\"tuandt\",\"capacity\":10}]; []; \"Sprint 5\")")"
+  assert_json_eq '{"login":"Minh-Ho","capacity":null,"in_team":false,"current":0,"adding":3,"total":3,"over":false,"tasks":["T1"]}' \
+    "$(printf '%s' "$load" | jq -c '.[] | select(.login == "Minh-Ho")')"
+}
+
+test_fit_sprint_over_capacity() {
+  local fit
+  # dependency order: T1 3, T5 3, T2 2, T3 5, T4 3 = 16; capacity 15 leaves T4 (the last, 3 pt) out
+  fit="$(jqp "$(plan5)" 'plan_fit(15; 0; "Sprint 5")')"
+  assert_eq "T1 T5 T2 T3" "$(printf '%s' "$fit" | jq -r '[.tasks[] | select(.fit == "sprint") | .id] | join(" ")')"
+  assert_eq "T4 over_capacity" "$(printf '%s' "$fit" | jq -r '.tasks[] | select(.fit == "backlog") | "\(.id) \(.reason)"')"
+  assert_eq "13 13" "$(printf '%s' "$fit" | jq -r '"\(.into) \(.after)"')"
+}
+
+test_fit_spec_scenario_fourteen_of_fifteen() {
+  # 16 points in dependency order, the last task has 2 points: 14 go in, the last stays out
+  local fit
+  fit="$(jqp "$(plan5 | jq -c '.features[0].tasks[3].points = 2 | .features[0].tasks[4].points = 4')" 'plan_fit(15; 0; "Sprint 5")')"
+  assert_eq "14" "$(printf '%s' "$fit" | jq -r .after)"
+  assert_eq "T4 over_capacity" "$(printf '%s' "$fit" | jq -r '.tasks[] | select(.fit == "backlog") | "\(.id) \(.reason)"')"
+}
+
+test_fit_dependent_of_a_backlog_task_stays_out() {
+  local fit
+  # capacity 5: T1 (3) and T5 (3) do not both fit; T5 out; T2 (2) fits; T3 (5) out; T4 depends on T2, fits? 3+2+3 = 8 > 5: out
+  fit="$(jqp "$(plan5 | jq -c '.features[0].tasks[1].points = 1 | .features[0].tasks[3].depends_on = ["T3"]')" 'plan_fit(5; 0; "Sprint 5")')"
+  assert_eq "T5 over_capacity,T3 over_capacity,T4 depends_on_backlog" \
+    "$(printf '%s' "$fit" | jq -r '[.tasks[] | select(.fit == "backlog") | "\(.id) \(.reason)"] | join(",")')"
+}
+
+test_fit_unknown_capacity_and_no_sprint() {
+  assert_eq "5" "$(jqp "$(plan5)" 'plan_fit(null; 0; "Sprint 5") | [.tasks[] | select(.fit == "sprint")] | length')"
+  assert_eq '"no_sprint"' "$(jqp "$(plan5)" 'plan_fit(15; 0; null) | [.tasks[].reason] | unique | join(",")')"
+}
+
+TEAM5='{"source":"config","members":[{"login":"tuandt","areas":[],"capacity":10},{"login":"an-nguyen","areas":[],"capacity":5}]}'
+insights() { # insights PLAN MILESTONES ISSUES
+  printf '%s' "$1" | jq -L "$PLUGIN_DIR/runtime/lib/jq" --argjson cfg "$(cfg5)" --arg today 2026-11-25 --argjson online true \
+    --argjson team "$TEAM5" --argjson ms "$2" --argjson sprint_issues "$3" -f "$PLUGIN_DIR/runtime/lib/jq/plan-insights.jq"
+}
+MS5='[{"number":5,"title":"Sprint 5","state":"open","description":"<!-- scrum:start=2026-11-23 end=2026-12-04 -->"}]'
+MS5V='[{"number":5,"title":"Sprint 5","state":"open","description":"<!-- scrum:start=2026-11-23 end=2026-12-04 -->"},
+       {"number":4,"title":"Sprint 4","state":"closed","closed_at":"2026-11-20T00:00:00Z","description":"<!-- scrum:velocity=15 -->"}]'
+s5issue() { jq -nc --argjson n "$1" --arg p "$2" --arg a "$3" '{number: $n, title: "x", state: "open", labels: [{name: "status: New"}, {name: "points: \($p)"}], assignees: [{login: $a}], milestone: {number: 5}}'; }
+
+test_insights_without_velocity() {
+  local out
+  out="$(insights "$(plan5)" "$MS5" "[$(s5issue 40 2 an-nguyen)]")"
+  assert_eq "null" "$(printf '%s' "$out" | jq -c .capacity)"
+  assert_contains "$(printf '%s' "$out" | jq -r '.warnings[]')" "the capacity of Sprint 5 is not known yet"
+  assert_eq "4 2" "$(printf '%s' "$out" | jq -r '.load[] | select(.login == "an-nguyen") | "\(.total) \(.adding)"')" "load still computed"
+  assert_json_eq '[["T1","T5"],["T2","T3"],["T4"]]' "$(printf '%s' "$out" | jq -c .wave_list)"
+}
+
+test_insights_with_velocity_warns_over_capacity() {
+  local out
+  out="$(insights "$(plan5)" "$MS5V" "[$(s5issue 40 3 an-nguyen)]")"
+  assert_eq "15 3 16 19 true" "$(printf '%s' "$out" | jq -r '"\(.capacity) \(.planned) \(.adding) \(.after) \(.over_sprint)"')"
+  assert_contains "$(printf '%s' "$out" | jq -r '.warnings[]')" "Sprint 5 would have 19 / 15 points after apply (over capacity by 4)"
+  assert_not_contains "$(printf '%s' "$out" | jq -r '.warnings[]')" "@an-nguyen" "5 of 5 is not over capacity"
+}
+
+test_insights_unknown_login_warning() {
+  local out
+  out="$(insights "$(plan5 | jq -c '.features[0].tasks[4].assignees = ["tuandtt"]')" "$MS5" "[]")"
+  assert_eq '["tuandtt"]' "$(printf '%s' "$out" | jq -c .unknown_logins)"
+  assert_contains "$(printf '%s' "$out" | jq -r '.warnings[]')" "tuandtt is not in the team (tuandt, an-nguyen)"
+}
+
+test_insights_offline() {
+  local out
+  out="$(plan5 | jq -L "$PLUGIN_DIR/runtime/lib/jq" --argjson cfg "$(cfg5)" --arg today 2026-11-25 --argjson online false \
+    --argjson team null --argjson ms null --argjson sprint_issues '[]' -f "$PLUGIN_DIR/runtime/lib/jq/plan-insights.jq")"
+  assert_eq "false null null" "$(printf '%s' "$out" | jq -r '"\(.online) \(.load) \(.fit)"')"
+  assert_eq "3" "$(printf '%s' "$out" | jq -r '.wave_list | length')"
+}
+
+check_env() {
+  setup_fake_gh
+  setup_repo 'points:
+  scale: [1, 2, 3, 5, 8]
+team:
+  - login: tuandt
+    capacity: 10
+  - login: an-nguyen
+    capacity: 5'
+  export SCRUM_TODAY=2026-11-25
+  printf '%s' "$MS5" > "$FAKE_GH_DIR/ms.json"
+  route 'api --paginate repos/acme/blog/milestones*' ms.json
+  printf '[%s]' "$(s5issue 40 3 an-nguyen)" > "$FAKE_GH_DIR/s5.json"
+  route 'api --paginate repos/acme/blog/issues?milestone=5*' s5.json
+  mkdir -p "$T/plans/comments"
+  plan5 > "$T/plans/comments/plan.json"
+}
+
+test_check_prints_waves_load_and_warnings() {
+  check_env
+  run_scrum plan check "$T/plans/comments/plan.json"
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "  1: T1, T5"
+  assert_contains "$OUT" "  3: T4"
+  assert_contains "$OUT" "Sprint 5: 3 points now + 16 from this plan = 19; capacity not known yet"
+  assert_contains "$OUT" "  @an-nguyen: 3 now + 2 from this plan = 5 / 5 pt"
+  assert_contains "$OUT" "  @tuandt: 0 now + 8 from this plan = 8 / 10 pt"
+  assert_contains "$OUT" "the capacity of Sprint 5 is not known yet"
+  assert_contains "$OUT" "scrum plan apply would do:"
+  assert_not_contains "$(gh_calls)" "assignees" "team is set: GitHub's list is not read"
+  assert_eq "" "$(gh_writes)"
+}
+
+test_check_person_over_capacity() {
+  check_env
+  printf '[%s]' "$(s5issue 40 4 an-nguyen)" > "$FAKE_GH_DIR/s5.json"
+  # scale has no 4; the label still counts as 4 points on GitHub
+  run_scrum plan check "$T/plans/comments/plan.json"
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "@an-nguyen would have 6 / 5 points in Sprint 5 (over capacity by 1)"
+}
+
+test_check_json_for_the_skill() {
+  check_env
+  run_scrum plan check "$T/plans/comments/plan.json" --json
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "5 16" "$(printf '%s' "$OUT" | jq -r '"\(.summary.tasks) \(.summary.points)"')"
+  assert_json_eq '[["T1","T5"],["T2","T3"],["T4"]]' "$(printf '%s' "$OUT" | jq -c .insights.wave_list)"
+  assert_eq "Sprint 5" "$(printf '%s' "$OUT" | jq -r .insights.sprint.title)"
+  assert_eq "config" "$(printf '%s' "$OUT" | jq -r .insights.team.source)"
+  assert_eq "true" "$(printf '%s' "$OUT" | jq -r '.actions | length > 0')"
+}
+
+test_check_offline_waves_only() {
+  check_env
+  broken_gh
+  run_scrum plan check "$T/plans/comments/plan.json" --offline
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "  2: T2, T3"
+  assert_contains "$OUT" "Load and capacity need GitHub"
+  assert_not_contains "$OUT" "would do"
+  run_scrum plan check "$T/plans/comments/plan.json" --offline --json
+  assert_eq "false null" "$(printf '%s' "$OUT" | jq -r '"\(.insights.online) \(.actions)"')"
+}
+
+test_check_unknown_login_warns() {
+  check_env
+  jq '.features[0].tasks[4].assignees = ["tuandtt"]' "$T/plans/comments/plan.json" > "$T/p.json"; mv "$T/p.json" "$T/plans/comments/plan.json"
+  run_scrum plan check "$T/plans/comments/plan.json" --offline
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "tuandtt is not in the team (tuandt, an-nguyen)"
+}

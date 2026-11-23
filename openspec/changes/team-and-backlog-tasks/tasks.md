@@ -26,8 +26,8 @@
 
 ## 5. Số liệu plan: đợt, tải, capacity (design 6; spec work-plan "Đợt theo phụ thuộc", "Tải và capacity khi kiểm tra plan")
 
-- [ ] 5.1 Thêm `plan_waves`, `plan_load`, `plan_fit` vào jq của plan và test jq: ba đợt theo ví dụ spec, một người vượt capacity, sprint vượt capacity, chưa có velocity. Kiểm tra: `bash tests/run.sh plan` xanh
-- [ ] 5.2 `plan check` đọc team và issue của sprint đang mở, in đợt, tải, mức vừa capacity, cảnh báo login ngoài team; thêm `plan check --json` cho skill. Test online và `--offline`. Kiểm tra: `bash tests/run.sh plan` xanh
+- [x] 5.1 Thêm `plan_waves`, `plan_load`, `plan_fit` vào jq của plan và test jq: ba đợt theo ví dụ spec, một người vượt capacity, sprint vượt capacity, chưa có velocity. Kiểm tra: `bash tests/run.sh plan` xanh
+- [x] 5.2 `plan check` đọc team và issue của sprint đang mở, in đợt, tải, mức vừa capacity, cảnh báo login ngoài team; thêm `plan check --json` cho skill. Test online và `--offline`. Kiểm tra: `bash tests/run.sh plan` xanh
 
 ## 6. Bản xem HTML (design 8, 9, 10; spec work-plan "Bản xem HTML", "Trang tự chứa và an toàn", "Ngôn ngữ của bản xem HTML", "Thay đổi so với lần xem trước", "Bỏ qua file sinh ra trong thư mục plan")
 
