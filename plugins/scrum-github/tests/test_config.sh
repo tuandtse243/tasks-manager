@@ -451,3 +451,33 @@ test_template_matches_defaults_for_run() {
   assert_eq "$(jq -c '{run, a: .labels.ai_ready}' "$PLUGIN_DIR/runtime/share/defaults.json")" \
     "$(yq -o=json '.' "$PLUGIN_DIR/templates/scrum.yml" | jq -c '{run, a: .labels.ai_ready}')"
 }
+
+# ---------- release (delta scrum-config, change release) ----------
+
+test_release_defaults_when_not_declared() {
+  setup_fake_gh
+  setup_repo 'version: 1'
+  run_scrum config
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "v breaking 0.1.0" "$(printf '%s' "$OUT" | jq -r '.release | "\(.tag_prefix) \(.breaking_label) \(.first_version)"')"
+}
+
+test_release_first_version_not_semver_rejected() {
+  assert_contains "$(config_error 'release:
+  first_version: "1.0"')" "release.first_version"
+}
+
+test_release_validation_messages() {
+  assert_contains "$(errors_with '.release.breaking_label = ""')" "release.breaking_label"
+  assert_contains "$(errors_with '.release.first_version = 1')" "release.first_version"
+  assert_contains "$(errors_with '.release.first_version = "01.2.3"')" "release.first_version"
+  assert_contains "$(errors_with '.release.tag_prefix = "v 1"')" "release.tag_prefix"
+  assert_contains "$(errors_with '.release.tag_prefix = null')" "release.tag_prefix"
+  assert_contains "$(errors_with '.release = "x"')" "release: must be a mapping"
+  assert_eq "" "$(errors_with '.release.tag_prefix = "" | .release.first_version = "1.0.0" | .release.breaking_label = "major"')"
+}
+
+test_template_matches_defaults_for_release() {
+  assert_eq "$(jq -c .release "$PLUGIN_DIR/runtime/share/defaults.json")" \
+    "$(yq -o=json '.' "$PLUGIN_DIR/templates/scrum.yml" | jq -c .release)"
+}

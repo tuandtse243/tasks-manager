@@ -78,5 +78,10 @@
     "test_command": "",
     "max_parallel": 3,
     "branch_pattern": "run/{sprint}-{login}"
+  },
+  "release": {
+    "tag_prefix": "v",
+    "breaking_label": "breaking",
+    "first_version": "0.1.0"
   }
 }

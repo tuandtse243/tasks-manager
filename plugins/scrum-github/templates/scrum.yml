@@ -93,6 +93,15 @@ run:
   # GitHub login, {date} today (YYYY-MM-DD).
   branch_pattern: "run/{sprint}-{login}"
 
+release:
+  # /scrum-github:release publishes a version: a tag and a GitHub Release from the Done tasks.
+  # Tag names are <tag_prefix>X.Y.Z, e.g. v1.4.2. "" for tags without a prefix (1.4.2).
+  tag_prefix: v
+  # A task with this label makes the next version a major one (2.0.0 after 1.4.2).
+  breaking_label: breaking
+  # The version of the first release, when the repository has no version tag yet.
+  first_version: "0.1.0"
+
 # Optional: who is on the team. /plan suggests an assignee for each task from this list (by
 # areas and current load), `scrum team` shows each person's load, and task new, task assign and
 # plan check warn about a login that is not here. Left out, the list is the people GitHub lets

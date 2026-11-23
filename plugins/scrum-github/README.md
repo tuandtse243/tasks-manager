@@ -170,6 +170,10 @@ run:                               # /scrum-github:run, see "Running tasks with 
   test_command: ""                 # the repo's test command; empty = each agent finds it
   max_parallel: 3                  # at most this many agents at once (a whole number > 0)
   branch_pattern: "run/{sprint}-{login}"   # integration branch; also {date} (YYYY-MM-DD)
+release:                           # /scrum-github:release, see "Releasing a version" below
+  tag_prefix: v                    # tags are <tag_prefix>X.Y.Z; "" for none
+  breaking_label: breaking         # a task with this label makes a major version
+  first_version: "0.1.0"           # the first release when there is no version tag yet
 project:                           # optional board, see "Project board" below
   enabled: false
   owner: null                      # user or organization that owns the project

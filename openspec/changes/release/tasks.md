@@ -4,7 +4,7 @@ Paths are relative to `plugins/scrum-github/`. Run tests with `bash tests/run.sh
 
 ## 1. Configuration (spec scrum-config)
 
-- [ ] 1.1 `release` block in `defaults.json`, `validate-config.jq`, `templates/scrum.yml` and the README Configuration block. Verify: tests in `test_config.sh` for the defaults and `first_version: "1.0"`; `bash tests/run.sh config` green
+- [x] 1.1 `release` block in `defaults.json`, `validate-config.jq`, `templates/scrum.yml` and the README Configuration block. Verify: tests in `test_config.sh` for the defaults and `first_version: "1.0"`; `bash tests/run.sh config` green
 
 ## 2. Version choice and task selection (design 1, 2, 4; spec release)
 
