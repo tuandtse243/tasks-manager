@@ -273,3 +273,59 @@ test_cmd_mine_reads_blockers_of_the_sprint_first() {
   assert_eq "100" "$(printf '%s' "$OUT" | jq -r .next.number)"
   assert_eq "50" "$(grep -c 'dependencies/blocked_by' "$FAKE_GH_LOG")"
 }
+
+# ---------- time (delta my-work "Thời gian trong việc của một người") ----------
+
+# mie NUMBER STATUS MILESTONE WORK REVIEW  Like mi (1 point), with an estimate block.
+mie() {
+  mi "$1" "$2" 1 "$3" | jq -c --argjson w "$4" --argjson r "$5" \
+    '.body = "Text\n\n<!-- scrum:estimate -->\nAI ~\($w)m\n<!-- {\"work_minutes\":\($w),\"review_minutes\":\($r),\"by\":\"ai\"} -->\n<!-- /scrum:estimate -->"'
+}
+
+# "Có ước lượng": #102 (20 + 15), #103 (15 + 15) blocked by #102 -> 20 + 5 + 15 + 5 = 45, review 30.
+test_mine_time_by_waves() {
+  local issues out
+  issues="$(jq -s . <(mie 102 New 5 20 15) <(mie 103 New 5 15 15))"
+  out="$(mine_jq "$issues" '{"102":[],"103":[102]}')"
+  assert_json_eq '{"tasks":2,"estimated":2,"missing":0,"missing_numbers":[],"work_minutes":45,"review_minutes":30,"waves":2}' \
+    "$(printf '%s' "$out" | jq -c .time)"
+  assert_json_eq '{"work_minutes":20,"review_minutes":15,"by":"ai"}' "$(printf '%s' "$out" | jq -c '.groups[0].tasks[0].estimate')"
+}
+
+test_mine_time_parallel_and_other_sprints_left_out() {
+  local issues
+  issues="$(jq -s . <(mie 102 'In progress' 5 20 15) <(mie 103 New 5 15 15) <(mie 104 New 6 60 60) <(mie 105 New '' 60 60))"
+  assert_json_eq '{"work_minutes":25,"review_minutes":30,"tasks":2}' \
+    "$(mine_jq "$issues" '{"102":[],"103":[]}' | jq -c '.time | {work_minutes, review_minutes, tasks}')"
+}
+
+# "Có task chưa ước lượng"
+test_mine_time_counts_tasks_without_estimate() {
+  local issues
+  issues="$(jq -s . <(mie 102 New 5 20 15) <(mi 104 New 1 5))"
+  assert_json_eq '{"estimated":1,"missing":1,"missing_numbers":[104]}' \
+    "$(mine_jq "$issues" '{}' | jq -c '.time | {estimated, missing, missing_numbers}')"
+}
+
+test_mine_time_null_without_open_sprint() {
+  assert_eq "null" "$(mine_jq "$(jq -s . <(mie 102 New '' 20 15))" '{}' null | jq -c .time)"
+}
+
+test_cmd_mine_shows_time() {
+  mine_env
+  jq -s . <(mie 102 New 5 20 15) <(mie 103 New 5 15 15) <(mi 104 New 1 5) > "$FAKE_GH_DIR/mine.json"
+  printf '[{"number":102,"state":"open"}]' > "$FAKE_GH_DIR/blk103.json"
+  route_first 'api --paginate repos/acme/blog/issues/103/dependencies/blocked_by*' blk103.json
+  run_scrum mine
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "  #102  1 pt  Sprint 5  Task 102  [AI 20m, review 15m]"
+  assert_contains "$OUT" "Time left in Sprint 5: about 45m of work (2 waves, each as long as its longest task plus the merge) and 30m of review."
+  assert_contains "$OUT" "1 task without a time estimate, not counted: #104."
+}
+
+test_cmd_mine_no_estimate_at_all() {
+  mine_env
+  run_scrum mine
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "Time left in Sprint 5: 3 tasks without a time estimate."
+}

@@ -185,7 +185,10 @@
     "plan_tl_aria": "Timeline: work done in about {work}, then about {review} of review, about {total} in all",
     "plan_tl_note": "The tasks of one wave run in parallel, so a wave takes as long as its longest task, plus {merge} to merge and run the tests (planning.merge_minutes). One after the other the tasks would take {sum}.",
     "plan_tl_missing": "{n} tasks have no time estimate and are not on the timeline: {ids}.",
-    "plan_tl_missing_one": "{n} task has no time estimate and is not on the timeline: {ids}."
+    "plan_tl_missing_one": "{n} task has no time estimate and is not on the timeline: {ids}.",
+    "work_left": "Work left",
+    "review_left": "Review left",
+    "time_missing_line": "Tasks not done without a time estimate: {n}."
   },
   "vi": {
     "assignee": "Người nhận",
@@ -359,6 +362,9 @@
     "plan_tl_review_bar": "review + test tay ~{d}",
     "plan_tl_aria": "Dòng thời gian: làm xong khoảng {work}, review thêm khoảng {review}, tổng khoảng {total}",
     "plan_tl_note": "Các task cùng một đợt chạy song song, nên mỗi đợt mất bằng task lâu nhất của nó, cộng {merge} để merge và chạy test (planning.merge_minutes). Làm lần lượt từng task thì mất {sum}.",
-    "plan_tl_missing": "{n} task chưa có ước lượng thời gian nên không có trên dòng thời gian: {ids}."
+    "plan_tl_missing": "{n} task chưa có ước lượng thời gian nên không có trên dòng thời gian: {ids}.",
+    "work_left": "Làm còn lại",
+    "review_left": "Review còn lại",
+    "time_missing_line": "Task chưa xong chưa có ước lượng thời gian: {n}."
   }
 }

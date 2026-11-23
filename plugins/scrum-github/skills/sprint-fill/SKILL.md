@@ -16,18 +16,23 @@ Run it from the root of the target repository.
 1. **Look.** Run `scrum sprint fill [SPRINT] [--capacity N]` (no sprint = the current one). It
    changes nothing. It prints the capacity (the average velocity of up to three recent closed
    sprints, or `--capacity`), the points already planned, the points free, and the backlog.
+   When tasks have time estimates, it also prints the minutes of review per person in the sprint
+   ("@an-nguyen 1h30m of 2h": the second number is `review_hours` from `team` in
+   `.github/scrum.yml`), and each backlog task's time ("[AI 20m, review 15m]").
    If it says the capacity is unknown, ask the user for one and run it again with `--capacity N`.
 2. **Propose.** Pick tasks from the backlog that fit the free points:
    - a task that blocks others comes before them; never propose a task without its open
      blockers unless the user says so;
    - leave out tasks without points, and say which ones need an estimate
      (`/scrum-github:task` can set it);
-   - follow any priority the user gave; otherwise prefer tasks of the same feature together.
+   - follow any priority the user gave; otherwise prefer tasks of the same feature together;
+   - when people have `review_hours`, keep each person's review minutes under it: when AI does
+     the work, review is the bottleneck, not points.
    Show the proposal as a short table (number, points, title, why) with the total against the
    capacity. Let the user add, remove or swap tasks.
 3. **Preview.** Run `scrum sprint fill [SPRINT] --add N,N,…` and show its warnings (over
-   capacity, no points, blocked by a task outside the sprint). An error means nothing will be
-   changed: fix the list first.
+   capacity, no points, blocked by a task outside the sprint, a person over their review hours).
+   Warnings never stop the command. An error means nothing will be changed: fix the list first.
 4. **Apply.** Only after the user agrees to that preview, run the same command with `--yes`.
    Each task gets the sprint's milestone and a comment. Report what was added.
 

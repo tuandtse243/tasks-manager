@@ -370,3 +370,81 @@ test_cmd_close_summary_in_vietnamese() {
   assert_status 0 "$STATUS" "$ERR"
   assert_contains "$(gh_calls)" "Tổng kết Sprint 1"
 }
+
+# ---------- review time (delta sprint-lifecycle "Giờ review khi lập kế hoạch sprint") ----------
+
+est_body() { printf 'Text\n\n<!-- scrum:estimate -->\nAI\n<!-- {"work_minutes":%s,"review_minutes":%s} -->\n<!-- /scrum:estimate -->' "$1" "$2"; }
+# rev_issue NUMBER LOGIN REVIEW  A task of the sprint assigned to LOGIN with that review time.
+rev_issue() {
+  fill_issue "$1" 1 | jq -c --arg l "$2" --arg b "$(est_body 20 "$3")" '.assignees = (if $l == "" then [] else [{login: $l}] end) | .body = $b'
+}
+fill_plan_cfg() { # MILESTONES SPRINT_ISSUES BACKLOG ADD CFG
+  jqt sprint-fill -n --argjson ms "$1" --argjson sprint "$(printf '%s' "$1" | jq -c '.[] | select(.state == "open")')" \
+    --argjson issues "$2" --argjson backlog "$3" --argjson add "$4" --argjson capacity null --argjson cfg "$5"
+}
+REV_CFG="$(jq -c '.team = [{"login": "an-nguyen", "review_hours": 2}, {"login": "tuandt"}]' "$PLUGIN_DIR/runtime/share/defaults.json")"
+rev_backlog() { # a backlog task #30 for an-nguyen with 45 minutes of review
+  jq -nc '{tasks: [{number: 30, title: "T30", points: 1, assignees: ["an-nguyen"], parent: null, blocked_by: [],
+                    estimate: {work_minutes: 20, review_minutes: 45, by: "ai"}}]}'
+}
+
+# "Vượt giờ review"
+test_fill_review_over_the_review_hours() {
+  local p
+  p="$(fill_plan_cfg "$(fill_ms 10)" "$( { rev_issue 1 an-nguyen 60; rev_issue 2 An-Nguyen 30; rev_issue 3 tuandt 15; } | jq -sc .)" \
+    "$(rev_backlog)" '[30]' "$REV_CFG")"
+  assert_json_eq '{"login":"an-nguyen","now":90,"after":135,"limit":120,"review_hours":2,"over":true}' \
+    "$(printf '%s' "$p" | jq -c '.review.people[] | select(.login == "an-nguyen")')"
+  assert_json_eq '{"login":"tuandt","now":15,"after":15,"limit":null,"review_hours":null,"over":false}' \
+    "$(printf '%s' "$p" | jq -c '.review.people[] | select(.login == "tuandt")')"
+  assert_eq '["an-nguyen would have 135 of 120 minutes of review in Sprint 9 (review_hours: 2)"]' "$(printf '%s' "$p" | jq -c .review_warnings)"
+  assert_eq "[]" "$(printf '%s' "$p" | jq -c .errors)" "a warning, not an error"
+}
+
+# "Không khai báo giờ review"
+test_fill_review_without_review_hours() {
+  local p
+  p="$(fill_plan_cfg "$(fill_ms 10)" "$( { rev_issue 1 an-nguyen 90; rev_issue 2 '' 10; } | jq -sc .)" "$(rev_backlog)" '[30]' "$(defaults)")"
+  assert_eq "90 135 null" "$(printf '%s' "$p" | jq -r '.review.people[0] | "\(.now) \(.after) \(.limit)"')"
+  assert_eq "10" "$(printf '%s' "$p" | jq -r .review.unassigned.now)"
+  assert_eq "[]" "$(printf '%s' "$p" | jq -c .review_warnings)"
+}
+
+test_fill_review_null_without_estimates() {
+  assert_eq "null []" "$(fill_plan "$(fill_ms 10)" "$(fill_issue 1 3 | jq -sc .)" "$(fill_backlog '30:3:')" '[30]' null | jq -c '[.review, .review_warnings] | map(tojson) | join(" ")' -r)"
+}
+
+rev_env() {
+  fill_env
+  printf 'team:\n  - login: an-nguyen\n    review_hours: 2\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  { rev_issue 1 an-nguyen 60; rev_issue 2 an-nguyen 30; } | jq -s . > "$FAKE_GH_DIR/sprint.json"
+  fill_issue 30 1 | jq -c --arg b "$(est_body 20 45)" '. + {milestone: null, body: $b, assignees: [{login: "an-nguyen"}]}' \
+    | jq -s . > "$FAKE_GH_DIR/backlog.json"
+}
+
+test_cmd_fill_review_warning_does_not_block() {
+  rev_env
+  run_scrum sprint fill --add 30 --yes
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "Review in the sprint: @an-nguyen 1h30m of 2h"
+  assert_contains "$OUT" "Review after adding: @an-nguyen 2h15m of 2h"
+  assert_contains "$OUT" "Warning: an-nguyen would have 135 of 120 minutes of review in Sprint 9 (review_hours: 2)"
+  assert_contains "$OUT" "#30  1 pt  T30  [AI 20m, review 45m]"
+  assert_contains "$OUT" "Added #30 to Sprint 9."
+}
+
+test_cmd_fill_review_totals_in_the_preview() {
+  rev_env
+  run_scrum sprint fill
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "Review in the sprint: @an-nguyen 1h30m of 2h"
+  assert_not_contains "$OUT" "Warning"
+  assert_contains "$OUT" "#30  1 pt  @an-nguyen  T30  [AI 20m, review 45m]"
+}
+
+test_cmd_fill_without_estimates_prints_no_review() {
+  fill_env
+  run_scrum sprint fill --add 30
+  assert_status 0 "$STATUS" "$ERR"
+  assert_not_contains "$OUT" "Review"
+}

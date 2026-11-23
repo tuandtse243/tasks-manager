@@ -3,7 +3,10 @@
 # SPRINT_ISSUES --argjson backlog BACKLOG (backlog.jq) --argjson add [NUMBERS] --argjson capacity N|null
 # --argjson cfg CONFIG
 # Output: {sprint, velocity: {average, sprints}, capacity, capacity_source, planned, free,
-#          adding: {tasks, points}, after, errors, warnings}
+#          adding: {tasks, points}, after, errors, warnings, review, review_warnings}
+# review (spec sprint-lifecycle "Giờ review khi lập kế hoạch sprint"): minutes of review of the
+# sprint's tasks per assignee, now and after adding, against team[].review_hours x 60; null when
+# no task has a review time. review_warnings never stop the command.
 include "scrum";
 
 ($ms | recent_velocity_sprints) as $recent
@@ -16,6 +19,25 @@ include "scrum";
 | [$add[] | select($bl[tostring] == null)] as $unknown
 | [$add[] | $bl[tostring] | select(. != null)] as $adding
 | ([$adding[].points // 0] | add // 0) as $add_pts
+# review minutes per person: every task of the sprint (done ones too: the time was planned in it)
+| [$in[] | {who: ._who, r: (._est.review_minutes // 0)}] as $rev_now
+| [$adding[] | {who: (.assignees // []), r: (.estimate.review_minutes // 0)}] as $rev_add
+| (($rev_now + $rev_add) | any(.[]; .r > 0)) as $timed
+| ([($rev_now + $rev_add)[].who[]]
+   | reduce .[] as $l ([]; if any(.[]; same_login(.; $l)) then . else . + [$l] end)) as $people
+| def minutes($xs; $l): [$xs[] | select(any(.who[]; same_login(.; $l))) | .r] | add // 0;
+  ( if $timed | not then null
+    else
+      { people: [$people[] as $l
+                 | ([($cfg.team // [])[] | select(same_login(.login; $l))] | .[0]) as $m
+                 | minutes($rev_now; $l) as $now
+                 | ($now + minutes($rev_add; $l)) as $after
+                 | (if $m.review_hours == null then null else ($m.review_hours * 60 | round) end) as $limit
+                 | {login: ($m.login // $l | ltrimstr("@")), now: $now, after: $after, limit: $limit,
+                    review_hours: ($m.review_hours // null), over: ($limit != null and $after > $limit)}],
+        unassigned: {now: ([$rev_now[] | select((.who | length) == 0) | .r] | add // 0),
+                     after: ([($rev_now + $rev_add)[] | select((.who | length) == 0) | .r] | add // 0)} }
+    end ) as $review
 | { sprint: ($sprint | sprint_info | {number, title, start, end}),
     velocity: {average: $avg, sprints: [$recent[] | {title, velocity}]},
     capacity: $cap,
@@ -34,4 +56,7 @@ include "scrum";
        | if .blocked_by == null then "#\(.number): its blockers were not checked"
          else (.blocked_by - $add - $open_in_sprint) as $out
          | if ($out | length) > 0 then "#\(.number) is blocked by \($out | map("#\(.)") | join(", ")), not in \($sprint.title)" else empty end
-         end) ] }
+         end) ],
+    review: $review,
+    review_warnings: [($review.people // [])[] | select(.over)
+      | "\(.login) \(if ($add | length) > 0 then "would have" else "has" end) \(.after) of \(.limit) minutes of review in \($sprint.title) (review_hours: \(.review_hours))"] }

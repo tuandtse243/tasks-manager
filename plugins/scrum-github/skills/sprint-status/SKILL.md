@@ -1,6 +1,6 @@
 ---
 name: sprint-status
-description: Show Scrum sprint progress from GitHub - tasks and story points per person and status (New, In progress, Done), percent of points done, unestimated tasks and days left. Use when the user asks how the sprint is going, who is working on what, or what is left.
+description: Show Scrum sprint progress from GitHub - tasks and story points per person and status (New, In progress, Done), percent of points done, unestimated tasks, days left, and the minutes of work and review left per person when tasks have time estimates. Use when the user asks how the sprint is going, who is working on what, or what is left.
 ---
 
 # Sprint status
@@ -16,6 +16,10 @@ Run it from the root of the target repository. It only reads from GitHub.
    Add `--json` if you need the numbers for further analysis.
 2. Show the table as it is, then add a short reading: what is done, who has the most open work,
    whether the remaining points fit the days left, unestimated tasks to estimate.
+   When tasks of the sprint have time estimates, the table has two more columns, "Work left" and
+   "Review left" (minutes of the tasks not done), and a line with the tasks not done that have no
+   time estimate. When AI does the work, review time is usually the bottleneck: say who has the
+   most review left. Without any time estimate the table has no time columns.
 3. Answer the user's actual question (for example "what is David doing?") from the table.
 
 For a chart, use `/scrum-github:sprint-report`.

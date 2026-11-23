@@ -25,9 +25,9 @@
 
 ## 5. Việc của tôi, tiến độ, lập sprint (spec my-work, sprint-reporting, sprint-lifecycle)
 
-- [ ] 5.1 `mine.jq` và `scrum mine`: thời gian từng task, ước tính theo đợt, số task thiếu ước lượng; skill `my-tasks`. Test ví dụ 45 phút của spec. Kiểm tra: `bash tests/run.sh mine` xanh
-- [ ] 5.2 `progress-table.jq`: cột phút làm và phút review còn lại khi có ước lượng, câu số task thiếu ước lượng (en, vi); bảng giữ nguyên khi không có ước lượng. Kiểm tra: `bash tests/run.sh report` xanh, các test bảng cũ không đổi
-- [ ] 5.3 `sprint-fill.jq` và `scrum sprint fill`: phút review theo người, cảnh báo vượt `review_hours`. Test hai scenario của spec. Kiểm tra: `bash tests/run.sh sprint` xanh
+- [x] 5.1 `mine.jq` và `scrum mine`: thời gian từng task, ước tính theo đợt, số task thiếu ước lượng; skill `my-tasks`. Test ví dụ 45 phút của spec. Kiểm tra: `bash tests/run.sh mine` xanh
+- [x] 5.2 `progress-table.jq`: cột phút làm và phút review còn lại khi có ước lượng, câu số task thiếu ước lượng (en, vi); bảng giữ nguyên khi không có ước lượng. Kiểm tra: `bash tests/run.sh report` xanh, các test bảng cũ không đổi
+- [x] 5.3 `sprint-fill.jq` và `scrum sprint fill`: phút review theo người, cảnh báo vượt `review_hours`. Test hai scenario của spec. Kiểm tra: `bash tests/run.sh sprint` xanh
 
 ## 6. Phiên bản và tài liệu
 

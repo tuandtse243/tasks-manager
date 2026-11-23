@@ -43,7 +43,7 @@ fetch_backlog() {
 
 # print_backlog  The backlog in BACKLOG, for a person.
 print_backlog() {
-  printf '%s' "$BACKLOG" | jq -r '
+  printf '%s' "$BACKLOG" | jq -r -L "$JQ_LIB" 'include "scrum";
     def pts: if .points == null then "-" else "\(.points) pt" end;
     def who: if (.assignees | length) == 0 then "-" else (.assignees | map("@" + .) | join(", ")) end;
     def notes: [ (if .parent then "part of #\(.parent)" else empty end),
@@ -53,7 +53,7 @@ print_backlog() {
     if .total == 0 then "The backlog is empty. Add tasks with /scrum-github:task-new or /scrum-github:plan."
     else
       "Backlog: \(.total) task\(if .total == 1 then "" else "s" end), \(.points) points\(if .unestimated > 0 then " (\(.unestimated) not estimated)" else "" end)",
-      (.tasks[] | "  #\(.number)  \(pts)  \(who)  \(.title)\(notes | if . == "" then "" else "  (\(.))" end)")
+      (.tasks[] | "  #\(.number)  \(pts)  \(who)  \(.title)\(estimate_brief)\(notes | if . == "" then "" else "  (\(.))" end)")
     end'
 }
 

@@ -117,6 +117,12 @@ def estimate_line($e; $s):
        then tr($s; "est_work"; {by: tr($s; "est_by_\($e.by // "ai")"), d: ($e.work_minutes | fmt_duration)}) else empty end),
     (if $e.review_minutes != null then tr($s; "est_review"; {d: ($e.review_minutes | fmt_duration)}) else empty end)
   ] | join(" · ");
+# Input: an object with "estimate". "  [AI 20m, review 15m]" for one line of a CLI list, or "".
+def estimate_brief:
+  (.estimate | clean_estimate) as $e
+  | if $e == null then ""
+    else "  [" + ([ (if $e.work_minutes != null then "\(if $e.by == "human" then "human" else "AI" end) \($e.work_minutes | fmt_duration)" else empty end),
+                    (if $e.review_minutes != null then "review \($e.review_minutes | fmt_duration)" else empty end) ] | join(", ")) + "]" end;
 # Content of the "estimate" block: the line, then the data in an HTML comment (hidden on GitHub).
 def estimate_block($e; $s):
   ($e | clean_estimate) as $c
@@ -229,15 +235,22 @@ def report_tasks($cfg):
   [.[] | select(is_task($cfg)) | select(is_not_planned | not)
    | . + {_role: task_role($cfg), _pts: task_points($cfg), _who: assignee_logins, _est: issue_estimate}];
 
+# Time left of tasks not done (spec sprint-reporting "Thời gian còn lại trong bảng tiến độ").
+def time_left: [.[] | select(._role != "done") | ._est | select(. != null)]
+  | {work_minutes: ([.[].work_minutes // 0] | add // 0), review_minutes: ([.[].review_minutes // 0] | add // 0)};
+
 def progress($cfg; $sprint; $issues; $today):
   ($sprint | sprint_info) as $s
   | ($issues | report_tasks($cfg)) as $t
+  # Time columns only when a task of the sprint has an estimate; otherwise the output is as before.
+  | any($t[]; ._est != null) as $timed
   | def row($xs): {
         new: ([$xs[] | select(._role == "new")] | bucket),
         in_progress: ([$xs[] | select(._role == "in_progress")] | bucket) }
       + (if review_on($cfg) then {in_review: ([$xs[] | select(._role == "in_review")] | bucket)} else {} end)
       + { done: ([$xs[] | select(._role == "done")] | bucket),
-          total: ($xs | bucket) };
+          total: ($xs | bucket) }
+      + (if $timed then {time: ($xs | time_left)} else {} end);
   ([$t[]._who[]] | unique) as $people
   | ( ($people | map(. as $p | {assignee: $p} + row([$t[] | select(._who | any(.[]; . == $p))])))
       + (if any($t[]; (._who | length) == 0) then [{assignee: "Unassigned"} + row([$t[] | select((._who | length) == 0)])] else [] end)
@@ -248,7 +261,8 @@ def progress($cfg; $sprint; $issues; $today):
       total: $total,
       pct_done: (if $total.total.points > 0 then ($total.done.points * 100 / $total.total.points | round) else null end),
       unestimated: ([$t[] | select(._pts == null)] | length),
-      days_left: days_left($cfg; $s; $today) };
+      days_left: days_left($cfg; $s; $today) }
+    + (if $timed then {time_missing: ([$t[] | select(._role != "done" and ._est == null)] | length)} else {} end);
 
 # ---------- team (spec team) ----------
 # GitHub logins are not case-sensitive; a leading "@" is not part of the login.
