@@ -385,3 +385,52 @@ test_cmd_task_new_warns_about_a_login_outside_the_team() {
   assert_not_contains "$ERR" "ruby is not"
   assert_contains "$(gh_calls)" '"assignees":["bob","ruby"]'
 }
+
+# ---------- spec scenarios checked end to end (tests added for the team-and-backlog-tasks change) ----------
+
+# "Vừa backlog vừa sprint" with the options the other way round.
+test_cmd_task_new_sprint_then_backlog_refused() {
+  task_env
+  run_scrum task new --title "Fix login" --sprint "Sprint 1" --backlog
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "use --sprint or --backlog, not both"
+  assert_eq "" "$(gh_writes)"
+}
+
+# "Sprint chỉ định không tồn tại" when no sprint is open at all: still an error, not the backlog.
+test_cmd_task_new_unknown_sprint_without_open_sprint() {
+  task_env
+  jq '.[0].state = "closed"' "$FIXTURES/milestones.json" > "$FAKE_GH_DIR/milestones.json"
+  run_scrum task new --title "Fix login" --sprint "Sprint 9"
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "Sprint 9"
+  assert_eq "" "$(gh_writes)"
+}
+
+# "Chủ động đưa vào backlog" with points, an assignee and bug: no milestone, the rest kept.
+test_cmd_task_new_backlog_keeps_points_and_assignee() {
+  task_env
+  route_json 'api -X POST repos/acme/blog/issues --input -' '{"number":3,"title":"Fix login","html_url":"u3"}'
+  run_scrum task new --title "Fix login" --backlog --points 3 --assignee ruby --bug
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$(gh_calls)" 'STDIN {"title":"Fix login","body":"","labels":["status: New","points: 3","bug"],"assignees":["ruby"]}'
+}
+
+# "Team trống" with an explicit empty list: no warning.
+test_cmd_task_assign_no_warning_with_empty_team_list() {
+  ops_env
+  printf 'team: []\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  run_scrum task assign 14 bob
+  assert_status 0 "$STATUS" "$ERR"
+  assert_not_contains "$ERR" "not in the team"
+}
+
+# A login written with @ in the team and in --assignee is the same person: no warning.
+test_cmd_task_new_at_login_in_team_no_warning() {
+  task_env
+  printf 'team:\n  - login: "@ruby"\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  route_json 'api -X POST repos/acme/blog/issues --input -' '{"number":1,"title":"x","html_url":"u"}'
+  run_scrum task new --title "x" --assignee @ruby
+  assert_status 0 "$STATUS" "$ERR"
+  assert_not_contains "$ERR" "not in the team"
+}

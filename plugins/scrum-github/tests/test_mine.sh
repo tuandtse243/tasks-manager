@@ -184,3 +184,68 @@ test_cmd_mine_unknown_option() {
   assert_status 1 "$STATUS"
   assert_contains "$ERR" "unknown option for mine"
 }
+
+# ---------- spec scenarios checked end to end (tests added for the team-and-backlog-tasks change) ----------
+
+# Scenario "Xem việc của người khác": the other person's open tasks are listed.
+test_cmd_mine_other_user_lists_their_tasks() {
+  mine_env
+  mi 44 New 2 5 > "$T/a.json"; mi 52 New 1 '' > "$T/b.json"
+  jq -s 'map(.assignees = [{login: "an-nguyen"}])' "$T/a.json" "$T/b.json" > "$FAKE_GH_DIR/an.json"
+  route_first 'api --paginate repos/acme/blog/issues?assignee=an-nguyen&state=open*' an.json
+  route_json 'api -X GET search/issues -f q=repo:acme/blog is:pr is:open review-requested:an-nguyen*' '{"items":[]}'
+  run_scrum mine --user an-nguyen
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "Open tasks of @an-nguyen: 2 tasks, 3 points"
+  assert_contains "$OUT" "  #44  2 pt  Sprint 5  Task 44"
+  assert_contains "$OUT" "  #52  1 pt  backlog  Task 52"
+  assert_not_contains "$OUT" "#42"
+  assert_eq "" "$(gh_writes)"
+}
+
+# Scenario "Đề xuất task không bị chặn", end to end: no task in progress, #45 blocked by the open
+# #42 (someone else's), #47 not blocked -> #47.
+test_cmd_mine_suggests_the_unblocked_task() {
+  mine_env
+  mi 45 New 3 5 > "$T/a.json"; mi 47 New 1 5 > "$T/b.json"
+  jq -s . "$T/a.json" "$T/b.json" > "$FAKE_GH_DIR/mine.json"
+  run_scrum mine --json
+  assert_status 0 "$STATUS" "$ERR"
+  assert_json_eq '{"number":47,"title":"Task 47","action":"start"}' "$(printf '%s' "$OUT" | jq -c .next)"
+  assert_eq "[42]" "$(printf '%s' "$OUT" | jq -c '[.groups[].tasks[] | select(.number == 45) | .blocked_by[]]')"
+  run_scrum mine
+  assert_contains "$OUT" "#47"
+  assert_contains "$OUT" "(blocked by #42)"
+}
+
+# Scenario "JSON": valid JSON with login, groups, the next task and the reviews.
+test_cmd_mine_json_has_every_part() {
+  mine_env
+  run_scrum mine --json
+  assert_status 0 "$STATUS" "$ERR"
+  printf '%s' "$OUT" | jq -e . >/dev/null || _fail "not JSON"
+  assert_eq "true" "$(printf '%s' "$OUT" | jq -r 'has("login") and has("groups") and has("next") and has("reviews")')"
+  assert_eq "array array" "$(printf '%s' "$OUT" | jq -r '"\(.groups | type) \(.reviews | type)"')"
+}
+
+# No open sprint and no tasks at all: still exit 0.
+test_cmd_mine_no_sprint_and_no_tasks() {
+  mine_env
+  printf '[]' > "$FAKE_GH_DIR/ms.json"
+  printf '[]' > "$FAKE_GH_DIR/mine.json"
+  run_scrum mine
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "@tuandt has no open tasks."
+}
+
+# Scenario "Không đọc được", with no open sprint: the task part is still printed.
+test_cmd_mine_search_fails_without_open_sprint() {
+  mine_env
+  printf '[]' > "$FAKE_GH_DIR/ms.json"
+  mi 51 New 1 '' | jq -s . > "$FAKE_GH_DIR/mine.json"
+  route_first 'api -X GET search/issues*' '!fail'
+  run_scrum mine
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "#51"
+  assert_contains "$OUT" "could not be read from GitHub"
+}

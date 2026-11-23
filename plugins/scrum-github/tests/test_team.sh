@@ -130,3 +130,23 @@ test_cmd_team_unknown_option() {
   assert_status 1 "$STATUS"
   assert_contains "$ERR" "unknown option for team"
 }
+
+# ---------- spec scenarios checked end to end (tests added for the team-and-backlog-tasks change) ----------
+
+# "Nguồn danh sách team": an empty team list (team: []) counts as not declared.
+test_cmd_team_empty_list_falls_back_to_github() {
+  team_env 'team: []'
+  run_scrum team --json
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "github" "$(printf '%s' "$OUT" | jq -r .source)"
+  assert_eq "tuandt,minh-ho" "$(printf '%s' "$OUT" | jq -r '[.members[].login] | join(",")')"
+}
+
+# "Không có sprint đang mở" in JSON: members with no load.
+test_cmd_team_json_without_open_sprint() {
+  team_env "$TEAM_YAML"
+  printf '[]' > "$FAKE_GH_DIR/ms.json"
+  run_scrum team --json
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "null null null" "$(printf '%s' "$OUT" | jq -r '"\(.sprint) \(.members[0].load) \(.members[1].load)"')"
+}

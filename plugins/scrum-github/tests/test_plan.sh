@@ -1132,3 +1132,89 @@ test_check_reminds_an_old_folder() {
   run_scrum plan check "$T/plans/comments/plan.json" --offline
   assert_not_contains "$OUT" "should ignore"
 }
+
+# ---------- spec scenarios checked end to end (tests added for the team-and-backlog-tasks change) ----------
+
+# delta task-management "Đề xuất người làm và sprint trong plan", scenario "Không có sprint đang mở":
+# every task is left for the backlog and the output points at /scrum-github:sprint-new.
+test_check_no_open_sprint_everything_to_the_backlog() {
+  check_env
+  printf '[{"number":4,"title":"Sprint 4","state":"closed","closed_at":"2026-11-20T00:00:00Z","description":"<!-- scrum:velocity=15 -->"}]' > "$FAKE_GH_DIR/ms.json"
+  # what /plan proposes then: the plan goes to the backlog
+  jq '.sprint = null' "$T/plans/comments/plan.json" > "$T/p.json"; mv "$T/p.json" "$T/plans/comments/plan.json"
+  run_scrum plan check "$T/plans/comments/plan.json" --json
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "null" "$(printf '%s' "$OUT" | jq -c .insights.sprint)"
+  assert_eq "5 no_sprint" "$(printf '%s' "$OUT" | jq -r '.insights.fit.tasks | "\([.[] | select(.fit == "backlog")] | length) \([.[].reason] | unique | join(","))"')"
+  run_scrum plan check "$T/plans/comments/plan.json"
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "/scrum-github:sprint-new"
+  assert_not_contains "$(gh_calls)" "issues?milestone" "no sprint: no sprint issues read"
+  [ -f "$T/plans/comments/plan.html" ] || _fail "plan.html not written"
+  assert_eq "" "$(gh_writes)"
+}
+
+# delta team "Nguồn danh sách team": an empty team block falls back to GitHub's assignees,
+# and logins from GitHub are not warned about.
+test_check_empty_team_uses_github_assignees() {
+  check_env
+  printf 'points:\n  scale: [1, 2, 3, 5, 8]\nteam: []\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  route_json 'api --paginate repos/acme/blog/assignees*' '[{"login":"tuandt"},{"login":"an-nguyen"}]'
+  run_scrum plan check "$T/plans/comments/plan.json" --json
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "github" "$(printf '%s' "$OUT" | jq -r .insights.team.source)"
+  assert_eq "[]" "$(printf '%s' "$OUT" | jq -c .insights.unknown_logins)"
+  assert_not_contains "$(printf '%s' "$OUT" | jq -r '.insights.warnings[]')" "not in the team"
+}
+
+# delta work-plan "Trang tự chứa và an toàn", end to end: a task title with HTML written by plan check.
+test_check_html_escapes_a_title_end_to_end() {
+  check_env
+  broken_gh
+  jq '.features[0].tasks[0].title = "Fix <script>alert(1)</script> in comments"' "$T/plans/comments/plan.json" > "$T/p.json"
+  mv "$T/p.json" "$T/plans/comments/plan.json"
+  run_scrum plan check "$T/plans/comments/plan.json" --offline
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$(cat "$T/plans/comments/plan.html")" 'Fix &lt;script&gt;alert(1)&lt;/script&gt; in comments'
+  assert_not_contains "$(cat "$T/plans/comments/plan.html")" '<script>alert(1)'
+}
+
+# delta work-plan "Ngôn ngữ của bản xem HTML", scenario "Tiếng Việt", end to end.
+test_check_html_in_vietnamese_end_to_end() {
+  check_env
+  broken_gh
+  printf 'language: vi\npoints:\n  scale: [1, 2, 3, 5, 8]\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  run_scrum plan check "$T/plans/comments/plan.json" --offline
+  assert_status 0 "$STATUS" "$ERR"
+  local page
+  page="$(cat "$T/plans/comments/plan.html")"
+  assert_contains "$page" 'lang="vi"'
+  assert_contains "$page" 'Thứ tự làm và chạy song song'
+  assert_contains "$page" 'Chi tiết từng task'
+  assert_contains "$page" 'Giả định và ngoài phạm vi'
+  assert_contains "$page" '<h3>Comment API</h3>' "task titles stay as written"
+  assert_not_contains "$page" 'Order of work and what runs in parallel'
+}
+
+# delta work-plan "Trang tự chứa và an toàn", scenario "Không có mạng": the page written by the
+# command loads nothing from a server.
+test_check_html_loads_nothing_from_the_network() {
+  check_env
+  run_scrum plan check "$T/plans/comments/plan.json"
+  assert_status 0 "$STATUS" "$ERR"
+  local page
+  page="$(cat "$T/plans/comments/plan.html")"
+  if printf '%s' "$page" | grep -Eiq '(src|href)[[:space:]]*=[[:space:]]*["'"'"']?(https?:)?//'; then _fail "a resource is loaded from the network"; fi
+  if printf '%s' "$page" | grep -Eiq '@import|url\((["'"'"'])?https?:|fetch\(|XMLHttpRequest'; then _fail "the page reaches the network"; fi
+  assert_contains "$page" 'data-part="graph"'
+}
+
+# delta task-management "Một lần duyệt plan", scenario "Duyệt một lần": the issue of T1 is created
+# with its assignee and its sprint in the same call.
+test_apply_creates_with_assignee_and_sprint() {
+  apply_env
+  plan3 | jq '.features[0].tasks[0].assignees = ["tuandt"] | .features[0].tasks[0].sprint = "Sprint 2"' > "$T/plan.json"
+  run_scrum plan apply "$T/plan.json"
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq '["tuandt"] 2' "$(grep '^STDIN' "$FAKE_GH_LOG" | sed 's/^STDIN //' | jq -r 'select(.title == "Store comments") | "\(.assignees | tojson) \(.milestone)"')"
+}
