@@ -46,8 +46,7 @@ cmd_task_new() {
   # Check the points before any network call.
   jqlib task-payload -n --argjson cfg "$CONFIG_JSON" --argjson task "$task" --argjson milestone 0 \
     | jq -r '.error // empty' | { read -r e || true; [ -z "$e" ] || die "$e"; }
-  # shellcheck disable=SC2046  # one login per word
-  warn_unknown_logins $(printf '%s' "$task" | jq -r '.assignees[]')
+  warn_unknown_logins "$(printf '%s' "$task" | jq -c '.assignees')"
 
   # --sprint S: that sprint (an unknown or closed one is an error). Neither flag: the open sprint,
   # or the backlog when no sprint is open. --backlog: the backlog (design 3).
@@ -245,30 +244,29 @@ cmd_task_estimate() {
 }
 
 cmd_task_assign() {
-  local n="" logins="" unassign=0 repo body
+  local n="" logins='[]' unassign=0 repo body who
   while [ $# -gt 0 ]; do
     case "$1" in
       --unassign) unassign=1 ;;
       -*) die "unknown option for task assign: $1" ;;
-      *) if [ -z "$n" ]; then n="$(issue_number "$1")"; else logins="$logins ${1#@}"; fi ;;
+      *) if [ -z "$n" ]; then n="$(issue_number "$1")"; else logins="$(jq -nc --argjson l "$logins" --arg x "${1#@}" '$l + [$x]')"; fi ;;
     esac
     shift
   done
-  [ -n "$n" ] && [ -n "$logins" ] || die "usage: scrum task assign N LOGIN... [--unassign]"
+  [ -n "$n" ] && [ "$logins" != '[]' ] || die "usage: scrum task assign N LOGIN... [--unassign]"
   require_tools
   load_config
   repo="$(repo_slug)"
   task_issue "$repo" "$n" >/dev/null
-  # shellcheck disable=SC2086  # one login per word
-  [ "$unassign" = 1 ] || warn_unknown_logins $logins
-  # shellcheck disable=SC2086  # one login per word
-  body="$(jq -n '{assignees: $ARGS.positional}' --args $logins)"
+  [ "$unassign" = 1 ] || warn_unknown_logins "$logins"
+  body="$(jq -nc --argjson l "$logins" '{assignees: $l}')"
+  who="$(printf '%s' "$logins" | jq -r 'map(" @" + .) | join("")')"
   if [ "$unassign" = 1 ]; then
     printf '%s' "$body" | gh_send DELETE "repos/$repo/issues/$n/assignees" >/dev/null
-    info "Unassigned$(printf ' @%s' $logins) from #$n."
+    info "Unassigned$who from #$n."
   else
     printf '%s' "$body" | gh_send POST "repos/$repo/issues/$n/assignees" >/dev/null
-    info "Assigned #$n to$(printf ' @%s' $logins)."
+    info "Assigned #$n to$who."
   fi
 }
 

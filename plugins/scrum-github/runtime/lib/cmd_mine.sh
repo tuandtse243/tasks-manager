@@ -36,8 +36,14 @@ cmd_mine() {
   issues="$(gh_get_all "repos/$repo/issues?assignee=$login&state=open&per_page=100")" || die "cannot read the issues of $repo"
   ms="$(fetch_milestones "$repo")" || die "cannot read the sprints (milestones) of $repo"
   sprint="$(open_sprint "$ms")"
+  # Blockers are read for at most BACKLOG_BLOCKED_LIMIT tasks: the New tasks of the open sprint
+  # first (they decide what to do next), then the others by number.
   nums="$(printf '%s' "$issues" | jq -r -L "$JQ_LIB" --argjson cfg "$CONFIG_JSON" --argjson max "$BACKLOG_BLOCKED_LIMIT" \
-    'include "scrum"; [.[] | select(.state == "open" and is_task($cfg)) | .number] | sort | .[:$max][]')"
+    --argjson cur "$(printf '%s' "$sprint" | jq '.number? // null')" \
+    'include "scrum"; [.[] | select(.state == "open" and is_task($cfg))
+      | {number, first: ($cur != null and (.milestone.number // null) == $cur and task_role($cfg) == "new")}]
+     | (map(select(.first)) | sort_by(.number)) + (map(select(.first | not)) | sort_by(.number))
+     | .[:$max][].number')"
   # shellcheck disable=SC2086  # one number per word
   blocked="$(blocked_map "$repo" $nums)"
   prs="$(review_requests "$repo" "$login")"

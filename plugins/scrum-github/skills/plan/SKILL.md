@@ -105,11 +105,15 @@ and say which.
    each: `kind` (`missing`, `out_of_scope`, `too_large`, `dependency`, `untestable` or
    `fragile`), `text` (the finding and what you did about it), `status` (`fixed` when the plan
    changed, `kept` when it stays as it is, with the reason in `text`). `plan apply` ignores it.
-2. Run `scrum team --json` and `scrum plan check <plan.json> --json`. From the second, read
+2. Run `scrum team --json` and `scrum plan check <plan.json> --json` (with `--json` it writes
+   neither `plan.html` nor the snapshot, so the page the user first sees, written in 6.5, already
+   has your suggestions and no list of changes). From the second, read
    `insights`: `wave_list` (dependency waves), `sprint` (the open sprint or null), `capacity`,
    `load` (each person's points in the sprint now and from this plan, against their capacity),
    `fit` (which new tasks fit in the open sprint in dependency order, and why the others should
-   stay in the backlog: `over_capacity`, `depends_on_backlog`, `no_sprint`) and `warnings`.
+   stay in the backlog: `over_capacity`, `depends_on_backlog`, `no_sprint`) and `warnings`. When
+   `unreadable` is true, GitHub could not be read: suggest no sprint and say so; do not tell the
+   user to create a sprint.
 3. Suggest an **assignee** for each task that has none, from the team only:
    - match the task's body to each member's `areas`, then prefer the one with the most room
      (`capacity` minus `load.total`); spread the tasks rather than giving one person everything;

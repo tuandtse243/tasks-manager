@@ -45,10 +45,9 @@ section { display: flex; flex-direction: column; gap: 12px; }
 .crumbs { font-family: var(--mono); font-size: 0.78rem; color: var(--muted); overflow-wrap: anywhere; }
 .titlerow { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 .state { display: inline-flex; align-items: center; gap: 8px; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; padding: 4px 12px; border-radius: 999px; background: var(--chg-soft); color: var(--chg); }
-.state i { width: 8px; height: 8px; border-radius: 50%; background: var(--chg); animation: pulse 1.6s ease-in-out infinite; }
+.state i { width: 8px; height: 8px; border-radius: 50%; background: var(--chg); }
 .state.done { background: var(--add-soft); color: var(--add); }
-.state.done i { background: var(--add); animation: none; }
-@keyframes pulse { 50% { opacity: 0.25; } }
+.state.done i { background: var(--add); }
 .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
 .kpi { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; display: flex; flex-direction: column; gap: 2px; }
 .kpi b { font-size: 1.45rem; font-variant-numeric: tabular-nums; line-height: 1.2; }
@@ -151,7 +150,7 @@ details pre { font-family: var(--mono); font-size: 0.78rem; background: var(--su
 .confirm .say { font-family: var(--mono); font-size: 0.86rem; }
 
 @media (prefers-reduced-motion: reduce) {
-  .state i, svg .flow { animation: none; }
+  svg .flow { animation: none; }
   svg .node, svg .edge { transition: none; }
 }
 </style>

@@ -3,6 +3,7 @@
 # --argjson cfg CONFIG --argjson insights (plan-insights.jq) --argjson diff (plan-diff.jq)
 # --argjson actions [plan-actions] | null (offline or not computed) --argjson action_errors [texts]
 # --argjson strings (strings.json, one language) --arg now ISO --arg path (the plan folder, for the header)
+# [--argjson done true]  the actions were just carried out by plan apply (the page says "created")
 # Output: every number the page shows comes from here, so it matches the plan file.
 include "scrum";
 include "plan";
@@ -34,7 +35,10 @@ include "plan";
 | [$tasks[] | select(.sprint.kind == "backlog")] as $backlog
 | ($actions // []) as $acts
 | def count($op): [$acts[] | select(.op == $op)] | length;
-  [$tasks[] | select(.issue == null)] as $new
+  ($ARGS.named.done // false) as $done
+| ([$acts[] | select(.op == "create_task") | .ref]) as $created
+# The tasks the actions are about: the new ones, or after apply the ones it created.
+| [$tasks[] | if $done then (.id as $i | select($created | index($i))) else select(.issue == null) end] as $new
 | { title: $plan.title,
     language: ($cfg.language // "en"),
     path: $path,
@@ -57,11 +61,12 @@ include "plan";
             planned: $insights.planned, adding: $insights.adding, after: $insights.after, over_sprint: $insights.over_sprint,
             team_source: ($insights.team.source // null), people: ($insights.load // []),
             fit: $insights.fit,
-            into_tasks: [$into[] | {id, points, feature_index}],
+            unreadable: ($insights.unreadable // false),
+            into_tasks: [$into[] | select(.issue == null) | {id, points, feature_index}],
             backlog_tasks: [$backlog[] | select(.issue == null) | {id, points, reason: (.fit.reason // null)}] },
     review: ($plan.review // []),
     actions: (if $actions == null then null
-              else { errors: $action_errors,
+              else { errors: $action_errors, done: $done,
                      epic: count("create_epic"), features: count("create_feature"), tasks: count("create_task"),
                      link_sub: count("link_sub"), link_blocked: count("link_blocked"),
                      existing: (count("skip") + count("update")),

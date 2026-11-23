@@ -83,7 +83,6 @@
     "plan_kpi_waves": "{n} waves",
     "plan_kpi_waves_one": "{n} wave",
     "plan_kpi_waves_sub": "the tasks of one wave can be worked on in parallel",
-    "plan_sec_summary": "Summary",
     "plan_sec_changes": "Changes since revision {rev}",
     "plan_sec_changes_first": "Changes",
     "plan_changes_first": "This is the first view of this plan, so there is nothing to compare yet.",
@@ -163,7 +162,9 @@
     "plan_confirm_title": "Approve in the chat",
     "plan_confirm_text": "This page is only for reading. Go back to Claude Code and answer, for example:",
     "plan_confirm_say": "\"approve\"  ·  \"put T6 into the sprint\"  ·  \"give T3 to @someone\"  ·  \"drop T5\"",
-    "plan_confirm_note": "After each change the page is generated again, and the Changes section shows what changed."
+    "plan_confirm_note": "After each change the page is generated again, and the Changes section shows what changed.",
+    "plan_act_issues_done": "issues created: {detail}",
+    "plan_load_unreadable": "Could not read the sprints or their tasks from GitHub, so load and capacity are not shown. Run scrum plan check again when GitHub answers."
   },
   "vi": {
     "assignee": "Người nhận",
@@ -240,7 +241,6 @@
     "plan_kpi_capacity_unknown": "{sprint} sau khi áp · chưa biết capacity",
     "plan_kpi_waves": "{n} đợt",
     "plan_kpi_waves_sub": "các task cùng đợt làm song song được",
-    "plan_sec_summary": "Tóm tắt",
     "plan_sec_changes": "Thay đổi so với lần sửa {rev}",
     "plan_sec_changes_first": "Thay đổi",
     "plan_changes_first": "Đây là lần xem đầu tiên của plan này, chưa có gì để so.",
@@ -318,6 +318,8 @@
     "plan_confirm_title": "Xác nhận trong chat",
     "plan_confirm_text": "Trang này chỉ để xem. Quay lại Claude Code và trả lời, ví dụ:",
     "plan_confirm_say": "\"duyệt\"  ·  \"đưa T6 vào sprint\"  ·  \"T3 cho @ai-đó\"  ·  \"bỏ T5\"",
-    "plan_confirm_note": "Sau mỗi lần sửa, trang được sinh lại và mục Thay đổi hiện những gì đã đổi."
+    "plan_confirm_note": "Sau mỗi lần sửa, trang được sinh lại và mục Thay đổi hiện những gì đã đổi.",
+    "plan_act_issues_done": "issue đã tạo: {detail}",
+    "plan_load_unreadable": "Không đọc được sprint hoặc task của sprint từ GitHub, nên chưa hiện tải và capacity. Chạy lại scrum plan check khi GitHub trả lời."
   }
 }

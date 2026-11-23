@@ -1218,3 +1218,128 @@ test_apply_creates_with_assignee_and_sprint() {
   assert_status 0 "$STATUS" "$ERR"
   assert_eq '["tuandt"] 2' "$(grep '^STDIN' "$FAKE_GH_LOG" | sed 's/^STDIN //' | jq -r 'select(.title == "Store comments") | "\(.assignees | tojson) \(.milestone)"')"
 }
+
+# delta team "Nguồn danh sách team": "Mọi lệnh dùng danh sách team MUST cho biết danh sách đến từ
+# nguồn nào." plan check uses the team list for the load, so its text output must name the source.
+test_check_text_names_the_team_source() {
+  check_env
+  run_scrum plan check "$T/plans/comments/plan.json"
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "scrum.yml" "config source named"
+  printf 'points:\n  scale: [1, 2, 3, 5, 8]\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  route_json 'api --paginate repos/acme/blog/assignees*' '[{"login":"tuandt"},{"login":"an-nguyen"}]'
+  run_scrum plan check "$T/plans/comments/plan.json"
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "from GitHub" "github source named"
+}
+
+# ---------- review fixes ----------
+
+# A task that already has its issue is in "now" (the sprint's issues), not in the plan's segments.
+test_html_capacity_bar_counts_applied_tasks_once() {
+  local plan ins d page
+  plan="$(plan5 | jq -c '.features[0].tasks[0].issue = 40')"
+  ins="$(insights "$plan" "$MS5V" "[$(s5issue 40 3 tuandt)]")"
+  d="$(printf '%s' "$plan" | jq -L "$PLUGIN_DIR/runtime/lib/jq" --argjson cfg "$(cfg5)" --argjson insights "$ins" \
+    --argjson diff "$(pdiff "$plan" null)" --argjson actions '[]' --argjson action_errors '[]' \
+    --argjson strings "$(jq -c .en "$PLUGIN_DIR/runtime/share/strings.json")" --arg now 2026-11-25T10:00:00Z --arg path p \
+    -f "$PLUGIN_DIR/runtime/lib/jq/plan-html-data.jq")"
+  assert_eq "T2 T3 T4 T5" "$(printf '%s' "$d" | jq -r '[.load.into_tasks[].id] | join(" ")')"
+  assert_eq "3 13 16" "$(printf '%s' "$d" | jq -r '"\(.load.planned) \(.load.adding) \(.load.after)"')"
+  page="$(printf '%s' "$d" | jqt plan-html -r --rawfile t "$PLUGIN_DIR/runtime/share/plan.html")"
+  assert_not_contains "$page" '>T1 3</div>'
+}
+
+test_check_json_writes_no_page_or_snapshot() {
+  check_env
+  local dir="$T/plans/comments"
+  run_scrum plan check "$dir/plan.json" --json
+  assert_status 0 "$STATUS" "$ERR"
+  [ ! -e "$dir/plan.html" ] || _fail "--json wrote plan.html"
+  [ ! -e "$dir/.plan-snapshot.json" ] || _fail "--json wrote the snapshot"
+  assert_eq "null" "$(printf '%s' "$OUT" | jq -c .html)"
+  # the skill fills in its suggestions, then the first page has no change list
+  jq '.features[0].tasks[3].assignees = ["tuandt"]' "$dir/plan.json" > "$T/p.json"; mv "$T/p.json" "$dir/plan.json"
+  run_scrum plan check "$dir/plan.json"
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "1" "$(jq -r .revision "$dir/.plan-snapshot.json")"
+  assert_contains "$(cat "$dir/plan.html")" "nothing to compare yet"
+}
+
+test_check_milestones_unreadable_is_not_no_sprint() {
+  check_env
+  route_first 'api --paginate repos/acme/blog/milestones*' '!fail'
+  run_scrum plan check "$T/plans/comments/plan.json"
+  # the plan names the current sprint, so apply cannot be checked: the command fails, and says why
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "cannot read the sprints (milestones) from GitHub"
+  assert_not_contains "$OUT$ERR" "There is no open sprint"
+  assert_contains "$(cat "$T/plans/comments/plan.html")" "Could not read the sprints or their tasks from GitHub"
+}
+
+test_check_sprint_issues_unreadable_is_not_an_empty_sprint() {
+  check_env
+  route_first 'api --paginate repos/acme/blog/issues?milestone=5*' '!fail'
+  run_scrum plan check "$T/plans/comments/plan.json" --json
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "false true null" "$(printf '%s' "$OUT" | jq -r '"\(.insights.online) \(.insights.unreadable) \(.insights.load)"')"
+}
+
+test_apply_html_says_created() {
+  apply_env
+  plan3 > "$T/plan.json"
+  run_scrum plan apply "$T/plan.json"
+  assert_status 0 "$STATUS" "$ERR"
+  local page; page="$(cat "$T/plan.html")"
+  assert_contains "$page" "Created on GitHub"
+  assert_contains "$page" "issues created: 1 feature, 3 tasks"
+  assert_not_contains "$page" "When you approve"
+  assert_contains "$page" '<b>3</b><span>tasks into Sprint 1</span>'
+}
+
+test_apply_html_after_a_failure_says_stopped() {
+  apply_env
+  create_numbers 10 11 '!fail'
+  plan3 > "$T/plan.json"
+  run_scrum plan apply "$T/plan.json"
+  assert_status 1 "$STATUS"
+  assert_contains "$(cat "$T/plan.html")" "plan apply stopped part-way"
+}
+
+test_apply_reads_github_state_once() {
+  apply_env
+  plan3 > "$T/plan.json"
+  run_scrum plan apply "$T/plan.json"
+  assert_status 0 "$STATUS" "$ERR"
+  # one read for the actions, one for the views' estimates
+  assert_eq "2" "$(grep -c 'repos/acme/blog/milestones' "$FAKE_GH_LOG")"
+}
+
+test_fit_ties_follow_plan_order() {
+  local p
+  p='{"version":2,"title":"x","features":[{"id":"F1","title":"F","tasks":[{"id":"T2","title":"a","points":1},{"id":"T10","title":"b","points":1}]}]}'
+  assert_eq "T2 T10" "$(jqp "$p" 'plan_fit(null; 0; "Sprint 5") | [.tasks[].id] | join(" ")' | jq -r .)"
+}
+
+test_html_status_dot_does_not_pulse() {
+  assert_not_contains "$(cat "$PLUGIN_DIR/runtime/share/plan.html")" "pulse"
+}
+
+test_current_without_open_sprint_names_the_skill() {
+  apply_env
+  printf '[]' > "$FAKE_GH_DIR/ms.json"
+  plan3 > "$T/plan.json"
+  run_scrum plan apply "$T/plan.json"
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "/scrum-github:sprint-new"
+}
+
+test_check_milestones_unreadable_text_for_a_backlog_plan() {
+  check_env
+  route_first 'api --paginate repos/acme/blog/milestones*' '!fail'
+  jq '.sprint = null' "$T/plans/comments/plan.json" > "$T/p.json"; mv "$T/p.json" "$T/plans/comments/plan.json"
+  run_scrum plan check "$T/plans/comments/plan.json"
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "Could not read the sprints or their tasks from GitHub"
+  assert_not_contains "$OUT" "sprint-new"
+}

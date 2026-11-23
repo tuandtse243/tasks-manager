@@ -5,7 +5,8 @@
 # --argjson team {source, members} | null   (team_list; null offline)
 # --argjson ms [milestones] | null           (null offline)
 # --argjson sprint_issues [issues of the open sprint]
-# Output: {online, waves: {id: n}, wave_list: [[ids]], team, sprint, velocity: {average, sprints},
+# [--arg reason offline|unreadable]   why it is not online (default offline)
+# Output: {online, unreadable, waves: {id: n}, wave_list: [[ids]], team, sprint, velocity: {average, sprints},
 #          capacity, planned, adding, after, over_sprint, load, fit, unknown_logins, warnings}
 include "scrum";
 include "plan";
@@ -19,7 +20,7 @@ include "plan";
 | unknown_logins($cfg; $assigned) as $unknown
 | ($cfg.team // [] | map(.login) | join(", ")) as $team_text
 | if ($online | not) or $ms == null then
-    { online: false, waves: $waves, wave_list: $wave_list, team: null, sprint: null,
+    { online: false, unreadable: (($ARGS.named.reason // "offline") == "unreadable"), waves: $waves, wave_list: $wave_list, team: null, sprint: null,
       velocity: null, capacity: null, planned: null, adding: null, after: null, over_sprint: false,
       load: null, fit: null, unknown_logins: $unknown,
       warnings: [$unknown[] | "\(.) is not in the team (\($team_text))"] }
@@ -35,7 +36,7 @@ include "plan";
     | ([$new[].points // 0] | add // 0) as $adding
     | (if $s == null then null else plan_load(($team.members // []); $tasks; $title) end) as $load
     | (if $s == null then 0 else $planned end) as $base
-    | { online: true, waves: $waves, wave_list: $wave_list, team: $team, sprint: $s,
+    | { online: true, unreadable: false, waves: $waves, wave_list: $wave_list, team: $team, sprint: $s,
         velocity: {average: $avg, sprints: [$recent[] | {title, velocity}]},
         capacity: $avg,
         planned: (if $s == null then null else $planned end),

@@ -84,7 +84,8 @@ plan_html_write() {
   case "$abs" in "$root"/*) rel="${abs#"$root"/}" ;; *) rel="$dir" ;; esac
   data="$(printf '%s' "$PLAN_JSON" | jqlib plan-html-data -c --argjson cfg "$CONFIG_JSON" --argjson insights "$PLAN_INSIGHTS" \
     --argjson diff "$diff" --argjson actions "$actions" --argjson action_errors "$errors" \
-    --argjson strings "$(strings_json)" --arg now "$(now_iso)" --arg path "$rel")" || return 1
+    --argjson strings "$(strings_json)" --arg now "$(now_iso)" --arg path "$rel" \
+    --argjson "done" "$([ "${PLAN_HTML_DONE:-0}" = 1 ] && echo true || echo false)")" || return 1
   printf '%s' "$data" | jqlib plan-html -r --rawfile t "$SHARE_DIR/plan.html" | write_atomic "$dir/plan.html" || return 1
   printf '%s' "$diff" | jq .snapshot | write_atomic "$snap"
 }
@@ -176,7 +177,11 @@ cmd_plan_render() {
   PLAN_MS='[]'; PLAN_ONLINE=false; PLAN_REPO=""
   [ "$offline" = 1 ] || plan_read_milestones
   plan_render_to "$file" "$out" "$PLAN_MS" || die "cannot write $out"
-  plan_insights "$PLAN_ONLINE" "$PLAN_MS" "$PLAN_REPO"
+  if [ "$offline" = 0 ] && [ "$PLAN_ONLINE" = false ] && [ -n "$PLAN_REPO" ]; then
+    plan_insights false null "" unreadable
+  else
+    plan_insights "$PLAN_ONLINE" "$PLAN_MS" "$PLAN_REPO"
+  fi
   PLAN_ACTIONS=null; PLAN_ACTION_ERRORS='[]'
   [ "$PLAN_ONLINE" = false ] || plan_actions_compute "$PLAN_REPO" false
   plan_html_write "$file" "$PLAN_ACTIONS" "$PLAN_ACTION_ERRORS" || die "cannot write $(plan_html_path "$file")"
@@ -214,12 +219,13 @@ plan_state() {
     '{milestones: $ms, today: $today, subs: $subs, blocked: $blocked, issues: $issues}'
 }
 
-# plan_actions_compute REPO UPDATE  Sets PLAN_ACTIONS (the actions array, or null when there are
+# plan_actions_compute REPO UPDATE [STATE]  Sets PLAN_ACTIONS (the actions array, or null when there are
 # errors) and PLAN_ACTION_ERRORS (JSON list of texts). Never exits. Not run in $(...).
 plan_actions_compute() {
   local state result
   PLAN_ACTIONS=null; PLAN_ACTION_ERRORS='[]'
-  state="$(plan_state "$1" "$2" 2>/dev/null)" || state=""
+  state="${3:-}"
+  [ -n "$state" ] || state="$(plan_state "$1" "$2" 2>/dev/null)" || state=""
   if [ -z "$state" ]; then PLAN_ACTION_ERRORS='["cannot read the sprints (milestones) from GitHub"]'; return 0; fi
   result="$(printf '%s' "$PLAN_JSON" | jqlib plan-actions -c --argjson cfg "$CONFIG_JSON" --argjson state "$state" --argjson update "$2")"
   PLAN_ACTION_ERRORS="$(printf '%s' "$result" | jq -c '.errors')"
@@ -239,7 +245,7 @@ plan_actions() {
   local state
   state="$(plan_state "$1" "$2")"
   [ -n "$state" ] || exit 1
-  plan_actions_compute "$1" "$2"
+  plan_actions_compute "$1" "$2" "$state"
   plan_actions_fail
 }
 
@@ -251,23 +257,26 @@ print_actions() {
 
 # ---------- waves, load and capacity (design 6) ----------
 
-# plan_insights ONLINE MILESTONES REPO  Sets PLAN_INSIGHTS (plan-insights.jq). Online, it reads the
-# team (GitHub only when team is empty) and the issues of the open sprint.
+# plan_insights ONLINE MILESTONES REPO [REASON]  Sets PLAN_INSIGHTS (plan-insights.jq). Online, it
+# reads the team (GitHub only when team is empty) and the issues of the open sprint. When those
+# issues cannot be read, or REASON is "unreadable" (the milestones could not be read), the load and
+# capacity are left out and the page and text say GitHub could not be read.
 plan_insights() {
-  local online="$1" ms="$2" repo="${3:-}" team=null sprint issues='[]'
+  local online="$1" ms="$2" repo="${3:-}" reason="${4:-offline}" team=null sprint issues='[]'
   if [ "$online" = true ]; then
     . "$SCRUM_ROOT/lib/cmd_team.sh"
     team="$(team_members "$repo")"
     sprint="$(open_sprint "$ms")"
     if [ "$sprint" != null ]; then
-      issues="$(fetch_milestone_issues "$repo" "$(printf '%s' "$sprint" | jq -r .number)" 2>/dev/null)" || issues='[]'
-      [ -n "$issues" ] || issues='[]'
+      issues="$(fetch_milestone_issues "$repo" "$(printf '%s' "$sprint" | jq -r .number)" 2>/dev/null)" || issues=""
+      if [ -z "$issues" ] || ! printf '%s' "$issues" | jq -e 'type == "array"' >/dev/null 2>&1; then
+        online=false; reason=unreadable; issues='[]'
+      fi
     fi
-  else
-    ms=null
   fi
+  [ "$online" = true ] || ms=null
   PLAN_INSIGHTS="$(printf '%s' "$PLAN_JSON" | jqlib plan-insights -c --argjson cfg "$CONFIG_JSON" --arg today "$(today)" \
-    --argjson online "$online" --argjson team "$team" --argjson ms "$ms" --argjson sprint_issues "$issues")"
+    --argjson online "$online" --argjson team "$team" --argjson ms "$ms" --argjson sprint_issues "$issues" --arg reason "$reason")"
 }
 
 # print_insights  PLAN_INSIGHTS for a person.
@@ -276,7 +285,11 @@ print_insights() {
     def reason: if . == "over_capacity" then "over capacity" elif . == "depends_on_backlog" then "depends on a task left for the backlog" elif . == "no_sprint" then "no open sprint" else . end;
     "Waves (the tasks of one wave can be worked on in parallel):",
     (.wave_list | to_entries[] | "  \(.key + 1): \(.value | join(", "))"),
-    (if .online | not then "Load and capacity need GitHub; run plan check without --offline to see them."
+    (if .team == null then empty
+     elif .team.source == "config" then "Team: from team in .github/scrum.yml (\(.team.members | length) members)."
+     else "Team: from GitHub, the people who can be assigned issues (\(.team.members | length)); declare team in .github/scrum.yml to give them areas and a capacity." end),
+    (if .unreadable then "Could not read the sprints or their tasks from GitHub, so load and capacity are not shown."
+     elif .online | not then "Load and capacity need GitHub; run plan check without --offline to see them."
      elif .sprint == null then "There is no open sprint: no load or capacity to show. Create one with /scrum-github:sprint-new."
      else
        "\(.sprint.title): \(.planned) points now + \(.adding) from this plan = \(.after)"
@@ -314,25 +327,31 @@ cmd_plan_check() {
   require_tools nogh
   load_config
   plan_load "$file"
-  local view html ms="[]" repo="" out
+  local view html out
   view="$(plan_view_path "$file")"; html="$(plan_html_path "$file")"
-  PLAN_ACTIONS=null; PLAN_ACTION_ERRORS='[]'
+  PLAN_ACTIONS=null; PLAN_ACTION_ERRORS='[]'; PLAN_MS='[]'; PLAN_REPO=""
   if [ "$offline" = 1 ]; then
     plan_insights false null
   else
     require_tools
-    repo="$(repo_slug)"
-    ms="$(plan_try_milestones)"
-    plan_insights true "$ms" "$repo"
-    plan_actions_compute "$repo" false
+    plan_read_milestones
+    [ -n "$PLAN_REPO" ] || PLAN_REPO="$(repo_slug)"
+    if [ "$PLAN_ONLINE" = true ]; then
+      plan_insights true "$PLAN_MS" "$PLAN_REPO"
+    else
+      plan_insights false null "" unreadable
+    fi
+    plan_actions_compute "$PLAN_REPO" false
   fi
-  plan_render_to "$file" "$view" "$ms" || die "cannot write $view"
-  plan_html_write "$file" "$PLAN_ACTIONS" "$PLAN_ACTION_ERRORS" || die "cannot write $html"
+  plan_render_to "$file" "$view" "$PLAN_MS" || die "cannot write $view"
+  # --json is the skill's first look, before it fills in its suggestions: it writes neither
+  # plan.html nor the snapshot, so the first page the user sees has no list of changes.
+  [ "$json" = 1 ] || plan_html_write "$file" "$PLAN_ACTIONS" "$PLAN_ACTION_ERRORS" || die "cannot write $html"
   plan_actions_fail
   if [ "$json" = 1 ]; then
     out="$(printf '%s' "$PLAN_JSON" | jq -c '[.features[] | .tasks[]] as $t | {features: (.features | length), tasks: ($t | length), points: ([$t[].points // 0] | add)}')"
-    jq -n --arg plan "$file" --arg view "$view" --arg html "$html" --argjson summary "$out" --argjson insights "$PLAN_INSIGHTS" --argjson actions "$PLAN_ACTIONS" \
-      '{plan: $plan, view: $view, html: $html, summary: $summary, insights: $insights, actions: $actions}'
+    jq -n --arg plan "$file" --arg view "$view" --argjson summary "$out" --argjson insights "$PLAN_INSIGHTS" --argjson actions "$PLAN_ACTIONS" \
+      '{plan: $plan, view: $view, html: null, summary: $summary, insights: $insights, actions: $actions}'
     return 0
   fi
   info "The plan is valid: $(plan_summary)."
@@ -410,7 +429,7 @@ cmd_plan_apply() {
   # Milestones are read once now, so the view keeps its velocity estimate like `plan render`.
   local view
   view="$(plan_view_path "$file")"
-  APPLY_FILE="$file"; APPLY_VIEW="$view"; APPLY_MS="$(plan_try_milestones)"; APPLY_REPO="$repo"; APPLY_ACTIONS="$PLAN_ACTIONS"
+  APPLY_FILE="$file"; APPLY_VIEW="$view"; APPLY_MS="$(plan_try_milestones)"; APPLY_REPO="$repo"; APPLY_ACTIONS="$PLAN_ACTIONS"; APPLY_OK=0
   trap plan_apply_render_view EXIT
 
   local failed=0 acts a op ref created number id parent pnum touched=""
@@ -532,14 +551,18 @@ $list"; then
     info "Done. Issue numbers are recorded in $file; view: $view"
   fi
   [ "$failed" = 0 ] || exit 1
+  APPLY_OK=1
 }
 
 # EXIT trap of apply: render the views from the plan file as it is now (numbers included).
-# plan.html shows what this run set out to do.
+# plan.html shows what this run did ("created"), or that it stopped part-way.
 plan_apply_render_view() {
+  local errors='[]'
   plan_load_quiet "$APPLY_FILE" || return 0
   plan_render_to "$APPLY_FILE" "$APPLY_VIEW" "${APPLY_MS:-[]}" >/dev/null 2>&1 || true
-  { plan_insights true "${APPLY_MS:-[]}" "$APPLY_REPO" && plan_html_write "$APPLY_FILE" "${APPLY_ACTIONS:-null}" '[]'; } >/dev/null 2>&1 || true
+  [ "${APPLY_OK:-0}" = 1 ] || errors='["plan apply stopped part-way; run it again to create the rest"]'
+  { plan_insights true "${APPLY_MS:-[]}" "$APPLY_REPO" \
+      && PLAN_HTML_DONE="$APPLY_OK" plan_html_write "$APPLY_FILE" "${APPLY_ACTIONS:-null}" "$errors"; } >/dev/null 2>&1 || true
 }
 
 # Reload the plan file without exiting on problems (used by the EXIT trap of apply).

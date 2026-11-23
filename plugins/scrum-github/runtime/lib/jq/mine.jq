@@ -30,8 +30,9 @@ include "scrum";
 | [$tasks[] | select(.role == "in_progress")] as $prog
 | [$tasks[] | select(.role == "in_review")] as $rev
 | [$tasks[] | select(.role != "in_progress" and .role != "in_review")] as $rest
-| [$rest[] | select($cur != null and .milestone == $cur)] as $current
-| [$rest[] | select(.milestone != null and .milestone != $cur)] as $others
+| [$rest[] | select($cur != null and .milestone == $cur and .role == "new")] as $current
+# open tasks of the open sprint labelled Done are listed under that sprint with the other sprints
+| [$rest[] | select(.milestone != null and (.milestone != $cur or .role != "new"))] as $others
 | [$rest[] | select(.milestone == null)] as $backlog
 | ($others | group_by(.milestone) | sort_by(.[0].due // "9999-12-31", .[0].sprint)) as $by_sprint
 | def clean: map(del(.milestone, .due));

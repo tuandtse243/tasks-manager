@@ -249,3 +249,27 @@ test_cmd_mine_search_fails_without_open_sprint() {
   assert_contains "$OUT" "#51"
   assert_contains "$OUT" "could not be read from GitHub"
 }
+
+# ---------- review fixes ----------
+
+test_mine_done_label_is_not_new_in_the_sprint() {
+  local issues out
+  mi 45 New 3 5 > "$T/a.json"; mi 46 Done 1 5 > "$T/b.json"
+  issues="$(jq -s . "$T/a.json" "$T/b.json")"
+  out="$(mine_jq "$issues" '{"45":[],"46":[]}')"
+  assert_eq "current:45 sprint:46" "$(printf '%s' "$out" | jq -r '[.groups[] | "\(.key):\(.tasks | map(.number) | join(","))"] | join(" ")')"
+}
+
+# Blockers are read first for the New tasks of the open sprint, even past the first 50 numbers.
+test_cmd_mine_reads_blockers_of_the_sprint_first() {
+  mine_env
+  jq -n '[range(1; 56) | {number: ., title: "B\(.)", state: "open", body: "", milestone: null,
+           labels: [{name: "status: New"}], assignees: [{login: "tuandt"}]}]
+         + [{number: 100, title: "Sprint task", state: "open", body: "", milestone: {number: 5, title: "Sprint 5"},
+             labels: [{name: "status: New"}], assignees: [{login: "tuandt"}]}]' > "$FAKE_GH_DIR/mine.json"
+  run_scrum mine --json
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$(gh_calls)" "issues/100/dependencies/blocked_by"
+  assert_eq "100" "$(printf '%s' "$OUT" | jq -r .next.number)"
+  assert_eq "50" "$(grep -c 'dependencies/blocked_by' "$FAKE_GH_LOG")"
+}

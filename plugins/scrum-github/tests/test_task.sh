@@ -434,3 +434,18 @@ test_cmd_task_new_at_login_in_team_no_warning() {
   assert_status 0 "$STATUS" "$ERR"
   assert_not_contains "$ERR" "not in the team"
 }
+
+# A login is passed as it is, never expanded by the shell.
+test_cmd_task_logins_are_not_globbed() {
+  ops_env
+  printf 'team:\n  - login: tuandt\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  touch "$T/aaa" "$T/bbb"
+  run_scrum task assign 14 '*'
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$(gh_calls)" 'STDIN {"assignees":["*"]}'
+  assert_contains "$ERR" "* is not in the team"
+  route_json 'api -X POST repos/acme/blog/issues --input -' '{"number":1,"title":"x","html_url":"u"}'
+  run_scrum task new --title x --assignee '*' --backlog
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$(gh_calls)" '"assignees":["*"]'
+}

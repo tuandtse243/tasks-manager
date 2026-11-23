@@ -82,7 +82,8 @@ include "scrum";
     + "</ol>") as $p3
 
 # ---------- 4. load and capacity ----------
-| ( if ($L.online | not) then sec(3; "load"; t("plan_sec_load_nosprint"); "<p class=\"muted offline\">\(t("plan_load_offline"))</p>")
+| ( if $L.unreadable then sec(3; "load"; t("plan_sec_load_nosprint"); "<p class=\"muted offline\">\(t("plan_load_unreadable"))</p>")
+    elif ($L.online | not) then sec(3; "load"; t("plan_sec_load_nosprint"); "<p class=\"muted offline\">\(t("plan_load_offline"))</p>")
     elif $L.sprint == null then sec(3; "load"; t("plan_sec_load_nosprint"); "<p class=\"muted\">\(t("plan_load_no_sprint"))</p>")
     else
       ([$L.capacity // 0, $L.after] | max) as $scale
@@ -156,10 +157,10 @@ include "scrum";
       elif ($A.epic + $A.features + $A.tasks + $A.link_sub + $A.link_blocked) == 0 then
         sec(6; "actions"; (if $d.applied then t("plan_sec_actions_done") else t("plan_sec_actions") end); "<p class=\"muted\">\(t("plan_actions_none"))</p>")
       else
-        sec(6; "actions"; t("plan_sec_actions");
+        sec(6; "actions"; (if $A.done then t("plan_sec_actions_done") else t("plan_sec_actions") end);
           "<div class=\"acts\">"
           + "<div class=\"act\"><b>\($A.epic + $A.features + $A.tasks)</b><span>"
-            + t("plan_act_issues"; {detail: ([ (if $A.epic > 0 then trn($S; "plan_act_epic"; $A.epic; {}) else empty end),
+            + t(if $A.done then "plan_act_issues_done" else "plan_act_issues" end; {detail: ([ (if $A.epic > 0 then trn($S; "plan_act_epic"; $A.epic; {}) else empty end),
                                                (if $A.features > 0 then trn($S; "plan_act_features"; $A.features; {}) else empty end),
                                                (if $A.tasks > 0 then trn($S; "plan_act_tasks"; $A.tasks; {}) else empty end)] | join(", "))}) + "</span></div>"
           + (if $A.link_sub > 0 then "<div class=\"act\"><b>\($A.link_sub)</b><span>\(t("plan_act_sub"))</span></div>" else "" end)

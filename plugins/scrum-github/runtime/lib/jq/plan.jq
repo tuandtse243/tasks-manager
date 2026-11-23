@@ -95,7 +95,7 @@ def plan_load($members; $sprint_tasks; $title):
          tasks: [$mine[].id] } ];
 
 # Input: a plan. What fits in the open sprint (design 6): the plan's new tasks that are not
-# named for another sprint, by wave then id, adding points to $planned (already in the sprint).
+# named for another sprint, by wave then plan order, adding points to $planned (already in the sprint).
 # A task that would pass $capacity, or that depends on a task left for the backlog, should stay
 # in the backlog. Unknown capacity (null) leaves every task in. No open sprint ($title null):
 # every task stays in the backlog. Suggestions only: the plan is not changed.
@@ -104,11 +104,11 @@ def plan_load($members; $sprint_tasks; $title):
 def plan_fit($capacity; $planned; $title):
   . as $plan
   | plan_waves as $w
-  | [plan_tasks[] | select(.issue == null)
+  | [plan_tasks | to_entries[] | .key as $i | .value | select(.issue == null)
      | select(task_sprint($plan) as $s | $s == "" or ($s | ascii_downcase) == "current"
               or ($title != null and ($s | ascii_downcase) == ($title | ascii_downcase)))
-     | {id, points: (.points // null), deps: deps, wave: $w[.id]}]
-  | sort_by(.wave, .id)
+     | {id, points: (.points // null), deps: deps, wave: $w[.id], order: $i}]
+  | sort_by(.wave, .order) | map(del(.order))
   | reduce .[] as $t ({sum: $planned, out: [], tasks: []};
       . as $st
       | (if $title == null then "no_sprint"
