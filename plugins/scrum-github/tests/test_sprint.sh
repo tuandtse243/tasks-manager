@@ -193,6 +193,34 @@ test_cmd_close_already_closed() {
   assert_eq "" "$(gh_writes)"
 }
 
+# ---------- release suggestion (delta sprint-lifecycle, change release) ----------
+
+test_cmd_close_suggests_a_release_with_done_tasks() {
+  sprint_env
+  jq '. + [{"number":2,"title":"Sprint 2","state":"open","description":"<!-- scrum:start=2014-09-29 end=2014-10-03 -->"}]' \
+    "$FIXTURES/milestones.json" > "$FAKE_GH_DIR/milestones.json"
+  run_scrum sprint close "Sprint 1" --yes
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" '/scrum-github:release --sprint "Sprint 1"'
+}
+
+test_cmd_close_without_done_tasks_suggests_no_release() {
+  sprint_env
+  jq '. + [{"number":2,"title":"Sprint 2","state":"open","description":"<!-- scrum:start=2014-09-29 end=2014-10-03 -->"}]' \
+    "$FIXTURES/milestones.json" > "$FAKE_GH_DIR/milestones.json"
+  jq 'map(select(.state == "open"))' "$FIXTURES/issues-sprint1.json" > "$FAKE_GH_DIR/issues.json"
+  run_scrum sprint close "Sprint 1" --yes
+  assert_status 0 "$STATUS" "$ERR"
+  assert_not_contains "$OUT" "/scrum-github:release"
+}
+
+test_cmd_close_preview_suggests_no_release() {
+  sprint_env
+  run_scrum sprint close
+  assert_status 0 "$STATUS" "$ERR"
+  assert_not_contains "$OUT" "/scrum-github:release"
+}
+
 # ---------- sprint fill (delta sprint-lifecycle) ----------
 
 fill_ms() { # closed sprints with the given velocities, then the open Sprint 9

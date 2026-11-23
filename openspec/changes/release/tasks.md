@@ -17,8 +17,8 @@ Paths are relative to `plugins/scrum-github/`. Run tests with `bash tests/run.sh
 
 ## 4. Skill and suggestions (design 7; spec sprint-lifecycle, next-step-guidance)
 
-- [ ] 4.1 `skills/release/SKILL.md` (preview, why this version, edits, wait for agreement, then `--yes`). Verify: `claude plugin validate plugins/scrum-github` passes; skill test in `test_cli.sh`
-- [ ] 4.2 `sprint close` suggests a release when the sprint has Done tasks; release step in `next-step.jq` and `cmd_next.sh`. Verify: `bash tests/run.sh sprint` and `next` green
+- [x] 4.1 `skills/release/SKILL.md` (preview, why this version, edits, wait for agreement, then `--yes`). Verify: `claude plugin validate plugins/scrum-github` passes; skill test in `test_cli.sh`
+- [x] 4.2 `sprint close` suggests a release when the sprint has Done tasks; release step in `next-step.jq` and `cmd_next.sh`. Verify: `bash tests/run.sh sprint` and `next` green
 
 ## 5. Version and docs
 

@@ -127,6 +127,10 @@ cmd_sprint_close() {
   info "Closed $title. Velocity: $(printf '%s' "$plan" | jq -r .velocity) points."
   post_sprint_summary "$repo" "$ms" "$sprint" "$issues" "$plan" \
     || warn "the sprint summary was not posted on the digest issue; the sprint is closed"
+  # spec sprint-lifecycle "Suggest a release after closing a sprint": only with Done tasks.
+  if [ "$(printf '%s' "$plan" | jq '.done | length')" -gt 0 ]; then
+    info "Next: publish a version with its Done tasks: /scrum-github:release --sprint \"$title\" (or: scrum release --sprint \"$title\")"
+  fi
 }
 
 # post_sprint_summary REPO MILESTONES SPRINT ISSUES PLAN  The summary as a comment on the

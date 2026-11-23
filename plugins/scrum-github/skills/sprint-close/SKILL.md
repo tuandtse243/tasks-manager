@@ -21,6 +21,9 @@ Run it from the root of the target repository.
    when the user agreed to create the next sprint.
 4. Report: velocity recorded, tasks moved, milestone closed. Suggest `/scrum-github:sprint-report`
    for the final burndown, generated before closing if the user wants it.
+5. When the sprint had Done tasks, the command suggests `/scrum-github:release --sprint "<sprint>"`:
+   offer to publish a version with them. Releasing is the user's choice; it has its own preview and
+   confirmation.
 
 Never pass `--yes` without the user's confirmation in this conversation.
 If a `scrum` or `gh` command fails on login or network, run `/scrum-github:doctor`.

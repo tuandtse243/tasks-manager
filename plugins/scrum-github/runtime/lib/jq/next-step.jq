@@ -4,13 +4,27 @@
 #    --argjson backlog_count N (tasks in the backlog; only needed when the sprint has no task)
 #    [--argjson run_open {id}|null]  an unfinished /scrum-github:run in this working tree
 #    [--argjson ai_blocked {"N": [open blocking numbers]|null}]  blockers of my ai-ready tasks
+#    [--argjson release {sprint, tag, since, issues}|null]  the most recently closed sprint, the
+#        latest version tag on the default branch (null: none yet) and its commit date, and the
+#        issues of that sprint; null or left out when not read (then there is no release step)
 # Output: {step, message, command, issues: [numbers]}
 include "scrum";
 ($ARGS.named.run_open // null) as $run_open
 | ($ARGS.named.ai_blocked // {}) as $ai_blocked
+| ($ARGS.named.release // null) as $release
 | 
 def step($id; $message; $command; $issues): {step: $id, message: $message, command: $command, issues: $issues};
 def refs: map("#\(.number) \"\(.title)\"") | join(", ");
+# Done tasks of the last closed sprint that are in no version yet (spec next-step-guidance
+# "Suggest a release"): closed after the latest version tag.
+def unreleased:
+  if $release == null then []
+  else [$release.issues | release_tasks($cfg; $release.since; null)[] | .number] | sort end;
+def release_step:
+  unreleased as $u
+  | if ($u | length) == 0 then empty
+    else step("release"; "\($release.sprint) is closed and \($u | length) of its Done task\(if ($u | length) == 1 then " is" else "s are" end) in no version yet\(if $release.tag == null then "" else " (latest: \($release.tag))" end). Publish a version with the tag and release notes.";
+              "/scrum-github:release"; $u) end;
 
 if $init | not then
   step("init"; "Scrum on GitHub is not set up in this repository yet."; "/scrum-github:init"; [])
@@ -18,7 +32,7 @@ elif $pushed | not then
   step("push"; "The workflows are not on the default branch on GitHub yet, so statuses will not change on their own. Commit and push .github/ (directly or through a pull request).";
        "git add .github && git commit -m \"Set up Scrum on GitHub\" && git push"; [])
 elif $sprint == null then
-  step("sprint-new"; "There is no open sprint."; "/scrum-github:sprint-new"; [])
+  first(release_step, step("sprint-new"; "There is no open sprint."; "/scrum-github:sprint-new"; []))
 else
   ($sprint | sprint_info) as $s
   | if $s.end != null and $today > $s.end then
@@ -43,6 +57,8 @@ else
         elif ($mine | length) > 0 then
           step("continue"; "You are working on \($mine | refs). When it is done, open its pull request.";
                "/scrum-github:task-pr"; [$mine[].number])
+        elif (unreleased | length) > 0 then
+          release_step
         elif ($unestimated | length) > 0 then
           step("estimate"; "\($unestimated | refs) \(if ($unestimated | length) == 1 then "has" else "have" end) no points. Estimate with one of \($cfg.points.scale | map(tostring) | join(", ")).";
                "gh issue edit \($unestimated[0].number) --add-label \"\($cfg.points.label_prefix)N\""; [$unestimated[].number])

@@ -209,3 +209,83 @@ test_next_unfinished_run_and_blocked_ai_ready() {
     --arg me alice --arg today 2026-11-19 --argjson cfg "$(defaults)" --argjson backlog_count 0 --argjson ai_blocked '{"5":[]}')"
   assert_eq "run" "$(step_id)" "label names are not case-sensitive"
 }
+
+# ---------- release step (delta next-step-guidance, change release) ----------
+
+# done_at NUMBER CLOSED_AT  A Done task closed at that time.
+done_at() { issue "$1" Done 3 alice | jq -c --arg c "$2" '. + {closed_at: $c}'; }
+# release_of SPRINT ISSUES [TAG] [SINCE]  The --argjson release value.
+release_of() {
+  jq -nc --arg s "$1" --argjson i "$2" --arg t "${3:-}" --arg d "${4:-}" \
+    '{sprint: $s, tag: (if $t == "" then null else $t end), since: (if $d == "" then null else $d end), issues: $i}'
+}
+next_with_release() { # next_with_release SPRINT_OR_null ISSUES RELEASE
+  STEP="$(jqt next-step -n --argjson init true --argjson pushed true --argjson sprint "$1" --argjson issues "$2" \
+    --arg me alice --arg today 2026-11-19 --argjson cfg "$(defaults)" --argjson backlog_count 0 --argjson release "$3")"
+}
+
+test_next_release_after_closed_sprint_not_released() {
+  local s5
+  s5="$( { done_at 1 2026-11-12T10:00:00Z; done_at 2 2026-11-12T11:00:00Z; done_at 3 2026-11-13T10:00:00Z
+           done_at 4 2026-11-13T11:00:00Z; issue 5 New 1 -; } | issues)"
+  next_with_release null '[]' "$(release_of "Sprint 5" "$s5" v1.4.2 2026-11-10T08:00:00Z)"
+  assert_eq "release" "$(step_id)"
+  assert_eq "/scrum-github:release" "$(printf '%s' "$STEP" | jq -r .command)"
+  assert_eq "[1,2,3,4]" "$(printf '%s' "$STEP" | jq -c .issues)"
+  assert_contains "$(printf '%s' "$STEP" | jq -r .message)" "Sprint 5 is closed and 4 of its Done tasks are in no version yet (latest: v1.4.2)"
+  # with an open sprint: after your own task in progress, before picking up a new one
+  next_with_release "$SPRINT" "$( { issue 20 New 3 alice; } | issues)" "$(release_of "Sprint 5" "$s5" v1.4.2 2026-11-10T08:00:00Z)"
+  assert_eq "release" "$(step_id)"
+  next_with_release "$SPRINT" "$( { issue 12 'In progress' 3 alice; } | issues)" "$(release_of "Sprint 5" "$s5" v1.4.2 2026-11-10T08:00:00Z)"
+  assert_eq "continue" "$(step_id)"
+}
+
+test_next_no_release_when_already_released() {
+  local s5
+  s5="$( { done_at 1 2026-11-12T10:00:00Z; done_at 2 2026-11-13T10:00:00Z; } | issues)"
+  next_with_release null '[]' "$(release_of "Sprint 5" "$s5" v1.5.0 2026-11-14T08:00:00Z)"
+  assert_eq "sprint-new" "$(step_id)"
+  next_with_release null '[]' null
+  assert_eq "sprint-new" "$(step_id)" "tags not read: no release step"
+}
+
+test_next_release_without_any_tag() {
+  next_with_release null '[]' "$(release_of "Sprint 1" "$(done_at 1 2026-11-12T10:00:00Z | issues)")"
+  assert_eq "release" "$(step_id)"
+  assert_not_contains "$(printf '%s' "$STEP" | jq -r .message)" "latest:"
+}
+
+test_cmd_next_suggests_release_after_a_closed_sprint() {
+  next_env
+  { issue 20 New 3 alice; } | issues > "$FAKE_GH_DIR/issues.json"
+  printf '[%s,{"number":2,"title":"Sprint 2","state":"closed","closed_at":"2026-11-14T10:00:00Z","description":""}]' "$SPRINT" > "$FAKE_GH_DIR/milestones.json"
+  route_json 'api --paginate repos/acme/blog/issues?milestone=2*' "$( { done_at 7 2026-11-12T10:00:00Z; done_at 8 2026-11-13T10:00:00Z; } | issues)"
+  route_json 'api repos/acme/blog' '{"default_branch":"main"}'
+  route_json 'api --paginate repos/acme/blog/tags*' '[{"name":"v1.4.2"}]'
+  route_json 'api repos/acme/blog/compare/v1.4.2...main' '{"status":"ahead","base_commit":{"commit":{"committer":{"date":"2026-11-12T12:00:00Z"}}}}'
+  run_scrum next --json
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "release [8]" "$(printf '%s' "$OUT" | jq -r '"\(.step) \(.issues | tojson)"')"
+  assert_eq "" "$(gh_writes)"
+}
+
+test_cmd_next_skips_release_when_tags_cannot_be_read() {
+  next_env
+  { issue 20 New 3 alice; } | issues > "$FAKE_GH_DIR/issues.json"
+  printf '[%s,{"number":2,"title":"Sprint 2","state":"closed","closed_at":"2026-11-14T10:00:00Z","description":""}]' "$SPRINT" > "$FAKE_GH_DIR/milestones.json"
+  route_json 'api --paginate repos/acme/blog/issues?milestone=2*' "$(done_at 7 2026-11-12T10:00:00Z | issues)"
+  route_json 'api repos/acme/blog' '{"default_branch":"main"}'
+  route 'api --paginate repos/acme/blog/tags*' '!fail'
+  run_scrum next --json
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "start" "$(printf '%s' "$OUT" | jq -r .step)"
+}
+
+test_cmd_next_reads_no_tags_while_you_have_work_in_progress() {
+  next_env
+  printf '[%s,{"number":2,"title":"Sprint 2","state":"closed","closed_at":"2026-11-14T10:00:00Z","description":""}]' "$SPRINT" > "$FAKE_GH_DIR/milestones.json"
+  run_scrum next --json
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "continue" "$(printf '%s' "$OUT" | jq -r .step)"
+  assert_not_contains "$(gh_calls)" "/tags"
+}
