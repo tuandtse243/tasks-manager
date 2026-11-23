@@ -108,7 +108,8 @@ def clean_estimate:
 # missing or its data cannot be read (design 1: a broken block never stops a command).
 def issue_estimate:
   ((.body // "") | if type == "string" then . else "" end) as $b
-  | ([$b | capture("<!-- scrum:estimate -->[\\s\\S]*?<!-- (?<j>\\{[\\s\\S]*?\\}) -->[\\s\\S]*?<!-- /scrum:estimate -->")] | .[0].j) as $j
+  | ([$b | match("<!-- scrum:estimate -->[\\s\\S]*?<!-- /scrum:estimate -->").string] | .[0]) as $blk
+  | (if $blk == null then null else [$blk | capture("<!-- (?<j>\\{[^\\n]*\\}) -->")] | .[0].j end) as $j
   | if $j == null then null else (try ($j | fromjson) catch null) | clean_estimate end;
 
 # The line people read: "AI ~25m · Review ~20m" ($s: strings of the configured language).

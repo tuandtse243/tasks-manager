@@ -98,3 +98,9 @@ test_eta_by_waves_skips_waves_without_estimate() {
       {wave: 1, estimate: {work_minutes: 20, review_minutes: 15}}, {wave: 2, estimate: null}]' \
     | ejq -c 'include "scrum"; eta_by_waves(5) | {work_minutes, review_minutes}')"
 }
+
+test_block_without_data_does_not_read_a_later_comment() {
+  local b
+  b="$(printf 'x\n\n<!-- scrum:estimate -->\nAI ~25m\n<!-- /scrum:estimate -->\n\n<!-- {"work_minutes":9} -->')"
+  assert_eq "null" "$(jq -n --arg b "$b" '{body: $b}' | ejq 'include "scrum"; issue_estimate')"
+}

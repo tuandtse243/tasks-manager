@@ -35,7 +35,7 @@
 
 ## 7. Kiểm tra tích hợp
 
-- [ ] 7.1 Toàn bộ `bash tests/run.sh`, `shellcheck`, `openspec validate time-estimates --strict`. Kiểm tra: tất cả đạt
+- [x] 7.1 Toàn bộ `bash tests/run.sh`, `shellcheck`, `openspec validate time-estimates --strict`. Kiểm tra: tất cả đạt
 
 ## Workflow follow-up
 
