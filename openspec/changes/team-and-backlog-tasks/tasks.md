@@ -4,8 +4,8 @@
 
 ## 1. Cấu hình team (design 1; spec scrum-config)
 
-- [ ] 1.1 Thêm `team: []` vào `runtime/share/defaults.json`; kiểm tra khối `team` trong `validate-config.jq` (login rỗng, ký tự sai, trùng không phân biệt hoa thường, `areas`, `capacity`), chuẩn hoá bỏ `@`. Kiểm tra: test mới trong `tests/test_config.sh` cho mặc định, đầy đủ, trùng, capacity 0, login có `@`; `bash tests/run.sh config` xanh
-- [ ] 1.2 Thêm ví dụ khối `team` đã comment vào `templates/scrum.yml` và mục `team` trong README plugin (bảng cấu hình). Kiểm tra: `bash tests/run.sh init` xanh; ví dụ bỏ comment thì `scrum config` chấp nhận
+- [x] 1.1 Thêm `team: []` vào `runtime/share/defaults.json`; kiểm tra khối `team` trong `validate-config.jq` (login rỗng, ký tự sai, trùng không phân biệt hoa thường, `areas`, `capacity`), chuẩn hoá bỏ `@`. Kiểm tra: test mới trong `tests/test_config.sh` cho mặc định, đầy đủ, trùng, capacity 0, login có `@`; `bash tests/run.sh config` xanh
+- [x] 1.2 Thêm ví dụ khối `team` đã comment vào `templates/scrum.yml` và mục `team` trong README plugin (bảng cấu hình). Kiểm tra: `bash tests/run.sh init` xanh; ví dụ bỏ comment thì `scrum config` chấp nhận
 
 ## 2. Lệnh team và cảnh báo login (design 1, 2, 4; spec team)
 

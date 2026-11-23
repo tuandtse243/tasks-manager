@@ -6,9 +6,13 @@ CONFIG_JSON=""
 config_path() { printf '%s/.github/scrum.yml' "$(repo_dir)"; }
 
 # merge_config RAW_JSON -> prints merged JSON. RAW_JSON may be "null" (empty file).
+# A team login written with "@" is read without it.
 merge_config() {
   jq -n --argjson d "$(cat "$SHARE_DIR/defaults.json")" --argjson u "$1" \
-    'if ($u | type) == "object" or $u == null then $d * ($u // {}) else error("top level must be a mapping") end'
+    'if ($u | type) == "object" or $u == null then $d * ($u // {}) else error("top level must be a mapping") end
+     | if (.team | type) == "array"
+       then .team |= map(if type == "object" and (.login | type) == "string" then .login |= ltrimstr("@") else . end)
+       else . end'
 }
 
 # load_config [FILE]  Sets CONFIG_JSON or dies. Without FILE uses .github/scrum.yml.

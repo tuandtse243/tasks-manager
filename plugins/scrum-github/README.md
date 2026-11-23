@@ -170,7 +170,32 @@ project:                           # optional board, see "Project board" below
   synced_field: Synced status      # bookkeeping text field; hide it in views
   points_field: Points             # number field filled from "points: N"; null to turn off
   poll_cron: "*/15 * * * *"        # how often board changes reach the labels
+team: []                           # members, see "Team" below; empty = the repo's assignable users
 ```
+
+### Team
+
+`team` lists who works on the repository. Each member has a `login` and, optionally, `areas`
+(what they usually work on) and `capacity` (points per sprint):
+
+```yaml
+team:
+  - login: tuandt
+    areas: [backend, api]
+    capacity: 10
+  - login: an-nguyen
+    areas: [frontend]
+```
+
+Logins are compared without case, and a leading `@` is dropped. Two members with the same login,
+an empty login, `areas` that is not a list of texts, or a `capacity` of 0 or less stop every
+command with an error. When `team` is empty, the list is the people GitHub lets you assign
+issues to in the repository (no areas, no capacity), and commands say so.
+
+The list is used by `scrum team` (each person's load in the open sprint), by `/scrum-github:plan`
+(suggested assignees and sprint, with each person's load against their capacity), and by
+`task new`, `task assign` and `plan check`, which warn about a login that is not in `team` (only
+when `team` is set; the warning never stops the command).
 
 ### Needs attention, burndown and the digest in a chat
 

@@ -77,6 +77,17 @@ planning:
   # The project context counts as stale after this many commits.
   context_stale_commits: 50
 
+# Optional: who is on the team. /plan suggests an assignee for each task from this list (by
+# areas and current load), `scrum team` shows each person's load, and task new, task assign and
+# plan check warn about a login that is not here. Left out, the list is the people GitHub lets
+# you assign issues to in this repository, without areas or capacity.
+# team:
+#   - login: tuandt
+#     areas: [backend, api]          # optional: what this person usually works on
+#     capacity: 10                   # optional: points per sprint
+#   - login: an-nguyen
+#     areas: [frontend]
+
 # Override label colors: label name -> 6-digit hex color.
 colors: {}
 
