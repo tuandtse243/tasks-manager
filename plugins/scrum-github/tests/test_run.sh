@@ -1089,12 +1089,17 @@ test_cmd_run_finish_refuses_diverged_origin_and_warns_on_task_branches() {
 test_cmd_run_record_in_parallel_keeps_every_change() {
   git_env
   run_scrum run start
-  "$BASH" "$SCRUM" run record 102 --started >/dev/null 2>"$T/e102" &
-  "$BASH" "$SCRUM" run record 107 --started >/dev/null 2>"$T/e107" &
-  "$BASH" "$SCRUM" run record 103 --started >/dev/null 2>"$T/e103" &
-  wait
+  local p102 p107 p103 s102=0 s107=0 s103=0
+  "$BASH" "$SCRUM" run record 102 --started >"$T/o102" 2>"$T/e102" & p102=$!
+  "$BASH" "$SCRUM" run record 107 --started >"$T/o107" 2>"$T/e107" & p107=$!
+  "$BASH" "$SCRUM" run record 103 --started >"$T/o103" 2>"$T/e103" & p103=$!
+  # One wait per process: its exit status says whether a record failed or its write was lost.
+  wait "$p102" || s102=$?
+  wait "$p107" || s107=$?
+  wait "$p103" || s103=$?
   assert_eq "running running running" "$(task_state 102) $(task_state 107) $(task_state 103)" \
-    "a parallel record was lost; stderr: $(cat "$T/e102" "$T/e107" "$T/e103")"
+    "a parallel record was lost; exit $s102 $s107 $s103; stdout: $(cat "$T/o102" "$T/o107" "$T/o103"); stderr: $(cat "$T/e102" "$T/e107" "$T/e103"); state: $(jq -c '.tasks | map_values(.state)' "$(state_file)")"
+  assert_eq "0 0 0" "$s102 $s107 $s103" "a parallel record failed"
   [ ! -d "$(state_file).lock" ] || _fail "lock left behind"
   mkdir "$(state_file).lock"
   SCRUM_RUN_LOCK_TRIES=2 run_scrum run record 102 --started
