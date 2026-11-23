@@ -603,3 +603,22 @@ test_cmd_status_shows_time_left() {
   assert_contains "$OUT" "Review left"
   assert_contains "$OUT" "45m"
 }
+
+# "Khối hỏng" in a read command: the status table does not stop and counts the task as without an estimate.
+test_cmd_status_broken_estimate_block_counts_as_missing() {
+  report_env
+  timed_issues | jq 'map(if .number == 3 then .body = "Text\n\n<!-- scrum:estimate -->\nAI ~20m\n<!-- {\"work_minutes\": -->\n<!-- /scrum:estimate -->" else . end)' \
+    > "$FAKE_GH_DIR/issues.json"
+  route_json 'api --paginate repos/acme/blog/issues/*/dependencies/blocked_by*' '[]'
+  run_scrum status
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "Review left"
+  assert_contains "$OUT" "Tasks not done without a time estimate: 1."
+}
+
+# "Không có ước lượng": no time on the rows of status --json when no task has an estimate.
+test_progress_without_estimates_rows_have_no_time() {
+  local p
+  p="$(progress_of "$(cat "$FIXTURES/issues-sprint1.json")" 2014-09-24)"
+  assert_eq "false" "$(jq -c '[.rows[] | has("time")] | any' <<<"$p")" "no time on the rows"
+}

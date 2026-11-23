@@ -595,3 +595,69 @@ Review ~10m
 <!-- {"review_minutes":10,"by":"ai"} -->
 <!-- /scrum:estimate -->' "$body"
 }
+
+# ---------- time estimates: edge cases (tests for the spec scenarios) ----------
+
+# Points only, as before the change: the label changes, the body (and its estimate block) is not written.
+test_cmd_task_estimate_points_only_leaves_the_estimate_block() {
+  ops_env
+  est_issue "$EST_BODY"
+  run_scrum task estimate 12 7
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$(gh_calls)" 'STDIN {"labels":["status: In progress","points: 7"]}'
+  assert_not_contains "$(gh_calls)" "-X PATCH" "the body is not written"
+  assert_not_contains "$OUT" "time estimate"
+  assert_contains "$OUT" "#12 now has 7 points."
+}
+
+# Durations with spaces around them, hours with 0 minutes, plain minutes.
+test_cmd_task_estimate_duration_forms() {
+  ops_env
+  est_issue "Lưu bình luận"
+  run_scrum task estimate 12 --work ' 25m' --review 1h0m
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$(gh_calls | sed -n 's/^STDIN //p' | jq -r .body)" '{"work_minutes":25,"review_minutes":60,"by":"ai"}'
+}
+
+test_cmd_task_estimate_bare_unit_refused() {
+  local d
+  for d in h m 0m; do
+    ops_env
+    run_scrum task estimate 12 --review "$d"
+    assert_status 1 "$STATUS" "--review $d"
+    assert_contains "$ERR" "--review"
+    assert_contains "$ERR" "1h30m"
+    assert_eq "" "$(gh_calls)" "nothing read or written for $d"
+  done
+}
+
+# "Ghi đè" in the language of the repository: the line people read is in Vietnamese.
+test_cmd_task_estimate_overwrite_in_vietnamese() {
+  ops_env
+  printf 'version: 1\nlanguage: vi\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  est_issue "$EST_BODY"
+  run_scrum task estimate 12 --by human
+  assert_status 0 "$STATUS" "$ERR"
+  local body
+  body="$(gh_calls | sed -n 's/^STDIN //p' | jq -r .body)"
+  assert_contains "$body" "Người ~25m · Review ~20m"
+  assert_contains "$body" '{"work_minutes":25,"review_minutes":20,"by":"human"}'
+  assert_eq "1" "$(printf '%s' "$body" | grep -c '<!-- scrum:estimate -->')"
+}
+
+# "Ghi đè" on a body with two estimate blocks (one pasted by hand): one block is left.
+test_cmd_task_estimate_two_blocks_become_one() {
+  ops_env
+  est_issue "$EST_BODY
+
+<!-- scrum:estimate -->
+AI ~99m
+<!-- {\"work_minutes\":99} -->
+<!-- /scrum:estimate -->"
+  run_scrum task estimate 12 --review 30m
+  assert_status 0 "$STATUS" "$ERR"
+  local body
+  body="$(gh_calls | sed -n 's/^STDIN //p' | jq -r .body)"
+  assert_eq "1" "$(printf '%s' "$body" | grep -c '<!-- scrum:estimate -->')"
+  assert_contains "$body" '{"work_minutes":25,"review_minutes":30,"by":"ai"}'
+}

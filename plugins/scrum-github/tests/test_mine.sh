@@ -329,3 +329,12 @@ test_cmd_mine_no_estimate_at_all() {
   assert_status 0 "$STATUS" "$ERR"
   assert_contains "$OUT" "Time left in Sprint 5: 3 tasks without a time estimate."
 }
+
+# "Khối hỏng" in scrum mine: the task counts as without an estimate and the command does not stop.
+test_cmd_mine_broken_estimate_block() {
+  mine_env
+  jq -s . <(mie 102 New 5 20 15) <(mi 104 New 1 5 | jq -c '.body = "Text\n\n<!-- scrum:estimate -->\n<!-- {\"work_minutes\":20 -->\n<!-- /scrum:estimate -->"') > "$FAKE_GH_DIR/mine.json"
+  run_scrum mine
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "1 task without a time estimate, not counted: #104."
+}

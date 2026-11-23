@@ -104,3 +104,23 @@ test_block_without_data_does_not_read_a_later_comment() {
   b="$(printf 'x\n\n<!-- scrum:estimate -->\nAI ~25m\n<!-- /scrum:estimate -->\n\n<!-- {"work_minutes":9} -->')"
   assert_eq "null" "$(jq -n --arg b "$b" '{body: $b}' | ejq 'include "scrum"; issue_estimate')"
 }
+
+# Edge cases of "Định dạng thời lượng".
+test_duration_edge_forms() {
+  assert_eq "60" "$(dur 1h0m)"
+  assert_eq "30" "$(dur 0h30m)"
+  assert_eq "25" "$(dur ' 25m')"
+  assert_eq "null" "$(dur '1h 30m')"
+  assert_eq "null" "$(dur 2H)"
+}
+
+# "Ghi đè" on a body with two blocks: the first is read, and writing leaves one.
+test_two_estimate_blocks_read_first_write_one() {
+  local b out
+  b="$(printf 'Top\n\n<!-- scrum:estimate -->\nA\n<!-- {"work_minutes":10} -->\n<!-- /scrum:estimate -->\n\nMiddle\n\n<!-- scrum:estimate -->\nB\n<!-- {"work_minutes":99} -->\n<!-- /scrum:estimate -->')"
+  assert_json_eq '{"work_minutes":10,"by":"ai"}' "$(jq -n --arg b "$b" '{body: $b}' | ejq -c 'include "scrum"; issue_estimate')"
+  out="$(ejq -nr --arg b "$b" --argjson s "$(strings_en)" 'include "scrum"; $b | set_estimate({work_minutes: 5}; $s)')"
+  assert_eq "1" "$(printf '%s' "$out" | grep -c '<!-- scrum:estimate -->')"
+  assert_contains "$out" "Middle"
+  assert_json_eq '{"work_minutes":5,"by":"ai"}' "$(jq -n --arg b "$out" '{body: $b}' | ejq -c 'include "scrum"; issue_estimate')"
+}
