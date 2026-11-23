@@ -701,3 +701,290 @@ test_review_only_estimate_in_eta_and_pr_body() {
   assert_contains "$body" "**Time**: estimate Review ~15m; actual 12m"
   assert_contains "$body" "Time of the merged tasks: estimate no estimate, actual 12m."
 }
+
+# ---------- spec scenarios end to end, and edge cases ----------
+
+# body_of_last_pr  The description of the last pull request opened (logged by gh-body).
+body_of_last_pr() { grep '^BODY ' "$FAKE_GH_LOG" | tail -1; }
+remote_branches() { git --git-dir="$T/remote.git" for-each-ref --format='%(refname:short)' refs/heads; }
+local_branches() { git -C "$SCRUM_REPO_DIR" for-each-ref --format='%(refname:short)' refs/heads; }
+
+# spec "Chia đợt và xem trước: Xem trước không ghi", in a real git repository
+test_cmd_run_plan_in_a_git_repo_changes_nothing() {
+  git_env
+  local branches head
+  branches="$(local_branches)"; head="$(git -C "$SCRUM_REPO_DIR" rev-parse HEAD)"
+  : > "$FAKE_GH_LOG"
+  ( cd "$SCRUM_REPO_DIR" && run_scrum run plan --dry-run && assert_status 0 "$STATUS" "$ERR" )
+  run_scrum run plan
+  assert_status 0 "$STATUS" "$ERR"
+  run_scrum run plan 102,107,103 --json
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "[[102,107],[103]]" "$(printf '%s' "$OUT" | jq -c .waves)"
+  assert_eq "" "$(gh_writes)"
+  assert_not_contains "$(gh_calls)" "pr create"
+  assert_eq "$branches" "$(local_branches)" "no branch created"
+  assert_eq "main $head" "$(git -C "$SCRUM_REPO_DIR" rev-parse --abbrev-ref HEAD) $(git -C "$SCRUM_REPO_DIR" rev-parse HEAD)"
+  assert_eq "1" "$(git -C "$SCRUM_REPO_DIR" worktree list | wc -l | tr -d ' ')" "no worktree"
+  [ ! -e "$SCRUM_REPO_DIR/.scrum" ] || _fail "plan wrote .scrum"
+  assert_eq "" "$(git -C "$SCRUM_REPO_DIR" status --porcelain --ignored)"
+  assert_eq "main" "$(remote_branches)"
+}
+
+# spec "Bắt đầu lần chạy: Có thay đổi chưa commit", with a staged change and a deleted file
+test_cmd_run_start_with_staged_or_deleted_changes_nothing() {
+  git_env
+  printf 'staged\n' >> "$SCRUM_REPO_DIR/app.txt"
+  git -C "$SCRUM_REPO_DIR" add app.txt
+  run_scrum run start
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "Commit or stash them first"
+  git -C "$SCRUM_REPO_DIR" reset -q --hard
+  rm "$SCRUM_REPO_DIR/app.txt"
+  run_scrum run start
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "Commit or stash them first"
+  assert_eq "main" "$(local_branches)"
+  assert_eq "" "$(gh_writes)"
+  [ ! -e "$SCRUM_REPO_DIR/.scrum" ] || _fail "state written"
+}
+
+# spec "Bắt đầu lần chạy": the integration branch starts from the latest default branch on origin
+test_cmd_run_start_from_the_latest_default_branch() {
+  git_env
+  git clone -q "$T/remote.git" "$T/other" 2>/dev/null
+  git -C "$T/other" -c user.email=o@example.com -c user.name=o -c commit.gpgsign=false commit -q --allow-empty -m "pushed by someone else"
+  git -C "$T/other" push -q origin main 2>/dev/null
+  local latest; latest="$(git -C "$T/other" rev-parse HEAD)"
+  [ "$latest" != "$(git -C "$SCRUM_REPO_DIR" rev-parse main)" ] || _fail "setup: local main is not behind"
+  run_scrum run start
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "$latest" "$(git -C "$SCRUM_REPO_DIR" rev-parse "$INT")"
+}
+
+# The state file is valid JSON after every step, and .scrum/ is excluded once (not in .gitignore).
+test_cmd_run_state_file_valid_after_each_step() {
+  finish_env
+  check() { jq -e 'type == "object" and .version == 1 and (.tasks | type) == "object"' "$(state_file)" >/dev/null || _fail "state is not valid after: $1"; }
+  check start
+  # #102 and #107 both rewrite app.txt, so #107 conflicts once #102 is merged
+  git -C "$SCRUM_REPO_DIR" worktree remove -f "$T/wt102"; git -C "$SCRUM_REPO_DIR" branch -D -q agent-102
+  git -C "$SCRUM_REPO_DIR" worktree remove -f "$T/wt107"; git -C "$SCRUM_REPO_DIR" branch -D -q agent-107
+  agent_work 102 app.txt "102 here"
+  agent_work 107 app.txt "107 here"
+  run_scrum run record 102 --started; check started
+  run_scrum run record 102 --done --branch agent-102; check "done"
+  run_scrum run merge 102; check merged
+  agent_work 103 c.txt "103 here"
+  run_scrum run record 107 --done --branch agent-107; check "done 107"
+  run_scrum run merge 107; check conflict
+  assert_eq "conflict" "$(task_state 107)"
+  run_scrum run record 107 --failed --reason "merge conflict"; check failed
+  run_scrum run record 103 --done --branch agent-103
+  run_scrum run merge 103; check "merged 103"
+  run_scrum run finish; check finish
+  assert_status 0 "$STATUS" "$ERR"
+  [ ! -e "$SCRUM_REPO_DIR/.gitignore" ] || _fail ".gitignore created"
+  assert_eq "1" "$(grep -cxF '.scrum/' "$SCRUM_REPO_DIR/.git/info/exclude")"
+  # a second run later adds no second line
+  git -C "$SCRUM_REPO_DIR" checkout -q main
+  git -C "$SCRUM_REPO_DIR" branch -D -q "$INT"
+  export SCRUM_NOW=2026-11-23T12:00:00Z
+  run_scrum run start 107
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "1" "$(grep -cxF '.scrum/' "$SCRUM_REPO_DIR/.git/info/exclude")"
+  assert_eq "" "$(git -C "$SCRUM_REPO_DIR" status --porcelain)"
+}
+
+# spec "Task lỗi: Một task lỗi" end to end: #107 fails, #102 (and #103 after it) are merged and
+# in the pull request; #107 is only listed with its reason.
+test_cmd_run_one_failed_task_the_others_go_on() {
+  finish_env
+  ri 107 'In progress' ai-ready > "$FAKE_GH_DIR/p107.json"
+  route_first 'api repos/acme/blog/issues/107' p107.json
+  run_scrum run record 107 --started
+  : > "$FAKE_GH_LOG"
+  run_scrum run record 107 --failed --reason "tests fail: 2 of 40"
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$(gh_calls)" 'api -X POST repos/acme/blog/issues/107/comments --input -'
+  assert_contains "$(gh_calls)" 'STDIN {"labels":["points: 3","ai-ready","status: New"]}'
+  assert_not_contains "$(gh_calls)" "issues/102/"
+  run_scrum run record 102 --done --branch agent-102
+  run_scrum run merge 102
+  assert_status 0 "$STATUS" "$ERR"
+  agent_work 103 c.txt "from 103"
+  run_scrum run record 103 --done --branch agent-103
+  run_scrum run merge 103
+  assert_status 0 "$STATUS" "$ERR"
+  : > "$FAKE_GH_LOG"
+  run_scrum run finish
+  assert_status 0 "$STATUS" "$ERR"
+  local body; body="$(body_of_last_pr)"
+  assert_contains "$body" "Closes #102"
+  assert_contains "$body" "Closes #103"
+  assert_not_contains "$body" "Closes #107"
+  assert_contains "$body" "#107 Task 107: the agent could not finish it (tests fail: 2 of 40); back in New"
+  assert_contains "$body" "#110 Task 110: left out (has no ai-ready label)"
+  assert_not_contains "$(git -C "$SCRUM_REPO_DIR" log --format=%s "$INT")" "#107"
+  [ ! -e "$SCRUM_REPO_DIR/b.txt" ] || _fail "the work of #107 is in the integration branch"
+  assert_eq "main
+$INT" "$(remote_branches)"
+}
+
+# spec "Task lỗi: Task phụ thuộc task lỗi" end to end: #103 is not run, and the PR says why.
+test_cmd_run_dependent_of_a_failed_task_is_not_run() {
+  finish_env
+  run_scrum run record 102 --failed --reason "tests fail"
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "excluded" "$(task_state 103)"
+  assert_eq "blocked by #102, which was not finished" "$(jq -r '.tasks["103"].reason' "$(state_file)")"
+  run_scrum run status --json
+  assert_eq "[]" "$(printf '%s' "$OUT" | jq -c '.waves[1].to_run')"
+  run_scrum run record 103 --started
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "#103 is excluded; it cannot be started"
+  agent_work 103 c.txt "from 103"
+  run_scrum run record 103 --done --branch agent-103
+  assert_status 1 "$STATUS"
+  run_scrum run merge 103
+  assert_status 1 "$STATUS"
+  run_scrum run record 107 --done --branch agent-107
+  run_scrum run merge 107
+  : > "$FAKE_GH_LOG"
+  run_scrum run finish
+  assert_status 0 "$STATUS" "$ERR"
+  local body; body="$(body_of_last_pr)"
+  assert_contains "$body" "Closes #107"
+  assert_not_contains "$body" "Closes #102"
+  assert_not_contains "$body" "Closes #103"
+  assert_contains "$body" "#102 Task 102: the agent could not finish it (tests fail)"
+  assert_contains "$body" "#103 Task 103: left out (blocked by #102, which was not finished)"
+}
+
+# spec "Merge theo đợt: Conflict", then the task is left out: the integration branch keeps none of
+# its work, and the pull request lists it with the reason.
+test_cmd_run_conflict_then_left_out() {
+  finish_env
+  git -C "$SCRUM_REPO_DIR" worktree remove -f "$T/wt102"; git -C "$SCRUM_REPO_DIR" branch -D -q agent-102
+  git -C "$SCRUM_REPO_DIR" worktree remove -f "$T/wt107"; git -C "$SCRUM_REPO_DIR" branch -D -q agent-107
+  agent_work 102 app.txt "102 rewrote this"
+  agent_work 107 app.txt "107 rewrote this"
+  run_scrum run record 102 --done --branch agent-102
+  run_scrum run record 107 --done --branch agent-107
+  run_scrum run merge 102
+  local before tree; before="$(git -C "$SCRUM_REPO_DIR" rev-parse "$INT")"; tree="$(git -C "$SCRUM_REPO_DIR" rev-parse "$INT^{tree}")"
+  run_scrum run merge 107
+  assert_status 1 "$STATUS"
+  assert_eq "$before" "$(git -C "$SCRUM_REPO_DIR" rev-parse "$INT")"
+  assert_eq "$tree" "$(git -C "$SCRUM_REPO_DIR" write-tree)" "index as before"
+  assert_eq "" "$(git -C "$SCRUM_REPO_DIR" status --porcelain)"
+  assert_eq "102 rewrote this" "$(cat "$SCRUM_REPO_DIR/app.txt")"
+  run_scrum run record 107 --failed --reason "merge conflict"
+  assert_status 0 "$STATUS" "$ERR"
+  run_scrum run record 103 --failed --reason "no time"
+  : > "$FAKE_GH_LOG"
+  run_scrum run finish
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$(body_of_last_pr)" "#107 Task 107: the agent could not finish it (merge conflict)"
+  assert_not_contains "$(body_of_last_pr)" "Closes #107"
+  assert_eq "$before" "$(git --git-dir="$T/remote.git" rev-parse "$INT")"
+}
+
+# A merge that git refuses before it starts (an untracked file in the way) is undone the same way.
+test_cmd_run_merge_refused_by_untracked_file() {
+  finish_env
+  run_scrum run record 102 --done --branch agent-102
+  printf 'mine, not tracked\n' > "$SCRUM_REPO_DIR/a.txt"
+  local before; before="$(git -C "$SCRUM_REPO_DIR" rev-parse "$INT")"
+  run_scrum run merge 102
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "failed:"
+  assert_eq "$before" "$(git -C "$SCRUM_REPO_DIR" rev-parse "$INT")"
+  assert_eq "mine, not tracked" "$(cat "$SCRUM_REPO_DIR/a.txt")" "the untracked file is kept"
+  assert_eq "?? a.txt" "$(git -C "$SCRUM_REPO_DIR" status --porcelain)"
+  assert_eq "conflict" "$(task_state 102)"
+  rm "$SCRUM_REPO_DIR/a.txt"
+  run_scrum run merge 102
+  assert_status 0 "$STATUS" "$ERR"
+}
+
+# merge checks out the integration branch itself and never touches the branch that was checked out.
+test_cmd_run_merge_from_another_branch() {
+  finish_env
+  run_scrum run record 102 --done --branch agent-102
+  git -C "$SCRUM_REPO_DIR" checkout -q main
+  local main_sha; main_sha="$(git -C "$SCRUM_REPO_DIR" rev-parse main)"
+  run_scrum run merge 102
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "$INT" "$(git -C "$SCRUM_REPO_DIR" rev-parse --abbrev-ref HEAD)"
+  assert_eq "$main_sha" "$(git -C "$SCRUM_REPO_DIR" rev-parse main)"
+  assert_eq "Merge #102 Task 102" "$(git -C "$SCRUM_REPO_DIR" log -1 --format=%s "$INT")"
+}
+
+# spec "Một PR gói review: Không có gì để mở PR", per wave: a wave with nothing merged opens
+# nothing, and the run is closed only after the last wave.
+test_cmd_run_finish_per_wave_nothing_merged() {
+  finish_env
+  run_scrum run record 102 --failed --reason "tests fail"
+  run_scrum run record 107 --failed --reason "tests fail"
+  : > "$FAKE_GH_LOG"
+  run_scrum run finish --wave 1
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "nothing is pushed and no pull request is opened"
+  assert_eq "true" "$(jq '.finished_at == null' "$(state_file)")" "wave 2 is left"
+  run_scrum run finish --wave 2
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "false" "$(jq '.finished_at == null' "$(state_file)")"
+  assert_not_contains "$(gh_calls)" "pr create"
+  assert_eq "main" "$(remote_branches)"
+  run_scrum run finish --wave 3
+  assert_status 1 "$STATUS"
+}
+
+# Only the integration branch reaches the remote; the task branches stay local after the run.
+test_cmd_run_task_branches_stay_local() {
+  finish_env
+  run_scrum run record 102 --done --branch agent-102
+  run_scrum run record 107 --done --branch agent-107
+  run_scrum run merge 102
+  run_scrum run merge 107
+  run_scrum run record 103 --failed --reason "no time"
+  run_scrum run finish
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$(local_branches)" "agent-102"
+  assert_eq "" "$(git ls-remote --heads "$T/remote.git" 'agent-*')"
+  assert_eq "1" "$(git ls-remote --heads "$T/remote.git" "$INT" | wc -l | tr -d ' ')"
+  assert_eq "$(git -C "$SCRUM_REPO_DIR" rev-parse origin/main)" "$(git --git-dir="$T/remote.git" rev-parse main)" "main on origin unchanged"
+}
+
+# spec "Chạy tiếp sau khi dừng": stopped inside wave 1, a done task waits to be merged and a
+# running one runs again; merged tasks are never run again.
+test_cmd_run_resume_inside_wave_1() {
+  finish_env
+  run_scrum run record 102 --started
+  run_scrum run record 102 --done --branch agent-102
+  run_scrum run merge 102
+  run_scrum run record 107 --started
+  run_scrum run status --json
+  assert_eq "1 [107] [] [103]" "$(printf '%s' "$OUT" | jq -r '"\(.next_wave) \(.waves[0].to_run | tojson) \(.waves[0].to_merge | tojson) \(.waves[1].to_run | tojson)"')"
+  run_scrum run record 107 --done --branch agent-107
+  run_scrum run status --json
+  assert_eq "1 [] [107]" "$(printf '%s' "$OUT" | jq -r '"\(.next_wave) \(.waves[0].to_run | tojson) \(.waves[0].to_merge | tojson)"')"
+  run_scrum run status
+  assert_contains "$OUT" "Next: wave 1; merge #107"
+  run_scrum run record 102 --done --branch agent-102
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "#102 is merged"
+}
+
+# delta scrum-config "Cấu hình chạy task bằng agent": run.branch_pattern with {date} and
+# run.max_parallel are what start uses when no option is given.
+test_cmd_run_start_uses_run_config() {
+  git_env
+  printf 'version: 1\nrun:\n  max_parallel: 2\n  branch_pattern: "ai/{date}-{login}"\n  test_command: "make test"\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  git -C "$SCRUM_REPO_DIR" add -A; git -C "$SCRUM_REPO_DIR" commit -q -m config
+  run_scrum run start
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "ai/2026-11-23-tuandt" "$(git -C "$SCRUM_REPO_DIR" rev-parse --abbrev-ref HEAD)"
+  assert_eq "2 make test false" "$(jq -r '"\(.max_parallel) \(.test_command) \(.pr_per_wave)"' "$(state_file)")"
+}
