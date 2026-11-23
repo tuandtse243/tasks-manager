@@ -47,6 +47,8 @@ def closing_refs($repo):
 # ---------- labels and tasks ----------
 def label_names: [.labels[]? | if type == "object" then .name else . end];
 def has_label($n): label_names | any(.[]; . == $n);
+# GitHub label names are not case-sensitive; "" matches nothing.
+def has_label_ci($n): ($n // "" | ascii_downcase) as $l | $l != "" and (label_names | any(.[]; ascii_downcase == $l));
 def status_label($cfg; $role): $cfg.statuses.label_prefix + $cfg.statuses[$role];
 # The optional fourth status (statuses.in_review); off when it is not a non-empty text.
 def review_on($cfg): ($cfg.statuses.in_review | type) == "string" and ($cfg.statuses.in_review | length) > 0;
@@ -155,6 +157,16 @@ def eta_by_waves($merge):
      review_minutes: ([$xs[].e.review_minutes // 0] | add // 0),
      waves: [$waves[] | {wave, work}],
      estimated: ($xs | length)};
+
+# Waves of a blocking graph. Input: [{number, deps: [numbers of the same list]}].
+# Output: {"N": wave}, 1 for a task that depends on none of the list. Rounds are capped at the
+# list's length, so a cycle ends with large waves instead of looping.
+def wave_map:
+  . as $items
+  | reduce range(0; ($items | length) + 1) as $_
+      ([$items[] | {key: (.number | tostring), value: 1}] | from_entries;
+       . as $w
+       | reduce $items[] as $t (.; .[$t.number | tostring] = 1 + ([0] + [$t.deps[] | $w[tostring] // 0] | max)));
 
 # Sums of the estimates of a list of tasks ({estimate} each): work, review and how many have none.
 def estimate_totals:

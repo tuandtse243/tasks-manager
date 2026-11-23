@@ -1,7 +1,7 @@
 {
   "name": "scrum-github",
-  "version": "0.10.0",
-  "description": "Run Scrum on GitHub: sprints as milestones, tasks as issues, automatic status from pull requests, burndown reports and daily digests, and AI planning from a requirement to an epic, features and tasks.",
+  "version": "0.11.0",
+  "description": "Run Scrum on GitHub: sprints as milestones, tasks as issues, automatic status from pull requests, burndown reports and daily digests, AI planning from a requirement to an epic, features and tasks, and AI agents that work tasks into one pull request ready for review.",
   "author": {
     "name": "tasks-manager maintainers"
   },

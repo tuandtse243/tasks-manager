@@ -79,10 +79,19 @@ include "plan";
           | ($want_est != null and $kind == "task" and ($cur | issue_estimate) != $want_est) as $est_changed
           | (if $est_changed then $kept | set_estimate($want_est; $strings) else $kept end) as $body
           | ($cur | label_names) as $labels
+          # ai_ready (spec work-plan "Task sẵn sàng cho agent"): true adds labels.ai_ready, false
+          # removes it, omitted leaves it as it is.
+          | ($cfg.labels.ai_ready // "") as $ai
           | (if $kind == "task" then
-               ([$labels[] | select(startswith($cfg.points.label_prefix) | not)]
-                + (if $want_points != null then [points_label($cfg; $want_points)] else [] end))
+               ([$labels[] | select(startswith($cfg.points.label_prefix) | not)
+                 | select(($item.ai_ready == false and $ai != "" and ascii_downcase == ($ai | ascii_downcase)) | not)]
+                + (if $want_points != null then [points_label($cfg; $want_points)] else [] end)
+                + (if $item.ai_ready == true and $ai != "" and ($cur | has_label_ci($ai) | not) then [$ai] else [] end))
              else $labels end) as $want_labels
+          | ($kind == "task" and $ai != "" and $item.ai_ready != null
+             and ($cur | has_label_ci($ai)) != $item.ai_ready) as $ai_changed
+          | ($kind == "task" and ($cur | task_points($cfg)) != $want_points
+             and (([$labels[] | select(startswith($cfg.points.label_prefix))] | length) > 0 or $want_points != null)) as $points_changed
           | ($cur.milestone.number // null) as $cur_ms
           | ( {}
               + (if $cur.title != $want_title then {title: $want_title} else {} end)
@@ -99,7 +108,8 @@ include "plan";
                            (if $patch.body and ($cur.body // "") != $kept then "body" else empty end),
                            (if $est_changed then "time estimate \(($cur | issue_estimate) | est_text) -> \($want_est | est_text)" else empty end),
                            (if $patch | has("milestone") then "sprint \(($cur.milestone.title // "backlog")) -> \($res.sprint)" else empty end),
-                           (if $set_labels then "points \($cur | task_points($cfg) // "none") -> \($want_points // "none")" else empty end)
+                           (if $set_labels and ($ai_changed | not) or $points_changed then "points \($cur | task_points($cfg) // "none") -> \($want_points // "none")" else empty end),
+                           (if $ai_changed then (if $item.ai_ready then "add \($ai)" else "remove \($ai)" end) else empty end)
                          ] | join(", ")))}
             end
         end;

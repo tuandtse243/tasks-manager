@@ -43,6 +43,8 @@ labels:
   meta: "scrum: meta"
   # Put this label on a pull request that has no task, so the link check passes.
   no_task: no-task
+  # A task ready to be worked by an AI agent with /scrum-github:run.
+  ai_ready: ai-ready
 
 branch:
   # Branch created by task-start. {number} is the issue number, {slug} comes from its title.
@@ -79,6 +81,17 @@ planning:
   # Minutes to merge and run the tests between two waves of parallel work, used when time
   # estimates add up how long a plan or a sprint takes (scrum mine, plan.md, plan.html).
   merge_minutes: 5
+
+run:
+  # /scrum-github:run works your ai-ready tasks with agents, each in its own local git worktree,
+  # merges them into one integration branch and opens one pull request.
+  # Command that runs the repository's tests. Empty: each agent finds how to test on its own.
+  test_command: ""
+  # At most this many agents work at the same time.
+  max_parallel: 3
+  # The integration branch. {sprint} is the sprint title as a slug (sprint-5), {login} your
+  # GitHub login, {date} today (YYYY-MM-DD).
+  branch_pattern: "run/{sprint}-{login}"
 
 # Optional: who is on the team. /plan suggests an assignee for each task from this list (by
 # areas and current load), `scrum team` shows each person's load, and task new, task assign and

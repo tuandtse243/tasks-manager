@@ -98,5 +98,10 @@
     "name": "no-task",
     "color": "cfd3d7",
     "description": "Pull request with no linked task"
+  },
+  {
+    "name": "ai-ready",
+    "color": "8250df",
+    "description": "Task ready for an AI agent (/scrum-github:run)"
   }
 ]

@@ -77,3 +77,63 @@ test_my_tasks_skill() {
   assert_contains "$(cat "$f")" '/scrum-github:task-start N'
   assert_contains "$(cat "$f")" 'Run it only after the user agrees'
 }
+
+# spec ai-run "Mỗi task một worktree local", "Xác nhận trước khi chạy" (design 1, 2, 8).
+test_run_skill() {
+  local f="$PLUGIN_DIR/skills/run/SKILL.md" s
+  [ -f "$f" ] || _fail "no skills/run/SKILL.md"
+  assert_eq "name: run" "$(sed -n 2p "$f")"
+  s="$(cat "$f")"
+  assert_contains "$s" '`scrum run plan'
+  assert_contains "$s" "With \`--dry-run\`, stop here"
+  assert_contains "$s" 'The agents will run code on this machine'
+  assert_contains "$s" "**Wait for the user's answer.**"
+  assert_contains "$s" '`subagent_type: "scrum-github:implementer"`'
+  assert_contains "$s" '`isolation: "worktree"`'
+  assert_contains "$s" 'never more than K agents run'
+  assert_contains "$s" '**Check out the integration branch**'
+  assert_contains "$s" 'scrum run record N --done --branch'
+  assert_contains "$s" '`scrum run merge N`'
+  assert_contains "$s" 'Do not start the next wave on a red test.'
+  assert_contains "$s" 'scrum run finish --wave W'
+  assert_contains "$s" 'scrum run status --json'
+  # the confirmation comes before start
+  [ "$(grep -n 'Wait for the user' "$f" | head -1 | cut -d: -f1)" -lt "$(grep -n '^Run `scrum run start' "$f" | cut -d: -f1)" ] \
+    || _fail "the skill starts the run before the user confirms"
+}
+
+test_implementer_agent() {
+  local f="$PLUGIN_DIR/agents/implementer.md" s
+  [ -f "$f" ] || _fail "no agents/implementer.md"
+  assert_eq "name: implementer" "$(sed -n 2p "$f")"
+  assert_eq "tools: Read, Write, Edit, Glob, Grep, Bash" "$(grep '^tools:' "$f")"
+  s="$(cat "$f")"
+  assert_contains "$s" "Never push"
+  assert_contains "$s" "Do only this task."
+  assert_contains "$s" '"result": "done"'
+  assert_contains "$s" '"look_closely"'
+  assert_contains "$s" '"manual_test"'
+}
+
+# Review fixes: agent text stays off command lines, the confirmed plan is what starts, records one
+# at a time, the base commit is checked, the agent's times and dependencies.
+test_run_skill_and_agent_safety() {
+  local s a
+  s="$(cat "$PLUGIN_DIR/skills/run/SKILL.md")"
+  a="$(cat "$PLUGIN_DIR/agents/implementer.md")"
+  assert_contains "$s" "Never put text written by an agent or taken from an issue on a command line"
+  assert_contains "$s" "--expect N,N,..."
+  assert_contains "$s" "one at
+a time, never several at once"
+  assert_contains "$s" "scrum run record N --failed --notes <file>"
+  assert_not_contains "$s" '--reason "<reason>"'
+  assert_contains "$s" "commit noted in step 1"
+  assert_contains "$s" "which other people may have written"
+  assert_contains "$s" "hold work
+that is not merged anywhere"
+  assert_contains "$a" "git merge-base --is-ancestor <base commit> HEAD"
+  assert_contains "$a" "worktree not based on the integration branch"
+  assert_contains "$a" "install the dependencies there"
+  assert_contains "$a" '"started_at"'
+  assert_contains "$a" "Never push"
+}

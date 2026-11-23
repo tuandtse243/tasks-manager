@@ -71,6 +71,10 @@ expand-migrate-contract), with this adapter. **Where they differ, the adapter wi
   `review_minutes` is how long a person needs to review it and test it by hand, the bottleneck
   when AI does the work; `by` is `ai` unless the task needs a person (design, a product
   decision, work on a live system), then `human`. Both numbers are whole minutes above 0.
+- Set `ai_ready: true` on a task an AI agent can do alone with `/scrum-github:run`: its
+  acceptance criteria are checkable by tests or by hand, it needs no decision from a person and
+  no access to a live system. `plan apply` labels its issue `ai-ready`; leave the key out when
+  unsure (the user can add the label later).
 - Several independent streams of work become several features under one `epic`; one stream is
   one feature and no epic.
 - From a brief: plan only what its "In scope" section lists; the brief's size estimate gives the

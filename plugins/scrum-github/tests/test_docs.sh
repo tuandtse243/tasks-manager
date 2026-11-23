@@ -7,7 +7,7 @@ GUIDE="$REPO_ROOT/docs/huong-dan-ap-dung.md"
 # Commands in `scrum --help`: the first word, or the first two for command groups.
 help_commands() {
   "$BASH" "$SCRUM" --help | sed -n 's/^  \([a-z][a-z-]*\)\( \([a-z][a-z-]*\)\)\{0,1\}.*/\1 \3/p' \
-    | awk '{ if ($1 ~ /^(sprint|task|plan|doc|context|project)$/) print $1" "$2; else print $1 }' | sort -u
+    | awk '{ if ($1 ~ /^(sprint|task|plan|doc|context|project|run)$/) print $1" "$2; else print $1 }' | sort -u
 }
 
 test_every_command_in_help_is_in_the_readme() {

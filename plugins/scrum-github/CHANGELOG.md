@@ -4,6 +4,55 @@ All notable changes to the `scrum-github` plugin. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the plugin uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] - 2026-11-23
+
+### Added
+
+- **Running tasks with AI agents.** The skill `/scrum-github:run` works your tasks with agents:
+  each task in its own local git worktree, several at once, wave by wave in the order of
+  "blocked by", merged into one integration branch with the tests run after each wave, and one
+  pull request for review. It shows the plan, says that the agents run code and tests on your
+  machine, and waits for your yes before anything changes. `--dry-run` only shows the plan,
+  `--pr-per-wave` opens one pull request per wave (each based on the one before), and
+  `--max-parallel K` limits the agents at once. A run that stopped is offered to continue.
+- The agent `scrum-github:implementer`: works one task in its worktree from the issue's
+  acceptance criteria, writes and runs tests, commits locally with `#N`, never pushes, stays in
+  the task's scope, and reports done or failed, how to test by hand and what to look at closely.
+- `scrum run`, the runtime under the skill, with tests on a temporary git repository:
+  - `plan [N,…] [--json]`: by default your open New tasks of the open sprint labelled
+    `ai-ready`, or exactly the numbers given; the tasks left out with their reason (blocked by an
+    open task outside the run, closed, a feature or a pull request); the waves; the time estimate
+    by waves. Read-only.
+  - `start`: stops on uncommitted changes; creates the integration branch
+    (`run.branch_pattern`) from the latest default branch, saves the run in
+    `.scrum/run/<id>.json` (kept out of git through `.git/info/exclude`), assigns the tasks
+    nobody has and sets them In progress.
+  - `record N --started | --done --branch B [--notes FILE] | --failed --reason R`: the actual
+    time of each task, posted on its issue in an `actual` block next to the estimate. A failed
+    task gets the reason as a comment, goes back to New, and the tasks it blocks are left out.
+  - `merge N`: `git merge --no-ff`, one merge commit per task; a conflict is aborted, the
+    integration branch stays as it was and the task is recorded as `conflict`.
+  - `finish [--wave W]`: pushes only the integration branch and opens the pull request, a review
+    pack: per task the acceptance criteria as checkboxes, estimate against actual time, how to
+    test by hand, what to look at closely, and `Closes #N`; then the failed and left-out tasks.
+    No push and no pull request when no task was merged.
+  - `status [ID] [--json]`: each task of a run by wave, and what comes next.
+- Configuration: the `run` block (`test_command`, `max_parallel`, default 3, `branch_pattern`,
+  default `run/{sprint}-{login}`) and `labels.ai_ready` (default `ai-ready`), which must differ
+  from the feature, epic, meta and no-task labels. `scrum init` creates the label: run
+  `/scrum-github:init` once after updating.
+- `plan.json` tasks take `ai_ready` (`true` or `false`): `plan apply` labels the issue, and
+  `plan apply --update` adds or removes the label to match the plan.
+- `scrum mine` and `scrum next` (and their skills) point to `/scrum-github:run` when you have New
+  tasks labelled `ai-ready` in the open sprint that nothing open blocks; `scrum next` asks to
+  continue an unfinished run first. Label names are compared without case.
+- Safety of a run: `start --expect` runs only the confirmed plan; the integration branch has no
+  upstream and is never the default branch; `start` and `finish` refuse to overwrite work on
+  origin, and `finish` warns when a task branch is on origin; failure reasons come from files
+  (`--notes`, `--reason-file`), never from agent text on a command line; `record --done` checks
+  the branch; records and merges take a lock on the run's state; the agent checks that its
+  worktree starts from the integration branch and reports its own start and end time.
+
 ## [0.10.0] - 2026-11-23
 
 ### Added

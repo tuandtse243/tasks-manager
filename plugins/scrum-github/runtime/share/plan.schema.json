@@ -75,6 +75,7 @@
         "depends_on": { "type": "array", "items": { "type": "string" }, "description": "Ids of tasks that must be done first; becomes GitHub's \"blocked by\"" },
         "assignees": { "type": "array", "items": { "type": "string" } },
         "bug": { "type": "boolean" },
+        "ai_ready": { "type": "boolean", "description": "true: the task can be worked by an AI agent with /scrum-github:run; `plan apply` gives its issue the labels.ai_ready label (ai-ready), and `plan apply --update` adds it, or removes it when this is false. Omitted: the label is left as it is." },
         "sprint": { "type": ["string", "null"], "description": "Overrides the plan's sprint for this task; null puts this task in the backlog. Omit the key to use the plan's sprint." },
         "estimate": {
           "type": "object",

@@ -8,7 +8,7 @@ defaults() { cat "$PLUGIN_DIR/runtime/share/defaults.json"; }
 test_label_plan_first_run_keeps_bug() {
   local plan
   plan="$(label_plan "$(defaults)" "$(cat "$FIXTURES/labels-github-default.json")")"
-  assert_json_eq '["status: New","status: In progress","status: Done","points: 0","points: 1","points: 3","points: 7","type: feature","type: epic","scrum: meta","no-task"]' \
+  assert_json_eq '["status: New","status: In progress","status: Done","points: 0","points: 1","points: 3","points: 7","type: feature","type: epic","scrum: meta","no-task","ai-ready"]' \
     "$(printf '%s' "$plan" | jq -c '[.create[].name]')"
   assert_eq '[]' "$(printf '%s' "$plan" | jq -c '.update')"
   assert_eq '["bug"]' "$(printf '%s' "$plan" | jq -c '.unchanged')"
@@ -77,7 +77,7 @@ test_init_creates_config_labels_and_files() {
   assert_status 0 "$STATUS" "$ERR"
   [ -f "$SCRUM_REPO_DIR/.github/scrum.yml" ] || _fail "config not created"
   assert_eq "$(cat "$PLUGIN_DIR/templates/scrum.yml")" "$(cat "$SCRUM_REPO_DIR/.github/scrum.yml")"
-  assert_eq "11" "$(gh_writes | grep -c 'POST repos/acme/blog/labels')" "11 labels created"
+  assert_eq "12" "$(gh_writes | grep -c 'POST repos/acme/blog/labels')" "12 labels created"
   for f in ISSUE_TEMPLATE/task.yml pull_request_template.md workflows/scrum-status-sync.yml workflows/scrum-pr-link-check.yml workflows/scrum-daily-digest.yml scrum/bin/scrum scrum/lib/jq/scrum.jq scrum/share/defaults.json scrum/GENERATED.md; do
     [ -f "$SCRUM_REPO_DIR/.github/$f" ] || _fail "missing .github/$f"
   done
@@ -254,7 +254,7 @@ test_pr_template_has_four_sections() {
 
 test_version_matches_plugin_json() {
   run_scrum --version
-  assert_eq "0.10.0" "$OUT"
+  assert_eq "0.11.0" "$OUT"
   assert_eq "$(jq -r .version "$PLUGIN_DIR/.claude-plugin/plugin.json")" "$OUT"
 }
 
@@ -375,4 +375,14 @@ test_label_plan_in_review_turned_off_is_obsolete() {
   plan="$(label_plan "$(defaults)" "$existing")"
   assert_eq '["status: In review"]' "$(printf '%s' "$plan" | jq -c '.obsolete')"
   assert_eq '[]' "$(printf '%s' "$plan" | jq -c '.create')"
+}
+
+# delta scrum-config "Nhãn ai-ready: Mặc định"
+test_label_plan_creates_ai_ready() {
+  local plan old
+  old="$(jq 'map(select(.name != "ai-ready"))' "$FIXTURES/labels-after-init.json")"
+  plan="$(label_plan "$(defaults)" "$old")"
+  assert_eq '["ai-ready"]' "$(printf '%s' "$plan" | jq -c '[.create[].name]')"
+  plan="$(label_plan "$(defaults | jq '.labels.ai_ready = "agent: ready"')" "[]")"
+  assert_contains "$(printf '%s' "$plan" | jq -c '[.create[].name]')" '"agent: ready"'
 }

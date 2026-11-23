@@ -36,7 +36,7 @@ def nonempty_string: type == "string" and length > 0;
      else "statuses.label_prefix: must be text" end),
 
     # labels
-    (["bug", "feature", "epic", "meta", "no_task"][] as $k
+    (["bug", "feature", "epic", "meta", "no_task", "ai_ready"][] as $k
      | if ($c.labels[$k] | nonempty_string) then empty
        else "labels.\($k): must be a non-empty text" end),
     (if ($c.labels.epic | nonempty_string)
@@ -44,6 +44,24 @@ def nonempty_string: type == "string" and length > 0;
              | index($c.labels.epic | ascii_downcase)) != null
        then "labels.epic: must differ from labels.feature, labels.meta and labels.no_task (got \($c.labels.epic | tojson))"
        else empty end),
+    # labels.ai_ready marks a task ready for /scrum-github:run; it must not be a label that makes
+    # an issue a non-task or lets a pull request skip the link check (spec scrum-config "Nhãn ai-ready")
+    (if ($c.labels.ai_ready | nonempty_string)
+        and ([$c.labels.feature, $c.labels.epic, $c.labels.meta, $c.labels.no_task] | map(ascii_downcase? // .)
+             | index($c.labels.ai_ready | ascii_downcase)) != null
+       then "labels.ai_ready: must differ from labels.feature, labels.epic, labels.meta and labels.no_task (got \($c.labels.ai_ready | tojson))"
+       else empty end),
+
+    # run (spec scrum-config "Cấu hình chạy task bằng agent")
+    (if ($c.run | type) != "object" then "run: must be a mapping"
+     else
+       (if ($c.run.test_command | type) == "string" then empty
+        else "run.test_command: must be a command (text), or empty to let the agent find how to test (got \($c.run.test_command | tojson))" end),
+       (if ($c.run.max_parallel | is_int) and $c.run.max_parallel > 0 then empty
+        else "run.max_parallel: must be a whole number greater than 0 (got \($c.run.max_parallel | tojson))" end),
+       (if ($c.run.branch_pattern | nonempty_string) then empty
+        else "run.branch_pattern: must be a non-empty branch name pattern, such as \"run/{sprint}-{login}\" (got \($c.run.branch_pattern | tojson))" end)
+     end),
 
     # planning
     (if ($c.planning | type) != "object" then "planning: must be a mapping"
