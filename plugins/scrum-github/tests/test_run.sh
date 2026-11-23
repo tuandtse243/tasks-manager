@@ -1089,11 +1089,12 @@ test_cmd_run_finish_refuses_diverged_origin_and_warns_on_task_branches() {
 test_cmd_run_record_in_parallel_keeps_every_change() {
   git_env
   run_scrum run start
-  "$BASH" "$SCRUM" run record 102 --started >/dev/null 2>&1 &
-  "$BASH" "$SCRUM" run record 107 --started >/dev/null 2>&1 &
-  "$BASH" "$SCRUM" run record 103 --started >/dev/null 2>&1 &
+  "$BASH" "$SCRUM" run record 102 --started >/dev/null 2>"$T/e102" &
+  "$BASH" "$SCRUM" run record 107 --started >/dev/null 2>"$T/e107" &
+  "$BASH" "$SCRUM" run record 103 --started >/dev/null 2>"$T/e103" &
   wait
-  assert_eq "running running running" "$(task_state 102) $(task_state 107) $(task_state 103)"
+  assert_eq "running running running" "$(task_state 102) $(task_state 107) $(task_state 103)" \
+    "a parallel record was lost; stderr: $(cat "$T/e102" "$T/e107" "$T/e103")"
   [ ! -d "$(state_file).lock" ] || _fail "lock left behind"
   mkdir "$(state_file).lock"
   SCRUM_RUN_LOCK_TRIES=2 run_scrum run record 102 --started
