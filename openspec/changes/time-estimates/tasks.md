@@ -12,9 +12,9 @@
 
 ## 3. Lệnh task (design 3; spec time-estimate)
 
-- [ ] 3.1 `task new --work --review --by`; `task-payload.jq` ghi khối. Test với `fake-gh`. Kiểm tra: `bash tests/run.sh task` xanh
-- [ ] 3.2 `task estimate N [POINTS] [--work] [--review] [--by]`: gộp với ước lượng cũ, PATCH thân, lỗi khi không có gì để đổi. Test chỉ đổi thời gian, chỉ đổi điểm, cả hai, không có gì. Kiểm tra: `bash tests/run.sh task` xanh
-- [ ] 3.3 Sửa `skills/task-new/SKILL.md` và `skills/task/SKILL.md`. Kiểm tra: `claude plugin validate plugins/scrum-github` đạt hoặc ghi lý do môi trường
+- [x] 3.1 `task new --work --review --by`; `task-payload.jq` ghi khối. Test với `fake-gh`. Kiểm tra: `bash tests/run.sh task` xanh
+- [x] 3.2 `task estimate N [POINTS] [--work] [--review] [--by]`: gộp với ước lượng cũ, PATCH thân, lỗi khi không có gì để đổi. Test chỉ đổi thời gian, chỉ đổi điểm, cả hai, không có gì. Kiểm tra: `bash tests/run.sh task` xanh
+- [x] 3.3 Sửa `skills/task-new/SKILL.md` và `skills/task/SKILL.md`. Kiểm tra: `claude plugin validate plugins/scrum-github` đạt hoặc ghi lý do môi trường
 
 ## 4. Plan (design 3, 4, 5; spec work-plan)
 

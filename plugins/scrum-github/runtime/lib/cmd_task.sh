@@ -3,11 +3,12 @@
 
 # create_task REPO TASK_JSON MILESTONE_NUMBER [PARENT_NUMBER] -> prints the created issue JSON
 create_task() {
-  local payload err
+  local payload err strings
+  strings="$(strings_json)"
   if [ -n "${4:-}" ]; then
-    payload="$(jqlib task-payload -n --argjson cfg "$CONFIG_JSON" --argjson task "$2" --argjson milestone "$3" --arg parent "$4")"
+    payload="$(jqlib task-payload -n --argjson cfg "$CONFIG_JSON" --argjson task "$2" --argjson milestone "$3" --arg parent "$4" --argjson strings "$strings")"
   else
-    payload="$(jqlib task-payload -n --argjson cfg "$CONFIG_JSON" --argjson task "$2" --argjson milestone "$3")"
+    payload="$(jqlib task-payload -n --argjson cfg "$CONFIG_JSON" --argjson task "$2" --argjson milestone "$3" --argjson strings "$strings")"
   fi
   err="$(printf '%s' "$payload" | jq -r '.error // empty')"
   [ -z "$err" ] || die "$err"
@@ -15,10 +16,13 @@ create_task() {
 }
 
 cmd_task_new() {
-  local title="" body="" points="" assignees="" sprint_name="" bug=false backlog=0
+  local title="" body="" points="" assignees="" sprint_name="" bug=false backlog=0 work="" review="" by="" est err
   while [ $# -gt 0 ]; do
     case "$1" in
       --title) title="${2:-}"; shift ;;
+      --work) work="${2:-}"; [ -n "$work" ] || die "--work needs a duration, for example 25m"; shift ;;
+      --review) review="${2:-}"; [ -n "$review" ] || die "--review needs a duration, for example 20m"; shift ;;
+      --by) by="${2:-}"; [ -n "$by" ] || die "--by needs ai or human"; shift ;;
       --backlog) backlog=1 ;;
       --body) body="${2:-}"; shift ;;
       --points) points="${2:-}"; shift ;;
@@ -34,15 +38,22 @@ cmd_task_new() {
   if [ "$backlog" = 1 ] && [ -n "$sprint_name" ]; then die "use --sprint or --backlog, not both"; fi
   case "$points" in ""|*[!0-9]*) [ -z "$points" ] || die "points must be a whole number (got \"$points\")" ;; esac
 
+  # The time flags before anything else (spec time-estimate "Định dạng thời lượng").
+  est="$(jqlib estimate-flags -n --arg work "$work" --arg review "$review" --arg by "$by")"
+  err="$(printf '%s' "$est" | jq -r '.error // empty')"
+  [ -z "$err" ] || die "$err"
+
   require_tools
   load_config
   local repo task ms sprint number created
   repo="$(repo_slug)"
-  task="$(jq -n --arg t "$title" --arg b "$body" --arg p "$points" --arg a "$assignees" --argjson bug "$bug" '{
+  task="$(jq -n --arg t "$title" --arg b "$body" --arg p "$points" --arg a "$assignees" --argjson bug "$bug" \
+      --argjson est "$(printf '%s' "$est" | jq -c .estimate)" '{
     title: $t, body: $b,
     points: (if $p == "" then null else ($p | tonumber) end),
     assignees: ($a | split("\n") | map(select(. != "") | ltrimstr("@"))),
-    bug: $bug }')"
+    bug: $bug }
+    + (if $est == null then {} else {estimate: $est} end)')"
   # Check the points before any network call.
   jqlib task-payload -n --argjson cfg "$CONFIG_JSON" --argjson task "$task" --argjson milestone 0 \
     | jq -r '.error // empty' | { read -r e || true; [ -z "$e" ] || die "$e"; }
@@ -224,23 +235,65 @@ cmd_task_move() {
   done
 }
 
+# scrum task estimate N [POINTS] [--work D] [--review D] [--by ai|human]
+# Points stay on the label; the time estimate is the "estimate" block of the body (spec time-estimate).
 cmd_task_estimate() {
-  local n p repo issue res err
-  [ $# -eq 2 ] || die "usage: scrum task estimate N POINTS"
-  n="$(issue_number "$1")"; p="$2"
-  case "$p" in ""|*[!0-9]*) die "points must be a whole number (got \"$p\")" ;; esac
+  local usage="usage: scrum task estimate N [POINTS] [--work D] [--review D] [--by ai|human]"
+  local n="" p="" work="" review="" by="" repo issue res err est touched=0
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --work) work="${2:-}"; [ -n "$work" ] || die "--work needs a duration, for example 25m"; shift ;;
+      --review) review="${2:-}"; [ -n "$review" ] || die "--review needs a duration, for example 20m"; shift ;;
+      --by) by="${2:-}"; [ -n "$by" ] || die "--by needs ai or human"; shift ;;
+      -*) die "unknown option for task estimate: $1" ;;
+      *) if [ -z "$n" ]; then n="$(issue_number "$1")"
+         elif [ -z "$p" ]; then p="$1"
+         else die "$usage"; fi ;;
+    esac
+    shift
+  done
+  [ -n "$n" ] || die "$usage"
+  if [ -z "$p" ] && [ -z "$work" ] && [ -z "$review" ] && [ -z "$by" ]; then
+    die "nothing to change: give points, or at least one of --work, --review, --by. $usage"
+  fi
+  case "$p" in *[!0-9]*) die "points must be a whole number (got \"$p\")" ;; esac
+  est="$(jqlib estimate-flags -n --arg work "$work" --arg review "$review" --arg by "$by" --argjson partial true)"
+  err="$(printf '%s' "$est" | jq -r '.error // empty')"
+  [ -z "$err" ] || die "$err"
   require_tools
   load_config
   # The scale first, before any network call.
-  err="$(printf '{}' | jqlib points-labels --argjson cfg "$CONFIG_JSON" --argjson points "$p" | jq -r '.error // empty')"
-  [ -z "$err" ] || die "$err"
+  if [ -n "$p" ]; then
+    err="$(printf '{}' | jqlib points-labels --argjson cfg "$CONFIG_JSON" --argjson points "$p" | jq -r '.error // empty')"
+    [ -z "$err" ] || die "$err"
+  fi
   repo="$(repo_slug)"
   issue="$(task_issue "$repo" "$n")"
-  res="$(printf '%s' "$issue" | jqlib points-labels --argjson cfg "$CONFIG_JSON" --argjson points "$p")"
-  if [ "$(printf '%s' "$res" | jq -r .changed)" != true ]; then info "#$n already has $p points."; return 0; fi
-  printf '%s' "$res" | jq -c '{labels}' | gh_send PUT "repos/$repo/issues/$n/labels" >/dev/null
-  info "#$n now has $p points."
-  project_touch "$repo" "$n"
+  # A --by alone on a task without a time estimate is an error: check it before writing anything.
+  est="$(jqlib estimate-flags -n --arg work "$work" --arg review "$review" --arg by "$by" \
+    --argjson issue "$issue" --argjson strings "$(strings_json)")"
+  err="$(printf '%s' "$est" | jq -r '.error // empty')"
+  [ -z "$err" ] || die "$err"
+
+  if [ -n "$p" ]; then
+    res="$(printf '%s' "$issue" | jqlib points-labels --argjson cfg "$CONFIG_JSON" --argjson points "$p")"
+    if [ "$(printf '%s' "$res" | jq -r .changed)" != true ]; then
+      info "#$n already has $p points."
+    else
+      printf '%s' "$res" | jq -c '{labels}' | gh_send PUT "repos/$repo/issues/$n/labels" >/dev/null
+      info "#$n now has $p points."
+      touched=1
+    fi
+  fi
+  if [ "$(printf '%s' "$est" | jq -r .given)" = true ]; then
+    if [ "$(printf '%s' "$est" | jq -r .changed)" = true ]; then
+      printf '%s' "$est" | jq -c '{body}' | gh_send PATCH "repos/$repo/issues/$n" >/dev/null
+      info "#$n time estimate: $(printf '%s' "$est" | jq -r .summary)."
+    else
+      info "#$n already has this time estimate: $(printf '%s' "$est" | jq -r .summary)."
+    fi
+  fi
+  [ "$touched" = 0 ] || project_touch "$repo" "$n"
 }
 
 cmd_task_assign() {

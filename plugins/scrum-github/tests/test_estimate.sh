@@ -47,7 +47,7 @@ test_estimate_block_overwrite_leaves_one_block() {
     "Lưu bình luận\n\nPart of #3" | set_estimate({work_minutes: 25, review_minutes: 20}; $s)
     | . as $b | {body: $b} | issue_estimate as $old
     | $b | set_estimate($old + {review_minutes: 30}; $s)')"
-  assert_eq "1" "$(printf '%s' "$body" | /usr/bin/grep -c '<!-- scrum:estimate -->')"
+  assert_eq "1" "$(printf '%s' "$body" | grep -c '<!-- scrum:estimate -->')"
   case "$body" in "Lưu bình luận"*) ;; *) _fail "body must still start with its text: $body" ;; esac
   assert_contains "$body" "Part of #3"
   assert_json_eq '{"work_minutes":25,"review_minutes":30,"by":"ai"}' \

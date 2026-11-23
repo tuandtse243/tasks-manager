@@ -1,6 +1,6 @@
 ---
 name: task-new
-description: Create a Scrum task as a GitHub issue in the current (or a named) sprint, or in the backlog when no sprint is open or the user asks for it, with status New, story points, assignees and an optional bug label. Use when the user wants to add a task, ticket, story or bug to the sprint or the backlog.
+description: Create a Scrum task as a GitHub issue in the current (or a named) sprint, or in the backlog when no sprint is open or the user asks for it, with status New, story points, an optional time estimate (work and review minutes, AI or human), assignees and an optional bug label. Use when the user wants to add a task, ticket, story or bug to the sprint or the backlog.
 ---
 
 # Create a task
@@ -15,6 +15,11 @@ Run it from the root of the target repository.
 1. Take from the user's request: title (required), description, points, assignees (GitHub logins),
    sprint name or "backlog", and whether it is a bug. Do not invent points or assignees the user did not give.
    If they ask you to estimate, propose points from the scale in `.github/scrum.yml` and say why.
+   A time estimate is separate from points and also optional: how long the work takes
+   (`--work`), how long a person needs to review and test it by hand (`--review`), and who does
+   the work (`--by ai`, the default, or `--by human`). Durations are `90`, `25m`, `2h` or
+   `1h30m`. Pass them only when the user gives them or asks you to estimate; then use `ai`
+   unless the task needs a person (design, a product decision, work on a live system).
    A description the user wrote goes in as it is. If they ask you to write it, read
    `${CLAUDE_PLUGIN_ROOT}/vendor/pocock/triage/AGENT-BRIEF.md` and apply its four principles
    with this adapter (where they differ, the adapter wins): use the principles, not the
@@ -24,14 +29,16 @@ Run it from the root of the target repository.
    functions or config shapes, not file paths or line numbers. Show the description and
    create the issue only after the user agrees with it.
 2. Run:
-   `scrum task new --title "..." [--body "..."] [--points N] [--assignee LOGIN]... [--sprint "Sprint N" | --backlog] [--bug]`
+   `scrum task new --title "..." [--body "..."] [--points N] [--assignee LOGIN]... [--sprint "Sprint N" | --backlog] [--bug] [--work D] [--review D] [--by ai|human]`
+   The time estimate is written in a small block at the end of the issue body
+   ("AI ~25m · Review ~20m"); no label is used for time.
    Without `--sprint` the task goes into the open sprint, or into the backlog (no milestone) when
    no sprint is open. Pass `--backlog` when the user wants it in the backlog although a sprint is
    open. `--sprint` and `--backlog` together are refused.
 3. Report the issue number, the link, and where the task went: the sprint named in the output
    ("in Sprint 5") or the backlog ("in the backlog"). When it went to the backlog because no
    sprint is open, say so and mention `/scrum-github:sprint-new`. If the script rejects the
-   points, show the allowed values. If it warns that a login is not in the team, tell the user
+   points, show the allowed values; if it rejects a duration, show the formats it lists. If it warns that a login is not in the team, tell the user
    (the task was still created and assigned).
 
 For several tasks from one feature, `/scrum-github:plan` is a better fit.
