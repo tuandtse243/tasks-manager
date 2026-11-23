@@ -14,7 +14,20 @@ def plural($n; $one; $many): "\($n) \(if $n == 1 then $one else $many end)";
 
 . as $plan
 | $cfg.planning.hours_per_point as $hpp
-| def hours($p): if $hpp == null or $p == null then null else $p * $hpp end;
+| ($cfg.planning.merge_minutes // 5) as $merge
+| plan_waves as $waves
+# Time estimates (spec work-plan "Thời gian trong bản xem"): shown only when a task has one.
+| (any(plan_tasks[]; (.estimate | clean_estimate) != null)) as $timed
+| def est($t): $t.estimate | clean_estimate;
+  def by_text($e): if $e.by == "human" then "human" else "AI" end;
+  def time_cells($t): est($t) as $e
+    | if $e == null then " | – | –"
+      else " | \(if $e.work_minutes != null then "\($e.work_minutes | fmt_duration) \(by_text($e))" else "–" end)"
+         + " | \(if $e.review_minutes != null then $e.review_minutes | fmt_duration else "–" end)" end;
+  def time_line($ts): ($ts | estimate_totals) as $s
+    | "Time: work \($s.work_minutes | fmt_duration), review \($s.review_minutes | fmt_duration)"
+      + (if $s.missing > 0 then ", \(plural($s.missing; "task"; "tasks")) without a time estimate" else "" end);
+  def hours($p): if $hpp == null or $p == null then null else $p * $hpp end;
   def total($ts): [$ts[] | .points // empty] | add // 0;
   def unest($ts): [$ts[] | select(.points == null)];
   def points_line($ts):
@@ -40,14 +53,16 @@ def plural($n; $one; $many): "\($n) \(if $n == 1 then $one else $many end)";
     (plan_features[] as $f
      | "## \($f.id): \($f.title) (\($f | issue_ref))", "",
        (if ($f.body // "") != "" then $f.body, "" else empty end),
-       (if $hpp != null then "| ID | Task | Points | Hours | Depends on | Issue |", "|---|---|---|---|---|---|"
-        else "| ID | Task | Points | Depends on | Issue |", "|---|---|---|---|---|" end),
+       ("| ID | Task | Points" + (if $hpp != null then " | Hours" else "" end) + (if $timed then " | Work | Review" else "" end) + " | Depends on | Issue |"),
+       ("|---|---|---" + (if $hpp != null then "|---" else "" end) + (if $timed then "|---|---" else "" end) + "|---|---|"),
        ($f.tasks[] as $t
         | "| \($t.id | cell) | \($t.title | cell) | \(pts($t.points))"
           + (if $hpp != null then " | \(hours($t.points) | if . == null then "–" else num end)" else "" end)
+          + (if $timed then time_cells($t) else "" end)
           + " | \(($t | deps) | if length == 0 then "–" else join(", ") end) | \($t | issue_ref) |"),
        "",
        "Total: \(points_line($f.tasks))",
+       (if $timed then "", time_line($f.tasks) else empty end),
        "",
        ($f.tasks[] as $t
         | select(($t.body // "") != "" or (($t.acceptance // []) | length) > 0 or (($t.subtasks // []) | length) > 0
@@ -66,17 +81,30 @@ def plural($n; $one; $many): "\($n) \(if $n == 1 then $one else $many end)";
 
     "## Estimate",
     "",
-    "| Feature | Tasks | Points | Not estimated\(if $hpp != null then " | Hours" else "" end) |",
-    "|---|---|---|---\(if $hpp != null then "|---" else "" end)|",
+    "| Feature | Tasks | Points | Not estimated\(if $hpp != null then " | Hours" else "" end)\(if $timed then " | Work | Review | No time estimate" else "" end) |",
+    "|---|---|---|---\(if $hpp != null then "|---" else "" end)\(if $timed then "|---|---|---" else "" end)|",
     (plan_features[] as $f
      | "| \($f.id): \($f.title | cell) | \($f.tasks | length) | \(total($f.tasks)) | \(unest($f.tasks) | length)"
-       + (if $hpp != null then " | \(total($f.tasks) * $hpp | num)" else "" end) + " |"),
+       + (if $hpp != null then " | \(total($f.tasks) * $hpp | num)" else "" end)
+       + (if $timed then ($f.tasks | estimate_totals) as $s | " | \($s.work_minutes | fmt_duration) | \($s.review_minutes | fmt_duration) | \($s.missing)" else "" end) + " |"),
     "| **Total** | \($all | length) | \(total($all)) | \(unest($all) | length)"
-      + (if $hpp != null then " | \(total($all) * $hpp | num)" else "" end) + " |",
+      + (if $hpp != null then " | \(total($all) * $hpp | num)" else "" end)
+      + (if $timed then ($all | estimate_totals) as $s | " | \($s.work_minutes | fmt_duration) | \($s.review_minutes | fmt_duration) | \($s.missing)" else "" end) + " |",
     "",
     "Total: \(points_line($all))."
       + (if (unest($all) | length) > 0 then " Not estimated: \(unest($all) | map(.id) | join(", "))." else "" end),
     (if $hpp != null then "Hours use \($hpp | num) h per point (planning.hours_per_point)." else empty end),
+    (if $timed then
+       ([$all[] | {wave: $waves[.id], estimate}] | eta_by_waves($merge)) as $eta
+       | ($all | estimate_totals) as $s
+       | [$all[] | select(est(.) == null) | .id] as $missing
+       | "",
+         "Time: work \($s.work_minutes | fmt_duration) and review \($s.review_minutes | fmt_duration) in total, for \(plural($s.estimated; "task"; "tasks")) with a time estimate.",
+         "Done in about \($eta.work_minutes | fmt_duration) of work: \(plural($eta.waves | length; "wave"; "waves")), each as long as its longest task, plus \($merge)m to merge and test after each (planning.merge_minutes)"
+           + (if ($eta.waves | length) > 0 then " (" + ($eta.waves | map("wave \(.wave): \(.work | fmt_duration) + \($merge)m") | join(", ")) + ")" else "" end)
+           + "; then about \($eta.review_minutes | fmt_duration) of review and manual tests by people.",
+         (if ($missing | length) > 0 then "\(plural($missing | length; "task has"; "tasks have")) no time estimate and \(if ($missing | length) == 1 then "is" else "are" end) not counted: \($missing | join(", "))." else empty end)
+     else empty end),
     (if ($recent | length) > 0 then
        ([$recent[].velocity] | add / length) as $avg
        | "Velocity: \($avg | num) points per sprint on average over the last \(plural($recent | length; "closed sprint"; "closed sprints")) ("

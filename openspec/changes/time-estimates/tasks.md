@@ -18,10 +18,10 @@
 
 ## 4. Plan (design 3, 4, 5; spec work-plan)
 
-- [ ] 4.1 `estimate` trong `plan.schema.json` và `plan-validate.jq`; `plan apply` ghi khối; `--update` cập nhật khối. Test: lỗi `review_minutes: 0`, áp có khối, update đổi review. Kiểm tra: `bash tests/run.sh plan` xanh
-- [ ] 4.2 `eta_by_waves`; thời gian trong `plan-render.jq` (task, feature, plan, số task thiếu, ước tính) và trong dữ liệu `plan.html`. Test ví dụ 90 phút của spec. Kiểm tra: `bash tests/run.sh plan` xanh
-- [ ] 4.3 Phần dòng thời gian trong `runtime/share/plan.html` (đúng tỉ lệ, đợt, merge, review, vạch chạy, tắt khi giảm chuyển động, không có phần này khi không có ước lượng), thời gian trên thẻ và KPI. Test: có hoặc không có phần dòng thời gian, không có URL ngoài. Kiểm tra: `bash tests/run.sh plan` xanh
-- [ ] 4.4 Sửa `skills/plan/SKILL.md` và `reference/planning-rules.md`: ước lượng `estimate` cho mỗi task. Kiểm tra: đọc lại skill thấy bước ước lượng thời gian
+- [x] 4.1 `estimate` trong `plan.schema.json` và `plan-validate.jq`; `plan apply` ghi khối; `--update` cập nhật khối. Test: lỗi `review_minutes: 0`, áp có khối, update đổi review. Kiểm tra: `bash tests/run.sh plan` xanh
+- [x] 4.2 `eta_by_waves`; thời gian trong `plan-render.jq` (task, feature, plan, số task thiếu, ước tính) và trong dữ liệu `plan.html`. Test ví dụ 90 phút của spec. Kiểm tra: `bash tests/run.sh plan` xanh
+- [x] 4.3 Phần dòng thời gian trong `runtime/share/plan.html` (đúng tỉ lệ, đợt, merge, review, vạch chạy, tắt khi giảm chuyển động, không có phần này khi không có ước lượng), thời gian trên thẻ và KPI. Test: có hoặc không có phần dòng thời gian, không có URL ngoài. Kiểm tra: `bash tests/run.sh plan` xanh
+- [x] 4.4 Sửa `skills/plan/SKILL.md` và `reference/planning-rules.md`: ước lượng `estimate` cho mỗi task. Kiểm tra: đọc lại skill thấy bước ước lượng thời gian
 
 ## 5. Việc của tôi, tiến độ, lập sprint (spec my-work, sprint-reporting, sprint-lifecycle)
 

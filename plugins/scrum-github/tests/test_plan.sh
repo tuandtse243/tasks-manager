@@ -1343,3 +1343,209 @@ test_check_milestones_unreadable_text_for_a_backlog_plan() {
   assert_contains "$OUT" "Could not read the sprints or their tasks from GitHub"
   assert_not_contains "$OUT" "sprint-new"
 }
+
+# ---------- time estimates (delta work-plan "Ước lượng thời gian trong plan") ----------
+
+# "Thời gian không hợp lệ"
+test_validate_estimate_review_zero() {
+  local e
+  e="$(validate "$(plan3 | jq -c '.features[0].tasks[1].estimate = {work_minutes: 20, review_minutes: 0, by: "ai"}')")"
+  assert_contains "$e" "task T2: estimate.review_minutes"
+}
+
+test_validate_estimate_errors() {
+  local e
+  e="$(validate "$(plan3 | jq -c '.features[0].tasks[0].estimate = {work_minutes: 2.5, review_minutes: 10, by: "robot"}
+                                  | .features[0].tasks[1].estimate = "20m" | .features[0].tasks[2].estimate = {review_minutes: 5}')")"
+  assert_contains "$e" "task T1: estimate.work_minutes"
+  assert_contains "$e" "task T1: estimate.by must be ai or human"
+  assert_contains "$e" "task T2: estimate must be an object"
+  assert_contains "$e" "task T3: estimate.work_minutes"
+  assert_eq "" "$(validate "$(plan3 | jq -c '.features[0].tasks[0].estimate = {work_minutes: 20, review_minutes: 15}')")" "by is optional"
+}
+
+# "Áp plan có thời gian"
+test_apply_writes_the_estimate_block() {
+  apply_env
+  plan3 | jq '.features[0].tasks[0].estimate = {work_minutes: 20, review_minutes: 15, by: "ai"}' > "$T/plan.json"
+  run_scrum plan apply "$T/plan.json"
+  assert_status 0 "$STATUS" "$ERR"
+  local body
+  body="$(stdin_of 2 | jq -r .body)"
+  assert_contains "$body" "Part of #10"
+  assert_contains "$body" "<!-- scrum:estimate -->
+AI ~20m · Review ~15m
+<!-- {\"work_minutes\":20,\"review_minutes\":15,\"by\":\"ai\"} -->
+<!-- /scrum:estimate -->"
+  assert_not_contains "$(stdin_of 3 | jq -r .body)" "scrum:estimate" "T2 has no estimate"
+  assert_contains "$OUT" "created #11 T1"
+}
+
+test_apply_dry_run_shows_the_estimate() {
+  apply_env
+  plan3 | jq '.features[0].tasks[0].estimate = {work_minutes: 90, review_minutes: 15}' > "$T/plan.json"
+  run_scrum plan apply "$T/plan.json" --dry-run
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" 'create  task T1 "Store comments" (3 points, work 1h30m + review 15m, Sprint 1)'
+}
+
+EST11='\n\n<!-- scrum:estimate -->\nAI ~20m · Review ~15m\n<!-- {"work_minutes":20,"review_minutes":15,"by":"ai"} -->\n<!-- /scrum:estimate -->'
+update_env_synced() { # update_env, with #12 in Sprint 1 like the plan: nothing to update
+  update_env
+  issue_get 12 '{"number":12,"id":1200,"state":"open","title":"Show comments","body":"Part of #10","labels":[{"name":"status: New"},{"name":"points: 3"}],"milestone":{"number":1,"title":"Sprint 1"}}'
+}
+update_env_est() { # update_env_synced, with #11 carrying an estimate of 20 + 15 minutes
+  update_env_synced
+  issue_get 11 "$(jq -nc --arg e "$(printf '%b' "$EST11")" '{number:11,id:1100,state:"open",title:"Store comments",
+    body:("### Acceptance criteria\n\n- [ ] Saved with author\n\n### Subtasks\n\n- [ ] Migration\n- [ ] API\n\nPart of #10" + $e),
+    labels:[{name:"status: In progress"},{name:"points: 3"}],milestone:{number:1,title:"Sprint 1"}}')"
+}
+
+# "Cập nhật thời gian"
+test_update_changes_the_review_time() {
+  update_env_est
+  jq '.features[0].tasks[0].estimate = {work_minutes: 20, review_minutes: 25, by: "ai"}' "$T/plan.json" > "$T/p2.json"; mv "$T/p2.json" "$T/plan.json"
+  run_scrum plan apply "$T/plan.json" --update
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$(gh_calls)" 'api -X PATCH repos/acme/blog/issues/11 --input -'
+  local body
+  body="$(stdin_of 1 | jq -r .body)"
+  assert_eq "1" "$(printf '%s' "$body" | grep -c '<!-- scrum:estimate -->')"
+  assert_contains "$body" '{"work_minutes":20,"review_minutes":25,"by":"ai"}'
+  case "$body" in "### Acceptance criteria"*) ;; *) _fail "the rest of the body is kept: $body" ;; esac
+  assert_contains "$OUT" "update  T1 #11: time estimate work 20m + review 15m -> work 20m + review 25m"
+  assert_not_contains "$OUT" "#11: body"
+  assert_eq "1" "$(gh_writes | wc -l | tr -d ' ')" "only #11 changes"
+}
+
+test_update_same_estimate_writes_nothing() {
+  update_env_est
+  jq '.features[0].tasks[0].estimate = {work_minutes: 20, review_minutes: 15}' "$T/plan.json" > "$T/p2.json"; mv "$T/p2.json" "$T/plan.json"
+  run_scrum plan apply "$T/plan.json" --update
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "" "$(gh_writes)"
+}
+
+test_update_without_estimate_in_plan_keeps_the_block() {
+  update_env_est
+  run_scrum plan apply "$T/plan.json" --update
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "" "$(gh_writes)" "the block set with task estimate stays"
+}
+
+test_update_adds_an_estimate_to_an_issue_without_one() {
+  update_env_synced
+  jq '.features[0].tasks[2].estimate = {work_minutes: 10, review_minutes: 5, by: "human"}' "$T/plan.json" > "$T/p2.json"; mv "$T/p2.json" "$T/plan.json"
+  run_scrum plan apply "$T/plan.json" --update
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$(gh_calls)" 'api -X PATCH repos/acme/blog/issues/13 --input -'
+  assert_contains "$(stdin_of 1 | jq -r .body)" 'Part of #10
+
+<!-- scrum:estimate -->
+Human ~10m · Review ~5m'
+}
+
+# ---------- time in the views (delta work-plan "Thời gian trong bản xem", "Dòng thời gian trong plan.html") ----------
+
+# plan5 with the waves of the spec: wave 1 T1 20m and T5 8m, wave 2 T2 15m and T3 35m, wave 3 T4 20m.
+plan5_timed() {
+  plan5 | jq -c '.features[0].tasks |= map(.estimate = ({T1: {work_minutes: 20, review_minutes: 15},
+      T5: {work_minutes: 8, review_minutes: 5}, T2: {work_minutes: 15, review_minutes: 15, by: "human"},
+      T3: {work_minutes: 35, review_minutes: 20}, T4: {work_minutes: 20, review_minutes: 10}}[.id]))'
+}
+
+# "Ba đợt"
+test_render_three_waves_eta_is_90_minutes() {
+  local v
+  v="$(render "$(plan5_timed)")"
+  assert_contains "$v" "Done in about 1h30m of work: 3 waves"
+  assert_contains "$v" "(wave 1: 20m + 5m, wave 2: 35m + 5m, wave 3: 20m + 5m)"
+  assert_contains "$v" "then about 1h5m of review"
+  assert_contains "$v" "| T3 | Moderation queue | 5 | 35m AI | 20m | T1 | – |"
+  assert_contains "$v" "| T2 | Comment form | 2 | 15m human | 15m | T1 | – |"
+  assert_contains "$v" "Time: work 1h38m, review 1h5m"
+  assert_contains "$v" "| **Total** | 5 | 16 | 0 | 1h38m | 1h5m | 0 |"
+}
+
+test_render_merge_minutes_from_config() {
+  assert_contains "$(render "$(plan5_timed)" "$(defaults | jq -c '.planning.merge_minutes = 0')")" "Done in about 1h15m of work"
+}
+
+# "Thiếu ước lượng"
+test_render_missing_estimate_counted_apart() {
+  local v
+  v="$(render "$(plan5_timed | jq -c '(.features[0].tasks[] | select(.id == "T4")) |= del(.estimate)')")"
+  assert_contains "$v" "1 task has no time estimate and is not counted: T4."
+  assert_contains "$v" "for 4 tasks with a time estimate"
+  assert_contains "$v" "Done in about 1h5m of work: 2 waves"
+  assert_contains "$v" "| T4 | Reply notifications | 3 | – | – | T2 | – |"
+}
+
+test_render_without_estimates_unchanged() {
+  local v
+  v="$(render "$(plan5)")"
+  assert_not_contains "$v" "Work"
+  assert_not_contains "$v" "Time:"
+}
+
+test_html_data_time() {
+  local d
+  d="$(html_data "$(plan5_timed)" en)"
+  assert_json_eq '{"merge":5,"work":90,"review":65,"total":155,"estimated":5,"missing":0}' \
+    "$(printf '%s' "$d" | jq -c '.time | {merge, work, review, total, estimated, missing}')"
+  assert_json_eq '[[1,0],[2,25],[3,65]]' "$(printf '%s' "$d" | jq -c '[.time.waves[] | [.wave, .start]]')"
+  assert_eq "T1 T5 T2 T3 T4" "$(printf '%s' "$d" | jq -r '[.time.rows[].id] | join(" ")')"
+  assert_eq "null" "$(html_data "$(plan5)" en | jq -c .time)"
+}
+
+# "Có ước lượng" (plan.html)
+test_html_timeline_with_estimates() {
+  local page tl
+  page="$(page_of "$(plan5_timed | jq -c '(.features[0].tasks[] | select(.id == "T4")) |= del(.estimate)')" en)"
+  assert_contains "$page" 'data-part="timeline"'
+  assert_eq "9" "$(printf '%s' "$page" | grep -o 'data-part="[a-z]*"' | sort -u | wc -l | tr -d ' ')"
+  assert_contains "$page" '<h2><span class="n">3</span>Timeline, to scale</h2>'
+  assert_contains "$page" '<h2><span class="n">4</span>People and capacity'
+  tl="$(printf '%s' "$page" | sed -n '/data-part="timeline"/,/<\/section>/p')"
+  assert_eq "3" "$(printf '%s' "$tl" | grep -o 'class="b-ai"' | wc -l | tr -d ' ')" "T1, T5, T3"
+  assert_eq "1" "$(printf '%s' "$tl" | grep -o 'class="b-hw"' | wc -l | tr -d ' ')" "T2 is human work"
+  assert_eq "1" "$(printf '%s' "$tl" | grep -o 'class="b-h"' | wc -l | tr -d ' ')" "one review bar"
+  assert_eq "2" "$(printf '%s' "$tl" | grep -o 'class="b-merge"' | wc -l | tr -d ' ')" "two waves with an estimate"
+  assert_not_contains "$tl" "T4 Reply" "no bar for the task without an estimate"
+  assert_contains "$tl" "1 task has no time estimate and is not on the timeline: T4."
+  assert_contains "$tl" 'class="now mover"'
+  assert_contains "$page" 'svg .mover { display: none; }'
+  assert_contains "$page" '<span class="fact ai">AI ~20m</span><span class="fact hu">Review ~15m</span>'
+  assert_contains "$page" '<div class="kpi ai"><b>~1h5m</b><span>work done, in 2 waves</span></div>'
+  if printf '%s' "$page" | grep -Eiq '(src|href)[[:space:]]*=[[:space:]]*["'"'"']?(https?:)?//'; then _fail "a resource is loaded from the network"; fi
+  if printf '%s' "$page" | grep -Eiq 'https?://' ; then
+    printf '%s' "$page" | grep -Eo 'https?://[^"<> ]*' | grep -qv '^http://www.w3.org/' && _fail "an external URL is in the page"
+  fi
+  true
+}
+
+test_html_timeline_is_to_scale() {
+  local tl
+  tl="$(page_of "$(plan5_timed)" en | sed -n '/data-part="timeline"/,/<\/section>/p')"
+  # 155 minutes over 638 px: T3 (35m) is 144.1 px wide and starts at 25m (wave 2).
+  assert_contains "$tl" '<rect x="302.9" y="118" width="144.1" height="20" rx="4" class="b-ai"><title>T3 · AI ~35m · Review ~20m</title></rect>'
+  assert_contains "$tl" 'class="done"'
+}
+
+# "Không có ước lượng" (plan.html)
+test_html_no_timeline_without_estimates() {
+  local page
+  page="$(page_of "$(plan5)" en)"
+  assert_not_contains "$page" 'data-part="timeline"'
+  assert_not_contains "$page" '<svg class="tl"'
+  assert_not_contains "$page" 'kpi ai'
+  assert_contains "$page" '<h2><span class="n">3</span>People and capacity'
+}
+
+test_html_timeline_vietnamese() {
+  local page
+  page="$(page_of "$(plan5_timed)" vi)"
+  assert_contains "$page" 'Dòng thời gian, đúng tỉ lệ'
+  assert_contains "$page" 'Người ~15m'
+  assert_contains "$page" 'làm xong, theo 3 đợt'
+}

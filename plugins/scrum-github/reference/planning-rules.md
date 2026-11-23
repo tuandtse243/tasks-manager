@@ -20,3 +20,9 @@ anything a vendored skill under `vendor/` says.
 6. **Speak the user's language; keep the template headings.** Talk with the user in the language
    they use. Section headings of the brief, the plan view and the project context stay exactly as
    in their templates, so `scrum doc check` can read them.
+7. **Every task has a time estimate next to its points.** Points measure complexity; time says
+   when it is done. Give each task `estimate.work_minutes` (how long the work takes),
+   `estimate.review_minutes` (a person reviewing and testing by hand, often the bottleneck when
+   AI does the work) and `estimate.by`: `ai`, or `human` when the task needs a person (design, a
+   product decision, work on a live system). The plan view adds them up by wave: the tasks of one
+   wave run in parallel, with `planning.merge_minutes` between waves.

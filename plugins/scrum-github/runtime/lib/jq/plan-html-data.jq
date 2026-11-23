@@ -30,7 +30,27 @@ include "plan";
         sprint: $sp, wave: ($insights.waves[.id] // 1),
         change: (if ($added | index($id)) != null then "added" elif $changed[$id] != null then "changed" else null end),
         changed_fields: ($changed[.id] // []),
-        fit: ($fit[.id] // null) } ] as $tasks
+        fit: ($fit[.id] // null),
+        estimate: (.estimate | clean_estimate) } ] as $tasks
+# Time (spec work-plan "Thời gian trong bản xem", "Dòng thời gian trong plan.html"): minutes only;
+# plan-html.jq turns them into the to-scale timeline. null when no task has an estimate.
+| ($cfg.planning.merge_minutes // 5) as $merge
+| ( if all($tasks[]; .estimate == null) then null
+    else ($tasks | eta_by_waves($merge)) as $eta
+      | ($tasks | estimate_totals) as $sum
+      | ($eta.waves | reduce .[] as $w ({at: 0, list: []}; .list += [$w + {start: .at}] | .at += $w.work + $merge) | .list) as $wl
+      | ([$wl[] | {key: (.wave | tostring), value: .start}] | from_entries) as $start
+      | { merge: $merge,
+          work: $eta.work_minutes, review: $eta.review_minutes, total: ($eta.work_minutes + $eta.review_minutes),
+          sum_work: $sum.work_minutes, sum_review: $sum.review_minutes,
+          estimated: $sum.estimated, missing: $sum.missing,
+          missing_ids: [$tasks[] | select(.estimate == null) | .id],
+          humans: any($tasks[]; .estimate.by == "human"),
+          waves: $wl,
+          rows: [$tasks | to_entries | sort_by(.value.wave, .key)[] | .value | select(.estimate != null)
+                 | {id, title, wave, start: $start[.wave | tostring], work: (.estimate.work_minutes // 0),
+                    review: (.estimate.review_minutes // 0), by: .estimate.by}] }
+    end ) as $time
 | [$tasks[] | select(.sprint.kind == "open")] as $into
 | [$tasks[] | select(.sprint.kind == "backlog")] as $backlog
 | ($actions // []) as $acts
@@ -55,6 +75,7 @@ include "plan";
                into: ($into | length), into_points: ([$into[].points // 0] | add // 0),
                backlog: ($backlog | length),
                waves: (($insights.wave_list // []) | length) },
+    time: $time,
     diff: {first: $diff.first, revision: $diff.revision, previous: (if $diff.first then null else $diff.revision - (if ($diff.added + $diff.removed + $diff.changed | length) > 0 then 1 else 0 end) end),
            added: $diff.added, removed: $diff.removed, changed: $diff.changed},
     load: { online: $insights.online, sprint: $insights.sprint, capacity: $insights.capacity,
