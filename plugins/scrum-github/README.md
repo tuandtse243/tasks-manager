@@ -84,16 +84,16 @@ the full path, and the skills now use the full path from the first call). Elsewh
 | – | `scrum uninstall [--dry-run] [--yes]` | Remove what `init` installed from the working tree; keeps `.github/scrum.yml`, files you edited, and everything on GitHub |
 | `/scrum-github:sprint-new` | `scrum sprint new [--title T] [--start DATE] [--length DAYS] [--goal TEXT]` | Create the next sprint |
 | `/scrum-github:backlog` | `scrum backlog [--json]` | Open tasks without a sprint: points, assignees, parent, blockers, totals |
-| `/scrum-github:sprint-fill` | `scrum sprint fill [SPRINT] [--capacity N] [--add N,N,…] [--yes]` | Capacity from recent velocity, what is planned, and moving tasks from the backlog into the sprint |
+| `/scrum-github:sprint-fill` | `scrum sprint fill [SPRINT] [--capacity N] [--add N,N,…] [--yes]` | Capacity from recent velocity, what is planned, review minutes per person against `review_hours`, and moving tasks from the backlog into the sprint |
 | `/scrum-github:project-scan` | `scrum context inventory`, `scrum context status`, `scrum context stamp` | Describe an existing codebase in `docs/project-context.md` (with a commit stamp) |
 | `/scrum-github:discover` | `scrum plan init`, `scrum doc check FILE` | Clarify a vague idea through research and an interview; writes `docs/plans/<slug>/brief.md` |
 | `/scrum-github:plan` | `scrum team --json`, `scrum plan init`, `scrum plan check FILE [--json]`, `scrum plan apply FILE` | Break a requirement into an epic, features and tasks in a plan file, with suggested assignees and sprint; one review (`plan.html`); after approval create the issues in their sprint, assigned |
-| `/scrum-github:task-new` | `scrum task new --title T [--points N] [--assignee LOGIN] [--sprint S \| --backlog] [--bug]` | Create a task in the open sprint, or in the backlog when none is open (or with `--backlog`); says where it went |
-| `/scrum-github:my-tasks` | `scrum mine [--user LOGIN] [--json]` | Every open task of one person in every sprint and the backlog, what blocks them, pull requests waiting for their review, and the task to do next; offers to start it. Read-only |
+| `/scrum-github:task-new` | `scrum task new --title T [--points N] [--assignee LOGIN] [--sprint S \| --backlog] [--bug] [--work D] [--review D] [--by ai\|human]` | Create a task in the open sprint, or in the backlog when none is open (or with `--backlog`); says where it went. Optional time estimate, see "Time estimates" |
+| `/scrum-github:my-tasks` | `scrum mine [--user LOGIN] [--json]` | Every open task of one person in every sprint and the backlog, what blocks them, their time estimates and the time left in the open sprint, pull requests waiting for their review, and the task to do next; offers to start it. Read-only |
 | `/scrum-github:task-start` | `scrum task start N` | Assign yourself, set In progress, create branch `feat/N-slug` |
-| `/scrum-github:task` | `scrum task list [--mine] [--sprint S \| --backlog] [--status ROLE]`, `scrum task move N… --sprint S \| --backlog`, `scrum task estimate N P`, `scrum task assign N LOGIN… [--unassign]`, `scrum task drop N [--reason T]` | See tasks; move, re-estimate, assign or drop them without editing labels by hand |
+| `/scrum-github:task` | `scrum task list [--mine] [--sprint S \| --backlog] [--status ROLE]`, `scrum task move N… --sprint S \| --backlog`, `scrum task estimate N [P] [--work D] [--review D] [--by ai\|human]`, `scrum task assign N LOGIN… [--unassign]`, `scrum task drop N [--reason T]` | See tasks; move, re-estimate, assign or drop them without editing labels by hand |
 | `/scrum-github:task-pr` | `gh pr create` / `gh pr edit`, after you approve | Write the pull request description for the task of the current branch |
-| `/scrum-github:sprint-status` | `scrum status [SPRINT]` | Table by person and status with points |
+| `/scrum-github:sprint-status` | `scrum status [SPRINT]` | Table by person and status with points; work and review minutes left when tasks have time estimates |
 | `/scrum-github:sprint-report` | `scrum report [SPRINT] [--out FILE]` | Self-contained HTML burndown and velocity |
 | `/scrum-github:sprint-close` | `scrum sprint close [SPRINT] [--yes] [--create-next]` | Record velocity, carry over open tasks, close the milestone |
 | `/scrum-github:project-setup` | `bash wizards/project-board.sh`, then `scrum project init` | Turn on the project board: a wizard for the steps only you can do |
@@ -202,6 +202,42 @@ The list is used by `scrum team` (each person's load in the open sprint), by `/s
 `task new`, `task assign` and `plan check`, which warn about a login that is not in `team` (only
 when `team` is set; the warning never stops the command).
 
+### Time estimates
+
+Points measure how complex a task is; a time estimate says when it is done. When AI does most of
+the work, "when" has two parts: how long the work takes, and how long a person needs to review it
+and test it by hand, which is often the bottleneck. A task can carry both, next to its points
+(points stay for velocity, burndown, labels and the board):
+
+- `work_minutes`: how long the work takes;
+- `review_minutes`: review and manual testing by a person;
+- `by`: who does the work, `ai` (the default) or `human`.
+
+They are stored in a block at the end of the issue body, a line people read and the data in a
+hidden HTML comment:
+
+```
+<!-- scrum:estimate -->
+AI ~25m · Review ~20m
+<!-- {"work_minutes":25,"review_minutes":20,"by":"ai"} -->
+<!-- /scrum:estimate -->
+```
+
+Set them with `scrum task new … --work 25m --review 20m [--by human]`, change them with
+`scrum task estimate N [POINTS] [--work D] [--review D] [--by ai|human]` (fields not given keep
+their value), or give each plan task an `estimate`. Durations are `90`, `25m`, `2h` or `1h30m`.
+A task without the block has no time estimate, and a block broken by hand counts as none (the
+next `task estimate` writes it again). The line follows `language`.
+
+Where they show: `plan.md` and `plan.html` (per task, per feature, in total, and a to-scale
+timeline), `scrum mine` (each task, and the time left in the open sprint), `scrum status` (work
+and review left per person) and `scrum sprint fill` (review minutes per person against
+`team[].review_hours`). Work time is added up **by waves**: tasks that do not depend on each
+other run in parallel, so a wave takes as long as its longest task, plus
+`planning.merge_minutes` to merge and run the tests; review time is the sum. For example, with
+`merge_minutes: 5`, waves of (20m, 8m), (15m, 35m) and (20m) are done in
+20 + 5 + 35 + 5 + 20 + 5 = 90 minutes of work.
+
 ### Needs attention, burndown and the digest in a chat
 
 `scrum status`, the digest and the HTML report list what needs attention: tasks blocked by an open
@@ -245,7 +281,8 @@ Nothing is written to GitHub before you approve the plan. Commit the files under
 one self-contained file (no network, light and dark, no motion when the system asks for less):
 a summary, what changed since the last view (its revision goes up only when a task is added,
 removed, or changes title, points, dependencies, assignees or sprint), the dependency graph by
-wave (hover a task to light up its chain), each person's load and the sprint's capacity, a card per
+wave (hover a task to light up its chain), when tasks have time estimates a timeline drawn to
+scale (work bars by wave, merge gaps, the review bar), each person's load and the sprint's capacity, a card per
 task, the plan-critic findings (the plan's optional `review` list), what `apply` will create, and
 the assumptions. Its fixed text follows `language`. Offline it says that load and the GitHub
 actions need GitHub. The page is for reading; you answer in the chat. `plan init` writes a
@@ -302,7 +339,8 @@ continues the existing plan and keeps its ids and issue numbers.
     { "id": "F1", "title": "Comments under a post", "body": "…", "issue": null,
       "tasks": [
         { "id": "T1", "title": "Store comments", "acceptance": ["…"], "subtasks": ["Migration", "API"],
-          "points": 3, "depends_on": [], "issue": null },
+          "points": 3, "estimate": {"work_minutes": 20, "review_minutes": 15, "by": "ai"},
+          "depends_on": [], "issue": null },
         { "id": "T2", "title": "Show comments", "points": 3, "depends_on": ["T1"], "issue": null }
       ] }
   ],
@@ -326,6 +364,10 @@ continues the existing plan and keeps its ids and issue numbers.
 - **Estimates** in `plan.md`: points per feature and in total, tasks not estimated, hours when
   `planning.hours_per_point` is set, and the number of sprints from the average velocity of the
   last three closed sprints (skipped offline or before any sprint is closed).
+- **Time estimates** (`estimate`, optional): `work_minutes` and `review_minutes` (whole minutes
+  above 0) and `by` (`ai` or `human`, `ai` when left out). `apply` writes them into the issue body
+  and `apply --update` updates them; `plan.md` and `plan.html` add them up (see "Time
+  estimates"), and `plan.html` draws the timeline.
 - Version 1 files (`{"feature": {...}, "tasks": [...]}`, no `version`) are read as one feature
   `F1` with tasks `T1…Tn` in the current sprint, and rewritten as version 2 when numbers are
   recorded.
@@ -337,7 +379,7 @@ continues the existing plan and keeps its ids and issue numbers.
 | See what would happen | `scrum plan apply FILE --dry-run` | Prints creates, links, skips; writes nothing |
 | A run failed half-way | `scrum plan apply FILE` | Creates only what has no `issue` yet |
 | Tasks added to the plan | `scrum plan apply FILE` | Creates only the new ones and links them |
-| Titles, bodies, points or sprints changed in the plan | `scrum plan apply FILE --update` | Updates open issues (one PATCH, one label PUT each); never status labels or assignees; closed issues are skipped and reported |
+| Titles, bodies, points, time estimates or sprints changed in the plan | `scrum plan apply FILE --update` | Updates open issues (one PATCH, one label PUT each); never status labels or assignees; closed issues are skipped and reported |
 
 Deleting an `issue` number or changing an `id` and applying again creates a duplicate: the CLI
 cannot detect it, so read the `--dry-run` output first.
@@ -458,7 +500,8 @@ branch needs `.github/` from `scrum init`.
 - **Sprint** = milestone. Start, end and velocity live in hidden markers in the milestone
   description (`<!-- scrum:start=2014-09-22 end=2014-09-26 -->`, `<!-- scrum:velocity=11 -->`),
   because a milestone only has a due date.
-- **Task** = issue with one `status: …` label and at most one `points: N` label.
+- **Task** = issue with one `status: …` label and at most one `points: N` label. Its time
+  estimate, when it has one, is the `<!-- scrum:estimate -->` block at the end of its body.
 - **Feature / epic** = issue with `type: feature` / `type: epic`; its tasks (or features) are
   sub-issues. Never counted as a task.
 - **Plan** = `docs/plans/<slug>/plan.json` in the repository: a snapshot of how a requirement was

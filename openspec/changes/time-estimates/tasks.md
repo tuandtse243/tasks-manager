@@ -31,7 +31,7 @@
 
 ## 6. Phiên bản và tài liệu
 
-- [ ] 6.1 Phiên bản 0.10.0 (`runtime/VERSION`, `plugin.json`, test phiên bản), mục CHANGELOG, README (lệnh và cấu hình mới), `docs/huong-dan-ap-dung.md`. Kiểm tra: `bash tests/run.sh manifest init` xanh
+- [x] 6.1 Phiên bản 0.10.0 (`runtime/VERSION`, `plugin.json`, test phiên bản), mục CHANGELOG, README (lệnh và cấu hình mới), `docs/huong-dan-ap-dung.md`. Kiểm tra: `bash tests/run.sh manifest init` xanh
 
 ## 7. Kiểm tra tích hợp
 
