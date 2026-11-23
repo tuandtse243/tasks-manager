@@ -2,7 +2,7 @@
 
 REPO_ROOT="$(cd "$PLUGIN_DIR/../.." && pwd)"
 PLUGIN_README="$PLUGIN_DIR/README.md"
-GUIDE="$REPO_ROOT/docs/huong-dan-ap-dung.md"
+GUIDE="$REPO_ROOT/docs/adoption-guide.md"
 
 # Commands in `scrum --help`: the first word, or the first two for command groups.
 help_commands() {

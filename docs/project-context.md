@@ -13,7 +13,7 @@
 
 This repository holds `scrum-github`, a Claude Code plugin that lets a team (PO, Scrum Master,
 Dev) run Scrum on GitHub alone. Sprints are milestones, tasks are issues, and status and points
-are labels; there is no separate database and no Jira or Trello (docs/huong-dan-ap-dung.md,
+are labels; there is no separate database and no Jira or Trello (docs/adoption-guide.md,
 openspec/changes/archive/2026-11-18-scrum-github-automation/proposal.md). It replaces manual
 steps (milestones, labels, issues, PR linking, status changes, progress checks) with slash
 commands, a `scrum` Bash CLI and GitHub Actions workflows installed into the target repo
@@ -48,7 +48,7 @@ The repo is distributed as a local Claude Code marketplace named `tasks-manager`
 - Deployment: there is no server. `scrum init` copies the runtime into the target repo's
   `.github/scrum/`, where the workflows run it (plugins/scrum-github/runtime/lib/cmd_init.sh).
   Supported: github.com only (no GitHub Enterprise Server); Windows only through WSL
-  (docs/huong-dan-ap-dung.md). Publishing beyond the local marketplace: unknown.
+  (docs/adoption-guide.md). Publishing beyond the local marketplace: unknown.
 
 ## Directory structure
 
@@ -69,7 +69,7 @@ The repo is distributed as a local Claude Code marketplace named `tasks-manager`
 | `plugins/scrum-github/tests/` | Bash test runner `run.sh`, `fake-gh` stub, 12 `test_*.sh` files, `fixtures/` |
 | `openspec/specs/` | Main specs, one per capability (7) |
 | `openspec/changes/` | Change in progress `requirement-planning`; finished changes under `archive/YYYY-MM-DD-<name>/` |
-| `docs/` | `huong-dan-ap-dung.md`, the Vietnamese adoption guide; this context document |
+| `docs/` | `adoption-guide.md`, the adoption guide; this context document |
 | `.claude/` | OpenSpec tooling only: `commands/opsx/*` and `skills/openspec-*` |
 
 ## Main flows
@@ -137,9 +137,9 @@ The repo is distributed as a local Claude Code marketplace named `tasks-manager`
   planned). Points from the first `points: N` label. Body sections: description,
   `### Acceptance criteria`, `### Subtasks`, "Part of #parent" (plugins/scrum-github/runtime/lib/jq/scrum.jq).
 - **Feature / Epic**: issues labeled `type: feature` / `type: epic`; tasks are sub-issues of a
-  feature, features of an epic; an epic has no points (docs/huong-dan-ap-dung.md,
+  feature, features of an epic; an epic has no points (docs/adoption-guide.md,
   openspec/changes/requirement-planning/specs/work-plan/spec.md).
-- **Backlog**: issues with no milestone (docs/huong-dan-ap-dung.md).
+- **Backlog**: issues with no milestone (docs/adoption-guide.md).
 - **Labels**: `status: New|In progress|Done`, `points: <n>` per scale value, `bug`,
   `type: feature`, `type: epic`, `scrum: meta`, `no-task`; obsolete ones are reported, never
   deleted (plugins/scrum-github/runtime/lib/jq/label-plan.jq).
@@ -199,16 +199,17 @@ The repo is distributed as a local Claude Code marketplace named `tasks-manager`
 - **Planning rules**: nothing goes to GitHub before user approval; agents only read; facts cite a
   path or URL; tasks are vertical slices; template headings kept exactly
   (plugins/scrum-github/reference/planning-rules.md).
-- **Language**: OpenSpec documents and the guide in Vietnamese; everything shown on GitHub and
-  the plugin code/README in English (openspec/specs/, docs/huong-dan-ap-dung.md,
-  openspec/changes/archive/2026-11-18-scrum-github-automation/proposal.md).
+- **Language**: everything in the repository is written in English: code, README, docs,
+  commits, pull requests and new OpenSpec documents. Vietnamese only when asked for. Older
+  OpenSpec documents (openspec/specs/, openspec/changes/archive/) are still in Vietnamese
+  (docs/adoption-guide.md, README.md).
 - **OpenSpec workflow**: propose → apply → sync → archive to `changes/archive/YYYY-MM-DD-<name>`;
   specs written as `### Requirement:` (SHALL/MUST) with `#### Scenario:` WHEN/THEN; tasks.md
   items say how to verify ("Kiểm tra: …") (.claude/commands/opsx/, openspec/specs/,
   openspec/changes/requirement-planning/tasks.md).
 - **Team rules for adopters**: every PR closes a task or carries `no-task`; use `Closes #n`;
   don't edit `status:` labels by hand; close abandoned tasks as not planned; don't change points
-  mid-sprint (docs/huong-dan-ap-dung.md).
+  mid-sprint (docs/adoption-guide.md).
 - Branching and commit rules for this repo itself: unknown (no config enforces them).
 
 ## Running and testing
@@ -237,7 +238,7 @@ The repo is distributed as a local Claude Code marketplace named `tasks-manager`
 | Feature | An issue labeled `type: feature` whose sub-issues are tasks; in a plan, an entry of `features[]`; in a brief, a size class (task / feature / epic) — three senses | templates/scrum.yml, plan.schema.json, skills/discover/SKILL.md |
 | Epic | An issue labeled `type: epic` whose sub-issues are features; has no points | plan.schema.json, openspec/changes/requirement-planning/specs/work-plan/spec.md |
 | Subtask | A checklist item under `### Subtasks` inside a task issue, not a separate issue. _Avoid_ confusing with GitHub "sub-issue" (how a task hangs under a feature) | plan.schema.json, openspec/specs/task-management/spec.md |
-| Backlog | Issues with no milestone (plan `sprint: null`) | docs/huong-dan-ap-dung.md |
+| Backlog | Issues with no milestone (plan `sprint: null`) | docs/adoption-guide.md |
 | Meta issue | A bookkeeping issue labeled `scrum: meta` (e.g. the digest issue), excluded from metrics | templates/scrum.yml, openspec/specs/sprint-reporting/spec.md |
 | Status | Exactly one `status: New/In progress/Done` label on a task. Also: the board's `Status` field (Todo/In Progress/Done), the `scrum status` command and `scrum context status` — four senses | runtime/lib/jq/scrum.jq, runtime/share/defaults.json |
 | Done | Closed as completed; closed as "not planned" (dropped) counts nowhere | runtime/lib/jq/scrum.jq, README.md |

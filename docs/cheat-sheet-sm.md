@@ -1,43 +1,74 @@
 # Cheat sheet: Scrum Master
 
-Các lệnh của Scrum Master theo thứ tự dùng trong một sprint. Gõ trong Claude Code, ở thư mục gốc của
-repo dự án. Chi tiết từng tuỳ chọn: [README của plugin](../plugins/scrum-github/README.md).
+The Scrum Master's commands in the order a sprint uses them. Type them in Claude Code, at the
+root of the project's repository. Every option: [the plugin's README](../plugins/scrum-github/README.md).
+Setting up a repository and the team's conventions: [the adoption guide](adoption-guide.md).
 
-## Một lần cho mỗi repo
+## Once per repository
 
-| Việc | Lệnh | Ví dụ |
+| What | Command | Example |
 |---|---|---|
-| Thiết lập repo: cấu hình, label, workflow | `/scrum-github:init` | `/scrum-github:init`, rồi commit và push `.github/` |
-| Kiểm tra cả bộ cài đặt | `/scrum-github:doctor` | `/scrum-github:doctor` |
-| (Tuỳ chọn) Bật board kanban | `/scrum-github:project-setup` | `/scrum-github:project-setup` |
+| Set up the repository: configuration, labels, workflows | `/scrum-github:init` | `/scrum-github:init`, then commit and push `.github/` |
+| Check the whole setup | `/scrum-github:doctor` | `/scrum-github:doctor` |
+| (Optional) Turn on the project board | `/scrum-github:project-setup` | `/scrum-github:project-setup` |
 
-Đổi `.github/scrum.yml` (thang điểm, giờ digest, ngôn ngữ, In review) thì chạy lại `init`.
+After changing `.github/scrum.yml` (points scale, digest time, language, In review), run `init`
+again.
 
-## Đầu sprint
+## The team
 
-| Việc | Lệnh | Ví dụ |
+List who works on the repository in the `team` block of `.github/scrum.yml`:
+
+```yaml
+team:
+  - login: tuandt
+    areas: [backend, api]
+    capacity: 10        # points per sprint
+    review_hours: 6     # hours of review and manual testing per sprint
+  - login: an-nguyen
+    areas: [frontend]
+```
+
+Every key but `login` is optional. `/scrum-github:plan` suggests assignees from it, and creating
+or assigning a task warns (without stopping) about a login that is not in it. Without `team`, the
+team is the people GitHub lets you assign issues to. To see each person's areas, capacity and
+load in the open sprint, run `scrum team` (there is no slash command for it: ask Claude to run
+it, or run it in a terminal).
+
+## Start of the sprint
+
+| What | Command | Example |
 |---|---|---|
-| Tạo sprint | `/scrum-github:sprint-new` | `/scrum-github:sprint-new bắt đầu thứ 2 tới, mục tiêu "Đăng ký, đăng nhập"` |
-| Chọn task cho sprint theo sức chứa | `/scrum-github:sprint-fill` | `/scrum-github:sprint-fill` |
+| Create the sprint | `/scrum-github:sprint-new` | `/scrum-github:sprint-new starting next Monday, goal "Sign-up and login"` |
+| Choose the sprint's tasks against its capacity | `/scrum-github:sprint-fill` | `/scrum-github:sprint-fill` |
+| Check the load per person | `scrum team` | `scrum team` |
 
-## Hằng ngày
+`sprint-fill` works out the capacity from the average velocity of up to the last three closed
+sprints (or the capacity you give), shows what is planned and the backlog, proposes tasks in
+dependency order, and moves them only after you approve. When tasks have time estimates, it also
+compares each person's review minutes with their `review_hours`.
 
-| Việc | Lệnh | Ví dụ |
+## Every day
+
+| What | Command | Example |
 |---|---|---|
-| Tiến độ theo người, mục "Cần chú ý" | `/scrum-github:sprint-status` | `/scrum-github:sprint-status ai đang bị chặn?` |
-| Sửa task: điểm, người nhận, sprint, bỏ | `/scrum-github:task` | `/scrum-github:task giao #15 cho an-nguyen` |
-| Việc kế tiếp của chính mình | `/scrum-github:next` | `/scrum-github:next` |
+| Progress by person, "Needs attention" | `/scrum-github:sprint-status` | `/scrum-github:sprint-status who is blocked?` |
+| Change a task: points, assignee, sprint, drop it | `/scrum-github:task` | `/scrum-github:task assign #15 to an-nguyen` |
+| One person's work and their pending reviews | `/scrum-github:my-tasks` | `/scrum-github:my-tasks for an-nguyen` |
+| Your own next step | `/scrum-github:next` | `/scrum-github:next` |
 
-"Cần chú ý" nêu task bị chặn, task In progress không động, task thiếu người nhận hoặc điểm, và
-sprint chậm hơn đường lý tưởng. Digest mỗi sáng có cùng mục này.
+"Needs attention" lists blocked tasks, tasks In progress with no activity, tasks without an
+assignee or points, and a sprint behind the ideal line. When tasks have time estimates, the
+status table also shows the work and review minutes left per person. The morning digest has the
+same section.
 
-## Cuối sprint
+## End of the sprint
 
-| Việc | Lệnh | Ví dụ |
+| What | Command | Example |
 |---|---|---|
-| Báo cáo burndown và velocity | `/scrum-github:sprint-report` | `/scrum-github:sprint-report` |
-| Đóng sprint, ghi velocity, chuyển task dở | `/scrum-github:sprint-close` | `/scrum-github:sprint-close` |
+| Burndown and velocity report | `/scrum-github:sprint-report` | `/scrum-github:sprint-report` |
+| Close the sprint, record velocity, carry over unfinished tasks | `/scrum-github:sprint-close` | `/scrum-github:sprint-close` |
 
-Đóng sprint đăng bản tổng kết lên issue `Sprint N digest` để dùng ở buổi review.
+Closing the sprint posts a summary on the issue `Sprint N digest` for the review.
 
-Lệnh báo lỗi đăng nhập hay mạng: `/scrum-github:doctor`.
+A command fails on login or network: `/scrum-github:doctor`.

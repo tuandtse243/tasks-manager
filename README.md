@@ -2,93 +2,105 @@
 
 [![CI](https://github.com/tuandtse243/tasks-manager/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/tuandtse243/tasks-manager/actions/workflows/ci.yml)
 
-Chạy Scrum ngay trên GitHub, không cần Jira hay Trello. Repo này là một **marketplace plugin của
-Claude Code**. Hiện marketplace có một plugin là [`scrum-github`](plugins/scrum-github/README.md).
+Run Scrum on GitHub itself, without Jira or Trello. This repository is a **Claude Code plugin
+marketplace**. It currently holds one plugin, [`scrum-github`](plugins/scrum-github/README.md)
+(version 0.11.0, see the [releases](https://github.com/tuandtse243/tasks-manager/releases)).
 
-| Scrum | Trên GitHub |
+| Scrum | On GitHub |
 |---|---|
 | Sprint | Milestone `Sprint {n}` |
-| Task | Issue có label `status: …` và `points: N` |
-| Trạng thái | Tự đổi khi mở hoặc merge PR có `Closes #n` |
-| Lập kế hoạch | Claude chia yêu cầu thành epic → feature → task, bạn duyệt rồi mới tạo issue |
-| Theo dõi | Bảng tiến độ có mục "Cần chú ý", báo cáo HTML có burndown, digest mỗi sáng (cả trên Slack/Telegram nếu muốn) |
+| Task | Issue with a `status: …` label and a `points: N` label, optionally a time estimate (AI work and human review) |
+| Backlog | Open tasks with no milestone |
+| Status | Changes on its own when a pull request with `Closes #n` is opened or merged |
+| Team | A `team` block in `.github/scrum.yml`: who works here, their areas and capacity |
+| Planning | Claude splits a requirement into epic → features → tasks with suggested assignees and sprint; you approve once, then the issues are created |
+| AI work | Tasks labelled `ai-ready` are worked by agents in local worktrees and come back as one pull request to review |
+| Tracking | A progress table with a "Needs attention" section, an HTML report with a burndown, a digest every morning (also on Slack or Telegram if you want) |
 
-## Cài trong ba bước
+## Install in three steps
 
-1. Công cụ: `brew install gh jq yq`, rồi `gh auth login -h github.com -s repo,workflow`.
-2. Plugin, trong Claude Code:
+1. Tools: `brew install gh jq yq`, then `gh auth login -h github.com -s repo,workflow`.
+2. The plugin, in Claude Code:
    ```
    /plugin marketplace add tuandtse243/tasks-manager
    /plugin install scrum-github@tasks-manager
    ```
-3. Trong repo dự án: `/scrum-github:init`, commit và push `.github/` lên nhánh mặc định, rồi
-   `/scrum-github:doctor` để kiểm tra cả bộ.
+3. In your project's repository: `/scrum-github:init`, commit and push `.github/` to the default
+   branch, then `/scrum-github:doctor` to check the whole setup.
 
-## Một task từ đầu tới cuối
+## One task from start to finish
 
 ```
-/scrum-github:sprint-new bắt đầu thứ 2 tới          # SM: tạo Sprint 1
-/scrum-github:task-new Đăng nhập bằng email, 3 điểm  # PO: tạo task #12 trong sprint
-/scrum-github:task-start 12                          # Dev: nhận task, sang In progress, tạo branch
-git push -u origin feat/12-dang-nhap-bang-email      # Dev: code xong thì push
-/scrum-github:task-pr                                # Dev: mô tả PR có "Closes #12", mở PR
-                                                     # Merge PR: #12 tự sang Done và đóng
-/scrum-github:sprint-status                          # Cả team: tiến độ và mục "Cần chú ý"
+/scrum-github:sprint-new starting next Monday          # SM: create Sprint 1
+/scrum-github:task-new Log in with email, 3 points     # PO: create task #12 in the sprint
+/scrum-github:my-tasks                                 # Dev: what is on my plate, what to do next
+/scrum-github:task-start 12                            # Dev: take the task, In progress, create the branch
+git push -u origin feat/12-log-in-with-email           # Dev: push when the code is done
+/scrum-github:task-pr                                  # Dev: PR description with "Closes #12", open the PR
+                                                       # Merge the PR: #12 moves to Done and closes
+/scrum-github:sprint-status                            # Everyone: progress and "Needs attention"
 ```
 
-Không biết làm gì tiếp thì hỏi `/scrum-github:next`. Task gắn label `ai-ready` thì để agent AI
-làm song song, gộp thành một PR để review: `/scrum-github:run` (xem Flow G trong
-[hướng dẫn](docs/huong-dan-ap-dung.md#flow-g-để-agent-ai-làm-task)).
+With no sprint open, `task-new` puts the task in the backlog and says so (`--backlog` does it on
+purpose); `/scrum-github:sprint-fill` later moves it into a sprint. For a larger requirement,
+`/scrum-github:plan` writes a plan file and a `plan.html` page to review, and creates every issue,
+assigned and in its sprint, after your one approval.
 
-![Một sprint với scrum-github](docs/diagrams/sprint-flow.png)
+Not sure what to do next? Ask `/scrum-github:next`. Tasks labelled `ai-ready` can be left to AI
+agents, which work them in parallel in local git worktrees and open one pull request for review:
+`/scrum-github:run` (it shows the plan and asks before anything starts; see the
+[adoption guide](docs/adoption-guide.md)).
 
-## Bạn là ai thì đọc gì
+![One sprint with scrum-github](docs/diagrams/sprint-flow.png)
 
-| Bạn là | Đọc |
+## Who reads what
+
+| You are | Read |
 |---|---|
-| Product Owner | [Cheat sheet PO](docs/cheat-sheet-po.md) |
-| Scrum Master | [Cheat sheet SM](docs/cheat-sheet-sm.md), rồi [Hướng dẫn áp dụng](docs/huong-dan-ap-dung.md) để thiết lập repo và quy ước team |
-| Dev | [Cheat sheet Dev](docs/cheat-sheet-dev.md) |
-| Cần tra mọi lệnh, tuỳ chọn, khoá cấu hình | [README của plugin](plugins/scrum-github/README.md) (tiếng Anh) |
-| Người phát triển plugin | [Bối cảnh dự án](docs/project-context.md), [kiểm thử end-to-end](plugins/scrum-github/docs/e2e-testing.md), spec trong `openspec/specs/` |
+| Product Owner | [PO cheat sheet](docs/cheat-sheet-po.md) |
+| Scrum Master | [SM cheat sheet](docs/cheat-sheet-sm.md), then the [adoption guide](docs/adoption-guide.md) to set up the repository and the team's conventions |
+| Developer | [Dev cheat sheet](docs/cheat-sheet-dev.md) |
+| Looking up any command, option or configuration key | [The plugin's README](plugins/scrum-github/README.md) |
+| Working on the plugin itself | [Project context](docs/project-context.md), [end-to-end testing](plugins/scrum-github/docs/e2e-testing.md), specs in `openspec/specs/` |
 
-## Cấu trúc repo
+## Repository layout
 
 ```
-.claude-plugin/marketplace.json   khai báo marketplace "tasks-manager"
-plugins/scrum-github/             mã nguồn plugin
-  skills/                         các lệnh /scrum-github:*
-  agents/                         agent chỉ đọc: codebase-scout, researcher, plan-critic
-  runtime/                        CLI `scrum` (bash + jq), được chép vào repo dự án khi init
-  templates/                      workflow, issue form, PR template cài vào repo dự án
-  tests/                          test offline với `gh` giả
-docs/                             hướng dẫn áp dụng, cheat sheet theo vai trò, bối cảnh dự án
-  diagrams/                       sơ đồ flow (nguồn archify .json, bản .html tương tác, ảnh .png)
-openspec/                         spec (specs/) và lịch sử thay đổi (changes/archive/)
+.claude-plugin/marketplace.json   declares the "tasks-manager" marketplace
+plugins/scrum-github/             the plugin's source
+  skills/                         the /scrum-github:* commands
+  agents/                         agents: implementer (for run), and the read-only
+                                  codebase-scout, researcher, plan-critic
+  runtime/                        the `scrum` CLI (bash + jq), copied into the project repo by init
+  templates/                      workflows, issue form and PR template installed in the project repo
+  tests/                          offline tests with a fake `gh`
+docs/                             adoption guide, cheat sheets by role, project context
+  diagrams/                       flow diagram (archify .json source, interactive .html, .png image)
+openspec/                         specs (specs/) and change history (changes/archive/)
 ```
 
-## Phát triển
+## Development
 
 ```bash
-bash plugins/scrum-github/tests/run.sh          # toàn bộ test, offline, khoảng 2 phút
-bash plugins/scrum-github/tests/run.sh plan     # chỉ chạy tests/test_plan.sh
+bash plugins/scrum-github/tests/run.sh          # all tests, offline, about 2 minutes
+bash plugins/scrum-github/tests/run.sh plan     # only tests/test_plan.sh
 ```
 
-Lint mã shell (không lint `vendor/`) và kiểm tra plugin:
+Lint the shell code (not `vendor/`) and validate the plugin:
 
 ```bash
 (cd plugins/scrum-github && shellcheck --severity=warning bin/scrum runtime/bin/scrum runtime/lib/*.sh scripts/*.sh wizards/*.sh tests/run.sh tests/test_*.sh tests/fake-gh)
-claude plugin validate plugins/scrum-github     # chạy tay, CI không cài Claude Code
+claude plugin validate plugins/scrum-github     # run by hand; CI does not install Claude Code
 ```
 
-CI (`.github/workflows/ci.yml`) chạy bộ test trên Ubuntu cùng lệnh `shellcheck` ở trên cho mỗi
-pull request, và chạy thêm bộ test trên macOS mỗi lần push vào `main` (repo riêng tư tính phút macOS
-gấp mười). Lịch sử phiên bản của plugin ở
+CI (`.github/workflows/ci.yml`) runs the tests on Ubuntu and the `shellcheck` command above on
+every pull request, and the tests on macOS too on every push to `main` (a private repository pays
+ten times as much for macOS minutes). The plugin's version history is in the
 [CHANGELOG](plugins/scrum-github/CHANGELOG.md).
 
-Claude Code có thể tạo thư mục `openspec/changes/.claude/` khi ghi file dưới `openspec/changes/`.
-Thư mục này đã nằm trong `.gitignore`, nhưng `openspec list` vẫn có thể hiện nó như một change tên
-`.claude`; bỏ qua hoặc xoá đi.
+Claude Code may create an `openspec/changes/.claude/` folder when it writes files under
+`openspec/changes/`. The folder is in `.gitignore`, but `openspec list` may still show it as a
+change named `.claude`; ignore it or delete it.
 
-Mỗi thay đổi lớn đi qua OpenSpec: đề xuất bằng `/opsx:propose`, làm bằng `/opsx:apply`, xong thì
-`/opsx:archive` để gộp spec vào `openspec/specs/`.
+Every larger change goes through OpenSpec: propose it with `/opsx:propose`, implement it with
+`/opsx:apply`, and when it is done, `/opsx:archive` merges its specs into `openspec/specs/`.

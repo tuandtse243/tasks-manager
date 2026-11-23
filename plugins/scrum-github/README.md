@@ -7,7 +7,7 @@ the same data.
 
 **This README is the reference:** every command and option, every configuration key, the status
 rules, how data is stored, and development. For how to work with it day to day, read the
-Vietnamese guide [Hướng dẫn áp dụng](../../docs/huong-dan-ap-dung.md) and the one-page cheat sheets
+[Adoption guide](../../docs/adoption-guide.md) and the one-page cheat sheets
 for the [Product Owner](../../docs/cheat-sheet-po.md), the [Scrum Master](../../docs/cheat-sheet-sm.md)
 and [Developers](../../docs/cheat-sheet-dev.md).
 
