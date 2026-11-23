@@ -45,12 +45,12 @@
 
 ## 8. Phiên bản và tài liệu chung
 
-- [ ] 8.1 Phiên bản 0.9.0 (`runtime/VERSION`, `.claude-plugin/plugin.json`, test phiên bản trong `test_init.sh`); mục 0.9.0 trong `CHANGELOG.md` với "Added" (team, mine, my-tasks, plan.html, một lần duyệt) và "Changed" (`task new` về backlog khi không có sprint mở). Kiểm tra: `bash tests/run.sh manifest` và `init` xanh
-- [ ] 8.2 README plugin và `docs/huong-dan-ap-dung.md`: bảng lệnh (`team`, `mine`, `my-tasks`), luồng plan một lần duyệt có `plan.html`. Kiểm tra: mọi lệnh trong bảng có trong `scrum --help`
+- [x] 8.1 Phiên bản 0.9.0 (`runtime/VERSION`, `.claude-plugin/plugin.json`, test phiên bản trong `test_init.sh`); mục 0.9.0 trong `CHANGELOG.md` với "Added" (team, mine, my-tasks, plan.html, một lần duyệt) và "Changed" (`task new` về backlog khi không có sprint mở). Kiểm tra: `bash tests/run.sh manifest` và `init` xanh
+- [x] 8.2 README plugin và `docs/huong-dan-ap-dung.md`: bảng lệnh (`team`, `mine`, `my-tasks`), luồng plan một lần duyệt có `plan.html`. Kiểm tra: mọi lệnh trong bảng có trong `scrum --help`
 
 ## 9. Kiểm tra tích hợp
 
-- [ ] 9.1 Toàn bộ `bash tests/run.sh` (jq 1.8.1 và 1.8.2), `shellcheck`, `openspec validate team-and-backlog-tasks --strict`, `claude plugin validate .`. Kiểm tra: tất cả đạt
+- [x] 9.1 Toàn bộ `bash tests/run.sh` (jq 1.8.1 và 1.8.2), `shellcheck`, `openspec validate team-and-backlog-tasks --strict`, `claude plugin validate .`. Kiểm tra: tất cả đạt
 - [ ] 9.2 Thử trên một repo thật: `/plan` một yêu cầu nhỏ, mở `plan.html`, duyệt một lần, issue có milestone và assignee; `scrum mine`; `task new` khi không có sprint mở. Kiểm tra: kết quả khớp spec, ghi lại trong mô tả PR
 
 ## Workflow follow-up

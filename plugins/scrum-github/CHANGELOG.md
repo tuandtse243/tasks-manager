@@ -4,6 +4,48 @@ All notable changes to the `scrum-github` plugin. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the plugin uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-11-23
+
+### Added
+
+- **Team.** An optional `team` block in `.github/scrum.yml`: each member's `login`, `areas` and
+  `capacity` (points per sprint). Logins are not case-sensitive and a leading `@` is dropped;
+  duplicates, empty logins, bad areas and a capacity of 0 or less are configuration errors.
+  Without it, the team is the people GitHub lets you assign issues to in the repository.
+- `scrum team [--json]`: each member's areas, capacity and load in the open sprint (open tasks,
+  points against capacity). Read-only.
+- `task new`, `task assign` and `plan check` warn about a login that is not in `team` (only when
+  `team` is set); the warning never stops the command.
+- `scrum mine [--user LOGIN] [--json]` and the skill `/scrum-github:my-tasks`: every open task of
+  one person in every sprint and the backlog, grouped In progress, In review, New in the open
+  sprint, other sprints, backlog, with what blocks each one; the pull requests waiting for their
+  review; and the task to do next in dependency order. The skill offers
+  `/scrum-github:task-start` and waits for the user.
+- `task new --backlog` puts a task in the backlog while a sprint is open.
+- **One approval for `/plan`.** The skill suggests an assignee for each task from the team (areas
+  and load) and a sprint (what fits the open sprint's capacity in dependency order; the rest in
+  the backlog), shows everything in one review and asks one question. `plan apply` then creates
+  the issues with their milestone and assignees; no `sprint-fill` or assignment step afterwards.
+- `plan check` prints the dependency waves, each person's load against their capacity, the
+  sprint's points after apply against its capacity (average velocity), what fits and warnings;
+  `plan check --json` gives the same to the skill.
+- **`plan.html`.** `plan check`, `plan render` and `plan apply` write a self-contained page next
+  to `plan.md`: summary, changes since the last view (with a revision number, from
+  `.plan-snapshot.json`), the dependency graph by wave with hover highlighting, load and
+  capacity, task cards, the plan-critic findings, what apply will do on GitHub, assumptions and
+  out of scope. No network, light and dark, motion off under reduced motion, fixed text in the
+  configured `language`.
+- Plan files accept an optional `review` list (plan-critic findings); `plan apply` ignores it.
+- `plan init` writes a `.gitignore` in the plan folder for `plan.html` and
+  `.plan-snapshot.json` (an existing one is kept); `plan check` reminds older folders.
+
+### Changed
+
+- `scrum task new` without `--sprint` puts the task in the backlog when no sprint is open,
+  instead of failing. With an open sprint it still goes into it. The output always says where
+  the task went ("in Sprint 5" or "in the backlog"). `--sprint` with `--backlog` is refused, and
+  a sprint that does not exist is still an error.
+
 ## [0.8.3] - 2026-11-22
 
 ### Fixed

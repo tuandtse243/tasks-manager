@@ -79,6 +79,7 @@ the full path, and the skills now use the full path from the first call). Elsewh
 | `/scrum-github:init` | `scrum init [--dry-run] [--force] [--force-file PATH]` | Create `.github/scrum.yml`, sync labels, install or update templates, workflows and the runtime |
 | `/scrum-github:doctor` | `scrum doctor [--json]` | Check tools, `gh` login and scopes, configuration, labels, what is pushed, versions and the board secret; each problem with its fix. Read-only |
 | `/scrum-github:next` | `scrum next [--json]` | The one thing to do next, with its command. Read-only |
+| – | `scrum team [--json]` | Team members (from `team` in `.github/scrum.yml`, or GitHub's assignable users), their areas, capacity and load in the open sprint. Read-only |
 | – | `scrum config` | Print the merged configuration (`.github/scrum.yml` over the defaults) as JSON; offline |
 | – | `scrum uninstall [--dry-run] [--yes]` | Remove what `init` installed from the working tree; keeps `.github/scrum.yml`, files you edited, and everything on GitHub |
 | `/scrum-github:sprint-new` | `scrum sprint new [--title T] [--start DATE] [--length DAYS] [--goal TEXT]` | Create the next sprint |
@@ -86,7 +87,7 @@ the full path, and the skills now use the full path from the first call). Elsewh
 | `/scrum-github:sprint-fill` | `scrum sprint fill [SPRINT] [--capacity N] [--add N,N,…] [--yes]` | Capacity from recent velocity, what is planned, and moving tasks from the backlog into the sprint |
 | `/scrum-github:project-scan` | `scrum context inventory`, `scrum context status`, `scrum context stamp` | Describe an existing codebase in `docs/project-context.md` (with a commit stamp) |
 | `/scrum-github:discover` | `scrum plan init`, `scrum doc check FILE` | Clarify a vague idea through research and an interview; writes `docs/plans/<slug>/brief.md` |
-| `/scrum-github:plan` | `scrum plan init`, `scrum plan check FILE`, `scrum plan apply FILE` | Break a requirement into an epic, features and tasks in a plan file; after approval create the issues |
+| `/scrum-github:plan` | `scrum team --json`, `scrum plan init`, `scrum plan check FILE [--json]`, `scrum plan apply FILE` | Break a requirement into an epic, features and tasks in a plan file, with suggested assignees and sprint; one review (`plan.html`); after approval create the issues in their sprint, assigned |
 | `/scrum-github:task-new` | `scrum task new --title T [--points N] [--assignee LOGIN] [--sprint S \| --backlog] [--bug]` | Create a task in the open sprint, or in the backlog when none is open (or with `--backlog`); says where it went |
 | `/scrum-github:my-tasks` | `scrum mine [--user LOGIN] [--json]` | Every open task of one person in every sprint and the backlog, what blocks them, pull requests waiting for their review, and the task to do next; offers to start it. Read-only |
 | `/scrum-github:task-start` | `scrum task start N` | Assign yourself, set In progress, create branch `feat/N-slug` |
@@ -103,8 +104,8 @@ Plan files have their own commands too (all but `check` and `apply` work offline
 |---|---|
 | `scrum plan init "<title>" [--slug SLUG]` | Create `<planning.dir>/<slug>/`; print its paths as JSON and which files exist |
 | `scrum plan validate FILE` | Check the plan: fields, unique ids, points in the scale, dependencies (unknown, self, cycles) |
-| `scrum plan render FILE [--out PATH] [--offline]` | Write the view `plan.md` next to the plan, with estimates |
-| `scrum plan check FILE [--offline]` | validate, render, then print what `apply` would do; writes nothing to GitHub |
+| `scrum plan render FILE [--out PATH] [--offline]` | Write the views `plan.md` (with estimates) and `plan.html` next to the plan |
+| `scrum plan check FILE [--offline] [--json]` | validate, render both views, print the waves, each person's load, the sprint's capacity, warnings and what `apply` would do; writes nothing to GitHub |
 | `scrum plan apply FILE [--dry-run] [--update]` | Create the missing issues, link sub-issues and dependencies, record the numbers |
 | `scrum doc check FILE [--type brief\|context]` | Check the required sections of a brief or of the project context |
 
@@ -228,12 +229,25 @@ when it needs them.
 project-scan ──► docs/project-context.md          what the existing code is (optional)
 discover     ──► docs/plans/<slug>/brief.md       what to build, confirmed scope (optional)
              ──► docs/plans/<slug>/questionnaire-<who>.md   only for decisions someone else owns
-plan         ──► docs/plans/<slug>/plan.json      epic → features → tasks, points, dependencies
+plan         ──► docs/plans/<slug>/plan.json      epic → features → tasks, points, dependencies,
+                                                  suggested assignees and sprint
              ──► docs/plans/<slug>/plan.md        generated view with estimates
-plan apply   ──► GitHub issues                    after you approve; numbers written back
+             ──► docs/plans/<slug>/plan.html      generated page to review (not committed)
+plan apply   ──► GitHub issues                    after your one approval: in their sprint, assigned
 ```
 
 Nothing is written to GitHub before you approve the plan. Commit the files under `docs/` yourself.
+
+**`plan.html`** is written next to `plan.md` by `plan check`, `plan render` and `plan apply`. It is
+one self-contained file (no network, light and dark, no motion when the system asks for less):
+a summary, what changed since the last view (its revision goes up only when a task is added,
+removed, or changes title, points, dependencies, assignees or sprint), the dependency graph by
+wave (hover a task to light up its chain), each person's load and the sprint's capacity, a card per
+task, the plan-critic findings (the plan's optional `review` list), what `apply` will create, and
+the assumptions. Its fixed text follows `language`. Offline it says that load and the GitHub
+actions need GitHub. The page is for reading; you answer in the chat. `plan init` writes a
+`.gitignore` in the plan folder for `plan.html` and `.plan-snapshot.json`; for a folder made before
+0.9.0, `plan check` says which lines to add.
 
 **`/scrum-github:project-scan [--full]`** reads the repository through the read-only agent
 `codebase-scout` and writes the project context: overview, technology, structure, flows, data
@@ -262,8 +276,13 @@ read-only agent `plan-critic` reviews the draft (missing, out of scope, too larg
 untestable criteria, fragile descriptions) before you see it, unless `--quick`. Task descriptions
 are written to last in a backlog: the behaviour wanted, not the files and lines to edit, and
 what is out of scope for the task. A draft brief with open questions is planned only if you
-agree to turn each open question into an assumption. You review the table, the findings, the
-estimate and what `apply` would do; edit until you approve. Running it again on the same folder
+agree to turn each open question into an assumption. Before you see it, the skill suggests an
+assignee for each task from `team` (by areas and current load, never a login outside the team,
+never over a name you gave) and a sprint: the tasks that fit the open sprint's capacity in
+dependency order go into it, the rest to the backlog with the reason. You review everything once,
+in the chat and in `plan.html`: tasks with assignee and sprint, each person's load, the sprint's
+capacity, the findings, and what `apply` would do; say what to change, or approve. After the
+approval `apply` creates the issues already in their sprint and assigned, without asking again. Running it again on the same folder
 continues the existing plan and keeps its ids and issue numbers.
 
 ### The plan file
