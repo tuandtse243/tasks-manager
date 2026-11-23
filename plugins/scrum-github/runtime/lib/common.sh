@@ -154,6 +154,16 @@ resolve_sprint() {
   printf '%s' "$result"
 }
 
+# warn_unknown_logins LOGIN...  A warning for each login that is not in cfg.team, naming the team.
+# Never stops the command; says nothing when team is empty (spec team "Cảnh báo login ngoài team").
+warn_unknown_logins() {
+  local bad team l
+  bad="$(jq -rn -L "$JQ_LIB" --argjson cfg "$CONFIG_JSON" 'include "scrum"; unknown_logins($cfg; $ARGS.positional)[]' --args "$@")"
+  [ -n "$bad" ] || return 0
+  team="$(config_get '[.team[].login] | join(", ")')"
+  for l in $bad; do warn "$l is not in the team (team in .github/scrum.yml: $team); going on anyway"; done
+}
+
 # Load configuration (sets CONFIG_JSON). Defined in config.sh.
 # shellcheck source=config.sh
 . "$SCRUM_ROOT/lib/config.sh"

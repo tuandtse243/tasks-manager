@@ -19,6 +19,7 @@ Setup
   uninstall [--dry-run] [--yes]                   Remove what init installed (keeps scrum.yml and edited files)
   doctor [--json]                                 Check tools, login, configuration and what is installed; read-only
   next [--json]                                   The one thing to do next, with its command; read-only
+  team [--json]                                   Team members, areas, capacity and load in the open sprint; read-only
 
 Backlog and sprints
   backlog [--json]                                Open tasks without a sprint, with points, parent and blockers
@@ -162,6 +163,9 @@ case "$cmd" in
     ;;
   backlog)
     . "$SCRUM_ROOT/lib/cmd_backlog.sh"; cmd_backlog "$@"
+    ;;
+  team)
+    . "$SCRUM_ROOT/lib/cmd_team.sh"; cmd_team "$@"
     ;;
   status)
     . "$SCRUM_ROOT/lib/cmd_report.sh"; cmd_status "$@"

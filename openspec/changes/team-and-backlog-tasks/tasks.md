@@ -9,9 +9,9 @@
 
 ## 2. Lệnh team và cảnh báo login (design 1, 2, 4; spec team)
 
-- [ ] 2.1 Tạo `runtime/lib/jq/team.jq` (nguồn config hoặc github, chuẩn hoá login, tải theo sprint dùng `report_tasks`, login lạ) và test jq trong `tests/test_team.sh`. Kiểm tra: `bash tests/run.sh team` xanh
-- [ ] 2.2 Tạo `runtime/lib/cmd_team.sh` với `team_members` (chỉ gọi `repos/{r}/assignees` khi `team` rỗng) và lệnh `scrum team [--json]`; đăng ký trong `runtime/bin/scrum` và `--help`. Test với `fake-gh`: cấu hình, dự phòng GitHub, có sprint, không có sprint, không có lời gọi ghi. Kiểm tra: `bash tests/run.sh team` xanh
-- [ ] 2.3 Thêm `warn_unknown_logins` và gọi trong `task new`, `task assign`. Test: cảnh báo khi team có thành viên và login lạ, vẫn ghi; không cảnh báo khi team rỗng. Kiểm tra: `bash tests/run.sh task` xanh
+- [x] 2.1 Tạo `runtime/lib/jq/team.jq` (nguồn config hoặc github, chuẩn hoá login, tải theo sprint dùng `report_tasks`, login lạ) và test jq trong `tests/test_team.sh`. Kiểm tra: `bash tests/run.sh team` xanh
+- [x] 2.2 Tạo `runtime/lib/cmd_team.sh` với `team_members` (chỉ gọi `repos/{r}/assignees` khi `team` rỗng) và lệnh `scrum team [--json]`; đăng ký trong `runtime/bin/scrum` và `--help`. Test với `fake-gh`: cấu hình, dự phòng GitHub, có sprint, không có sprint, không có lời gọi ghi. Kiểm tra: `bash tests/run.sh team` xanh
+- [x] 2.3 Thêm `warn_unknown_logins` và gọi trong `task new`, `task assign`. Test: cảnh báo khi team có thành viên và login lạ, vẫn ghi; không cảnh báo khi team rỗng. Kiểm tra: `bash tests/run.sh task` xanh
 
 ## 3. `task new` về backlog (design 3; spec task-management "Tạo task")
 

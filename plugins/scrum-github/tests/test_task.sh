@@ -309,3 +309,41 @@ test_cmd_task_list_in_review_refused_when_off() {
   assert_status 1 "$STATUS"
   assert_contains "$ERR" "statuses.in_review"
 }
+
+# ---------- logins outside the team (spec team "Cảnh báo login ngoài team") ----------
+
+test_cmd_task_assign_warns_about_a_login_outside_the_team() {
+  ops_env
+  printf 'team:\n  - login: tuandt\n  - login: an-nguyen\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  run_scrum task assign 14 tuandtt
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$ERR" "tuandtt is not in the team"
+  assert_contains "$ERR" "tuandt, an-nguyen"
+  assert_contains "$(gh_calls)" 'STDIN {"assignees":["tuandtt"]}' "still assigned"
+}
+
+test_cmd_task_assign_no_warning_without_team() {
+  ops_env
+  run_scrum task assign 14 bob
+  assert_status 0 "$STATUS" "$ERR"
+  assert_not_contains "$ERR" "not in the team"
+}
+
+test_cmd_task_assign_known_login_any_case_no_warning() {
+  ops_env
+  printf 'team:\n  - login: tuandt\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  run_scrum task assign 14 TuanDT
+  assert_status 0 "$STATUS" "$ERR"
+  assert_not_contains "$ERR" "not in the team"
+}
+
+test_cmd_task_new_warns_about_a_login_outside_the_team() {
+  task_env
+  printf 'team:\n  - login: ruby\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  route_json 'api -X POST repos/acme/blog/issues --input -' '{"number":1,"title":"x","html_url":"u"}'
+  run_scrum task new --title "x" --assignee bob --assignee ruby
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$ERR" "bob is not in the team (team in .github/scrum.yml: ruby)"
+  assert_not_contains "$ERR" "ruby is not"
+  assert_contains "$(gh_calls)" '"assignees":["bob","ruby"]'
+}

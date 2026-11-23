@@ -183,6 +183,40 @@ def progress($cfg; $sprint; $issues; $today):
       unestimated: ([$t[] | select(._pts == null)] | length),
       days_left: days_left($cfg; $s; $today) };
 
+# ---------- team (spec team) ----------
+# GitHub logins are not case-sensitive; a leading "@" is not part of the login.
+def login_key: ltrimstr("@") | ascii_downcase;
+def same_login($a; $b): ($a | login_key) == ($b | login_key);
+
+# The team: from cfg.team when it has a member, else the repo's assignable users ($assignees:
+# GitHub's list of users or of logins; null when it was not read).
+# Output: {source: "config"|"github", members: [{login, areas, capacity}]}
+def team_list($cfg; $assignees):
+  if (($cfg.team // []) | length) > 0 then
+    {source: "config",
+     members: [$cfg.team[] | {login: (.login | ltrimstr("@")), areas: (.areas // []), capacity: (.capacity // null)}]}
+  else
+    {source: "github",
+     members: [($assignees // [])[] | (if type == "object" then .login else . end) | select(type == "string")
+               | {login: ltrimstr("@"), areas: [], capacity: null}]}
+  end;
+
+# Logins of $logins that are not in cfg.team, in their order, each once; [] when team is empty.
+def unknown_logins($cfg; $logins):
+  if (($cfg.team // []) | length) == 0 then []
+  else ([$cfg.team[].login | login_key]) as $known
+    | reduce ($logins[] | ltrimstr("@") | select(. != "")) as $l ([];
+        if ($known | index($l | ascii_downcase)) != null or any(.[]; same_login(.; $l)) then . else . + [$l] end)
+  end;
+
+# Load of one login among annotated sprint tasks (report_tasks): open tasks and the points of all
+# its tasks in the sprint (done ones still used capacity).
+def member_load($login; $tasks):
+  [$tasks[] | select(any(._who[]; same_login(.; $login)))] as $mine
+  | {tasks: ([$mine[] | select(._role != "done")] | length),
+     points: ([$mine[]._pts // 0] | add // 0),
+     done_points: ([$mine[] | select(._role == "done") | ._pts // 0] | add // 0)};
+
 # ---------- burndown ----------
 # Issues may carry `_events` (GitHub issue events, oldest first). The state of an issue at the
 # end of day $d is rebuilt by undoing, from its current state, the events after $d: labeled X

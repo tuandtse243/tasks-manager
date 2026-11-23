@@ -44,6 +44,8 @@ cmd_task_new() {
   # Check the points before any network call.
   jqlib task-payload -n --argjson cfg "$CONFIG_JSON" --argjson task "$task" --argjson milestone 0 \
     | jq -r '.error // empty' | { read -r e || true; [ -z "$e" ] || die "$e"; }
+  # shellcheck disable=SC2046  # one login per word
+  warn_unknown_logins $(printf '%s' "$task" | jq -r '.assignees[]')
 
   ms="$(fetch_milestones "$repo")"
   sprint="$(resolve_sprint "$ms" "$sprint_name")"
@@ -240,6 +242,8 @@ cmd_task_assign() {
   load_config
   repo="$(repo_slug)"
   task_issue "$repo" "$n" >/dev/null
+  # shellcheck disable=SC2086  # one login per word
+  [ "$unassign" = 1 ] || warn_unknown_logins $logins
   # shellcheck disable=SC2086  # one login per word
   body="$(jq -n '{assignees: $ARGS.positional}' --args $logins)"
   if [ "$unassign" = 1 ]; then
