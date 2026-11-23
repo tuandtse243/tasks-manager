@@ -85,7 +85,7 @@ Releases
   release [VERSION] [--since TAG] [--sprint S]... [--draft] [--notes-file FILE] [--json] [--yes]
                                                   Version, tasks and release notes from the Done tasks
                                                   since the last version tag (or of the sprints); with
-                                                  --yes create the tag and the GitHub Release
+                                                  VERSION --yes create the tag and the GitHub Release
 
 Project board (GitHub Projects, optional: project.enabled in .github/scrum.yml)
   project init [--dry-run] [--allow-builtin-workflows]

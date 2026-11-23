@@ -20,7 +20,7 @@ The runtime already has `is_completed` / `is_not_planned`, `is_task`, `report_ta
 
 ### 2. Tasks since the previous tag
 
-The start time is the commit date of the tag (`base_commit.commit.committer.date` from compare). Read `issues?state=closed&since=<time>` (paginated), then keep `closed_at > time`, `is_completed`, `is_task`. With `--sprint`, read the issues of those milestones as `sprint-status` does, with no time filter. The selection lives in `release-plan.jq`.
+The start time is when the tag was made: the tagger date of an annotated tag (`git/tags/{sha}`), else the `created_at` of its release, else the commit date (`base_commit.commit.committer.date` from compare). A task closed by the last merge before the tag then belongs to that tag. When version tags exist but none can be confirmed on the default branch (a compare failed, the 20-tag cap was reached, or none is on it), the command stops and asks for `--since TAG` instead of treating the repository as never released. Read `issues?state=closed&since=<time>` (paginated), then keep `closed_at > time`, `is_completed`, `is_task`. With `--sprint`, read the issues of those milestones as `sprint-status` does, with no time filter. The selection lives in `release-plan.jq`.
 
 ### 3. Pull requests that closed a task
 
@@ -36,7 +36,8 @@ Markdown, groups in the order of the spec. The parent feature comes from "Part o
 
 ### 6. Writes
 
-1. Check the tag: `GET git/ref/tags/<tag>`. If it exists and `GET releases/tags/<tag>` finds a release, stop. If it exists without a release, skip to step 5.
+0. `--yes` needs `VERSION` (the version of the preview), so what is published is what was previewed; the skill also passes the previewed notes with `--notes-file`.
+1. Check the tag: list `releases` (drafts included; `releases/tags/<tag>` does not return drafts) and stop when one is for the tag. `GET git/ref/tags/<tag>`: if the tag exists without a release (and is on the default branch), skip to step 5. Tag and branch names are URL-encoded in paths.
 2. Head SHA of the default branch.
 3. `POST git/tags` (annotated, message "Release <tag>").
 4. `POST git/refs`.

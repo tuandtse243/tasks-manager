@@ -678,8 +678,9 @@ words; the skill shows the result again. Nothing is written yet.
 token; if it fails with 403, run `/scrum-github:doctor`. If the tag was created but the release
 was not, run the same command again: it creates only the release.
 
-With the CLI: `scrum release` to see the version and notes, then `scrum release --yes` (or
-`scrum release 1.5.0 --notes-file notes.md --yes`). `scrum next` also suggests releasing when the
+With the CLI: `scrum release` to see the version and notes, then publish that version with
+`scrum release 1.5.0 --yes` (`--yes` needs the version, so you publish what you saw; add
+`--notes-file notes.md` for your own notes). `scrum next` also suggests releasing when the
 last closed sprint has Done tasks that are in no version yet.
 
 The plugin does not edit version files (`package.json`, `VERSION`) or `CHANGELOG.md` in the

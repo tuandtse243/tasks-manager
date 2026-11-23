@@ -16,8 +16,9 @@ All notable changes to the `scrum-github` plugin. The format follows
   next version (major for a task labelled `breaking`, minor for any task that is not a bug, patch
   otherwise) and writes release notes: breaking changes, features grouped by parent feature, bug
   fixes, each line with the task and pull request numbers, in the configured `language`. Without
-  `--yes` it only prints them. With `--yes` it creates an annotated tag on the head commit of the
-  default branch on GitHub and a GitHub Release (a draft with `--draft`). The skill shows the
+  `--yes` it only prints them. With `VERSION --yes` (the version of the preview) it creates an
+  annotated tag on the head commit of the default branch on GitHub and a GitHub Release (a draft
+  with `--draft`); a release or draft already made for that tag stops it before any write. The skill shows the
   preview, explains the version, lets you change the version or edit the notes, and publishes
   only after you agree.
 - The configuration block `release`: `tag_prefix` (default `v`, may be empty), `breaking_label`

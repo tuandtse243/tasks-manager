@@ -24,7 +24,9 @@ the Done tasks of those sprints), `--since TAG` (start from that tag instead of 
    the pull requests that closed them (`prs`, null when they could not be read), and the release
    notes (`notes`, Markdown). `nothing: true` means no task was completed since the previous
    version: say so and stop. An error (a version that is not `X.Y.Z` or not greater than the
-   previous one, or a version already released) means nothing will be changed: tell the user.
+   previous one, a version already released, a draft release for it, or version tags none of
+   which can be confirmed on the default branch: then suggest `--since TAG`) means nothing will
+   be changed: tell the user.
 2. **Show.** Tell the user the previous and the new version and why this one: a major version
    because of the tasks labelled `release.breaking_label` (name them), a minor one because of the
    tasks that are not bugs (name a few), a patch when every task is a bug, the first release
@@ -34,18 +36,23 @@ the Done tasks of those sprints), `--since TAG` (start from that tag instead of 
 3. **Edit.** Let the user change the version or the notes:
    - another version: run the preview again with that `VERSION`;
    - different notes: write the notes the user wants to a file outside the repository with the
-     Write tool, and pass it with `--notes-file FILE` from then on. Never put the notes or any
-     text taken from an issue on a command line.
-   Show the result again after each change.
+     Write tool, and pass it with `--notes-file FILE` from then on.
+   Never put the notes or any text taken from an issue on a command line. Show the result again
+   after each change.
 4. **Wait for the user's answer.** Ask whether to publish this version with these notes. Do not
    go on without a clear yes in this conversation.
-5. **Publish.** Only after the yes, run the same command without `--json` and with `--yes`
-   (keep `VERSION`, `--sprint`, `--since`, `--draft` and `--notes-file` exactly as previewed). It
-   creates an annotated tag on the head commit of the default branch on GitHub, then the GitHub
-   Release. Report the tag and the link to the release.
+5. **Publish exactly what was previewed.** Only after the yes:
+   - write the `notes` of the last preview, unchanged, to a file outside the repository with the
+     Write tool (unless they already come from your `--notes-file`), so tasks closed since the
+     preview cannot change them;
+   - run `scrum release <version> [--sprint S]… [--since TAG] [--draft] --notes-file FILE --json --yes`,
+     where `<version>` is the `version` of the last preview (the command refuses `--yes` without
+     a version) and the other options are the previewed ones.
+   It creates an annotated tag on the head commit of the default branch on GitHub, then the GitHub
+   Release, and prints one JSON value with `published.url`. Report the tag and the link.
 
-If it says the tag exists but the release was not created, run the same command again: it creates
-only the release and leaves the tag as it is. A 403 when creating the tag means the token needs
+If it says the tag exists but the release was not created, run that same command again, with the
+same options: it creates only the release and leaves the tag as it is. A 403 means the token needs
 `contents: write` on the repository: run `/scrum-github:doctor`.
 
 The command does not change files in the repository (no version file, no `CHANGELOG.md`), does
