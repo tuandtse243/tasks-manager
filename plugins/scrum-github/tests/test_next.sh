@@ -289,3 +289,42 @@ test_cmd_next_reads_no_tags_while_you_have_work_in_progress() {
   assert_eq "continue" "$(printf '%s' "$OUT" | jq -r .step)"
   assert_not_contains "$(gh_calls)" "/tags"
 }
+
+# spec "Already released" through scrum next: the latest tag is after every Done task.
+test_cmd_next_no_release_when_the_sprint_is_released() {
+  next_env
+  { issue 20 New 3 alice; } | issues > "$FAKE_GH_DIR/issues.json"
+  printf '[%s,{"number":2,"title":"Sprint 2","state":"closed","closed_at":"2026-11-14T10:00:00Z","description":""}]' "$SPRINT" > "$FAKE_GH_DIR/milestones.json"
+  route_json 'api --paginate repos/acme/blog/issues?milestone=2*' "$( { done_at 7 2026-11-12T10:00:00Z; done_at 8 2026-11-13T10:00:00Z; } | issues)"
+  route_json 'api repos/acme/blog' '{"default_branch":"main"}'
+  route_json 'api --paginate repos/acme/blog/tags*' '[{"name":"v1.5.0"},{"name":"v1.4.2"}]'
+  route_json 'api repos/acme/blog/compare/v1.5.0...main' '{"status":"identical","base_commit":{"commit":{"committer":{"date":"2026-11-14T12:00:00Z"}}}}'
+  run_scrum next --json
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "start" "$(printf '%s' "$OUT" | jq -r .step)"
+}
+
+# A closed sprint with no Done task (only not planned): no release step.
+test_cmd_next_no_release_without_done_tasks() {
+  next_env
+  { issue 20 New 3 alice; } | issues > "$FAKE_GH_DIR/issues.json"
+  printf '[%s,{"number":2,"title":"Sprint 2","state":"closed","closed_at":"2026-11-14T10:00:00Z","description":""}]' "$SPRINT" > "$FAKE_GH_DIR/milestones.json"
+  route_json 'api --paginate repos/acme/blog/issues?milestone=2*' "$(done_at 7 2026-11-12T10:00:00Z | jq -c '.state_reason = "not_planned"' | issues)"
+  route_json 'api repos/acme/blog' '{"default_branch":"main"}'
+  route_json 'api --paginate repos/acme/blog/tags*' '[]'
+  run_scrum next --json
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "start" "$(printf '%s' "$OUT" | jq -r .step)"
+}
+
+# The default branch cannot be read: the release step is skipped.
+test_cmd_next_skips_release_when_repo_cannot_be_read() {
+  next_env
+  { issue 20 New 3 alice; } | issues > "$FAKE_GH_DIR/issues.json"
+  printf '[%s,{"number":2,"title":"Sprint 2","state":"closed","closed_at":"2026-11-14T10:00:00Z","description":""}]' "$SPRINT" > "$FAKE_GH_DIR/milestones.json"
+  route_json 'api --paginate repos/acme/blog/issues?milestone=2*' "$(done_at 7 2026-11-12T10:00:00Z | issues)"
+  route 'api repos/acme/blog' '!fail'
+  run_scrum next --json
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "start" "$(printf '%s' "$OUT" | jq -r .step)"
+}

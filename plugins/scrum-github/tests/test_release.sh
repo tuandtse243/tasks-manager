@@ -349,3 +349,218 @@ test_cmd_release_since_tag() {
   assert_status 1 "$STATUS"
   assert_contains "$ERR" "no version tag named v9.9.9"
 }
+
+# ---------- spec scenarios and edge cases end to end (test engineer) ----------
+
+# spec "Several tags": the highest semver, not the lexical order, through scrum release.
+test_cmd_release_several_tags_highest_semver() {
+  release_env
+  route_first 'api --paginate repos/acme/blog/tags*' 'tags3.json'
+  printf '[{"name":"v0.9.0"},{"name":"v0.11.0"},{"name":"v0.10.0"}]' > "$FAKE_GH_DIR/tags3.json"
+  route_json 'api repos/acme/blog/compare/v0.11.0...main' '{"status":"identical","base_commit":{"commit":{"committer":{"date":"2026-11-10T08:00:00Z"}}}}'
+  run_scrum release --json
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "v0.11.0 v0.12.0" "$(printf '%s' "$OUT" | jq -r '"\(.previous.tag) \(.tag)"')"
+  assert_not_contains "$(gh_calls)" "compare/v0.9.0" "only the highest tag on the branch is compared"
+}
+
+# Pre-release and odd tags are not version tags.
+test_version_tags_ignore_pre_releases_and_odd_names() {
+  local out
+  out="$(printf '%s' '[{"name":"v1.2"},{"name":"v1.2.3-rc1"},{"name":"release-1"},{"name":"v2.0.0-beta.1"},{"name":"v1.2.3"},{"name":"V1.9.9"},{"name":"vv1.0.0"}]' \
+    | jq -c -L "$PLUGIN_DIR/runtime/lib/jq" 'include "scrum"; version_tags("v") | map(.name)')"
+  assert_eq '["v1.2.3"]' "$out"
+}
+
+# spec "No tag yet": the first release reads every closed issue and suggests release.first_version.
+test_cmd_release_first_release_without_tags() {
+  release_env
+  route_first 'api --paginate repos/acme/blog/tags*' 'notags.json'
+  printf '[{"name":"nightly"},{"name":"v1.2.3-rc1"}]' > "$FAKE_GH_DIR/notags.json"
+  route_json 'api --paginate repos/acme/blog/issues/9/timeline*' '[]'
+  run_scrum release
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "Previous version: none"
+  assert_contains "$OUT" "New version: v0.1.0: the first release"
+  assert_not_contains "$OUT" "Full changelog"
+  assert_contains "$(gh_calls)" "issues?state=closed&per_page=100"
+  assert_not_contains "$(gh_calls)" "since="
+  assert_eq "" "$(gh_writes)"
+}
+
+# tag_prefix "": tags without a prefix are the version tags, the new tag has no prefix.
+test_cmd_release_with_empty_tag_prefix() {
+  release_env
+  printf 'version: 1\nrelease:\n  tag_prefix: ""\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  route_first 'api --paginate repos/acme/blog/tags*' 'tags4.json'
+  printf '[{"name":"1.4.2"},{"name":"v9.0.0"}]' > "$FAKE_GH_DIR/tags4.json"
+  route_json 'api repos/acme/blog/compare/1.4.2...main' '{"status":"ahead","base_commit":{"commit":{"committer":{"date":"2026-11-10T08:00:00Z"}}}}'
+  run_scrum release --yes
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$(gh_calls)" 'STDIN {"tag":"1.5.0","message":"Release 1.5.0"'
+  assert_contains "$(gh_calls)" 'STDIN {"ref":"refs/tags/1.5.0"'
+  assert_contains "$(grep '^STDIN {"tag_name"' "$FAKE_GH_LOG" | sed 's/^STDIN //' | jq -r .body)" "compare/1.4.2...1.5.0"
+}
+
+# Tags without the prefix count when the prefix is "v" (spec: <tag_prefix>X.Y.Z or X.Y.Z).
+test_cmd_release_unprefixed_tag_with_v_prefix() {
+  release_env
+  route_first 'api --paginate repos/acme/blog/tags*' 'tags5.json'
+  printf '[{"name":"1.4.2"}]' > "$FAKE_GH_DIR/tags5.json"
+  route_json 'api repos/acme/blog/compare/1.4.2...main' '{"status":"ahead","base_commit":{"commit":{"committer":{"date":"2026-11-10T08:00:00Z"}}}}'
+  run_scrum release --json
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "1.4.2 v1.5.0" "$(printf '%s' "$OUT" | jq -r '"\(.previous.tag) \(.tag)"')"
+}
+
+# Label names are compared case-insensitively: BREAKING bumps major, Bug alone bumps patch.
+test_cmd_release_label_case() {
+  release_env
+  printf '%s' "$( { rel_issue 12 'BREAKING' 2026-11-15T10:00:00Z; rel_issue 14 Bug; } | issues)" > "$FAKE_GH_DIR/closed.json"
+  route_json 'api --paginate repos/acme/blog/issues/12/timeline*' '[]'
+  run_scrum release --json
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "v2.0.0 major [12] [14]" "$(printf '%s' "$OUT" | jq -c -r '"\(.tag) \(.bump) \(.reasons.breaking | tojson) \(.reasons.bugs | tojson)"')"
+  printf '%s' "$(rel_issue 14 Bug | issues)" > "$FAKE_GH_DIR/closed.json"
+  run_scrum release --json
+  assert_eq "v1.4.3 patch" "$(printf '%s' "$OUT" | jq -r '"\(.tag) \(.bump)"')"
+}
+
+# Not planned, epics, features, meta issues and pull requests are left out through the command.
+test_cmd_release_leaves_out_non_tasks() {
+  release_env
+  printf '%s' "$( { rel_issue 12; rel_issue 13 '' 2026-11-16T10:00:00Z not_planned; rel_issue 20 'type: feature'
+                    rel_issue 21 'type: epic'; rel_issue 22 'scrum: meta'
+                    rel_issue 23 | jq -c '. + {pull_request: {url: "x"}}'; } | issues)" > "$FAKE_GH_DIR/closed.json"
+  route_json 'api --paginate repos/acme/blog/issues/12/timeline*' '[]'
+  run_scrum release --json
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "[12]" "$(printf '%s' "$OUT" | jq -c '[.tasks[].number]')"
+}
+
+# --sprint twice: the Done tasks of both sprints, and nothing else.
+test_cmd_release_two_sprints() {
+  release_env
+  route_json 'api --paginate repos/acme/blog/milestones*' \
+    '[{"number":5,"title":"Sprint 5","state":"closed","description":"scrum:start=2026-11-02 end=2026-11-06"},{"number":6,"title":"Sprint 6","state":"closed","description":"scrum:start=2026-11-09 end=2026-11-13"},{"number":7,"title":"Sprint 7","state":"open","description":"scrum:start=2026-11-16 end=2026-11-20"}]'
+  route_json 'api --paginate repos/acme/blog/issues?milestone=5*' "$( { rel_issue 31; rel_issue 32 '' 2026-11-05T10:00:00Z not_planned; } | issues)"
+  route_json 'api --paginate repos/acme/blog/issues?milestone=6*' "$(rel_issue 33 bug | issues)"
+  route_json 'api --paginate repos/acme/blog/issues?milestone=7*' "$(rel_issue 34 | issues)"
+  route_json 'api --paginate repos/acme/blog/issues/3*/timeline*' '[]'
+  run_scrum release --sprint "Sprint 5" --sprint "Sprint 6" --json
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "[31,33]" "$(printf '%s' "$OUT" | jq -c '[.tasks[].number]')"
+  assert_not_contains "$(gh_calls)" "milestone=7"
+  assert_eq "" "$(gh_writes)"
+}
+
+# --sprint with no Done task: nothing to release, exit 0, no writes even with --yes.
+test_cmd_release_sprint_without_done_tasks() {
+  release_env
+  route_json 'api --paginate repos/acme/blog/milestones*' '[{"number":5,"title":"Sprint 5","state":"closed","description":""}]'
+  route_json 'api --paginate repos/acme/blog/issues?milestone=5*' "$(rel_issue 32 '' 2026-11-05T10:00:00Z not_planned | issues)"
+  run_scrum release --sprint "Sprint 5" --yes
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "Nothing to release"
+  assert_eq "" "$(gh_writes)"
+}
+
+# Empty groups are not printed by the command: only bug fixes.
+test_cmd_release_only_bugs_prints_only_bug_fixes() {
+  release_env
+  printf '%s' "$(rel_issue 14 bug | issues)" > "$FAKE_GH_DIR/closed.json"
+  run_scrum release
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "## Bug fixes"
+  assert_not_contains "$OUT" "## Features"
+  assert_not_contains "$OUT" "## Breaking changes"
+}
+
+# language: vi gives Vietnamese headings in the notes sent to GitHub.
+test_cmd_release_notes_in_vietnamese() {
+  release_env
+  printf 'version: 1\nlanguage: vi\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  run_scrum release --yes
+  assert_status 0 "$STATUS" "$ERR"
+  local body
+  body="$(grep '^STDIN {"tag_name"' "$FAKE_GH_LOG" | sed 's/^STDIN //' | jq -r .body)"
+  assert_contains "$body" "## Tính năng"
+  assert_contains "$body" "## Sửa lỗi"
+  assert_contains "$body" "**Toàn bộ thay đổi**"
+}
+
+# spec "Preview": no write call, also with --draft, --notes-file or a given version.
+test_cmd_release_preview_with_options_writes_nothing() {
+  release_env
+  printf 'Notes\n' > "$T/notes.md"
+  run_scrum release --draft
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "New version: v1.5.0 (draft)"
+  run_scrum release --notes-file "$T/notes.md"
+  assert_status 0 "$STATUS" "$ERR"
+  run_scrum release 2.0.0 --draft --notes-file "$T/notes.md" --json
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "v2.0.0 given true" "$(printf '%s' "$OUT" | jq -r '"\(.tag) \(.bump) \(.draft)"')"
+  assert_eq "" "$(gh_writes)"
+}
+
+# A given version must be semver: the command stops with --yes and writes nothing.
+test_cmd_release_not_semver_given_stops() {
+  release_env
+  run_scrum release 1.5 --yes
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "1.5 is not a version"
+  assert_eq "" "$(gh_writes)"
+}
+
+# spec "Tag already released": also stops in the preview, and a version given with its prefix.
+test_cmd_release_already_released_preview_and_prefixed_version() {
+  release_env
+  route_first 'api --paginate repos/acme/blog/tags*' 'tags2.json'
+  printf '[{"name":"v1.5.0"},{"name":"v1.4.2"}]' > "$FAKE_GH_DIR/tags2.json"
+  printf '{"html_url":"https://github.com/acme/blog/releases/tag/v1.5.0"}' > "$FAKE_GH_DIR/released.json"
+  route_first 'api repos/acme/blog/releases/tags/v1.5.0' 'released.json'
+  run_scrum release v1.5.0
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "v1.5.0 is already released"
+  assert_eq "" "$(gh_writes)"
+}
+
+# spec "Release failed after the tag": the rerun does not touch the tag (no tag, no ref, no PATCH).
+test_cmd_release_rerun_leaves_the_tag_alone() {
+  release_env
+  route_first 'api --paginate repos/acme/blog/tags*' 'tags2.json'
+  printf '[{"name":"v1.5.0"},{"name":"v1.4.2"}]' > "$FAKE_GH_DIR/tags2.json"
+  route_json 'api repos/acme/blog/commits/v1.5.0' '{"commit":{"committer":{"date":"2026-11-20T08:00:00Z"}}}'
+  run_scrum release 1.5.0
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "Tag v1.5.0 already exists (from an earlier run)"
+  assert_eq "" "$(gh_writes)" "the preview of a rerun writes nothing"
+  run_scrum release 1.5.0 --yes
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "repos/acme/blog/releases" "$(gh_writes | sed 's/.*-X POST \([^ ]*\).*/\1/' | paste -sd '|' -)"
+  assert_not_contains "$(gh_calls)" "git/ref/heads/main"
+  assert_eq "v1.5.0" "$(grep '^STDIN {"tag_name"' "$FAKE_GH_LOG" | sed 's/^STDIN //' | jq -r .tag_name)"
+}
+
+# A 403 on the release read when the tag exists: stop, write nothing.
+test_cmd_release_cannot_read_release_of_existing_tag() {
+  release_env
+  route_first 'api --paginate repos/acme/blog/tags*' 'tags2.json'
+  printf '[{"name":"v1.5.0"},{"name":"v1.4.2"}]' > "$FAKE_GH_DIR/tags2.json"
+  route_first 'api repos/acme/blog/releases/tags/v1.5.0' '!403'
+  run_scrum release 1.5.0 --yes
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "/scrum-github:doctor"
+  assert_eq "" "$(gh_writes)"
+}
+
+# A task whose timeline cannot be read is still released, without pull request numbers.
+test_cmd_release_timeline_unreadable_keeps_the_task() {
+  release_env
+  route_first 'api --paginate repos/acme/blog/issues/12/timeline*' '!fail'
+  run_scrum release --json
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "null" "$(printf '%s' "$OUT" | jq -c '.tasks[] | select(.number == 12) | .prs')"
+  assert_contains "$(printf '%s' "$OUT" | jq -r .notes)" "- Task 12 (#12)"
+}
