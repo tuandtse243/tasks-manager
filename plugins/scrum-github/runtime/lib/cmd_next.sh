@@ -3,7 +3,7 @@
 # Stops as early as the priority order allows, so a repo that is not set up needs no gh call.
 
 # next_release_info REPO MILESTONES  For the release step: {sprint, tag, since, issues} of the most
-# recently closed sprint and the latest version tag on the default branch, with the time the tag
+# recently closed sprint and the latest version tag on the release branch, with the time the tag
 # was made (release_tag_time); null when no sprint is closed or GitHub cannot be read (the step is
 # then skipped).
 next_release_info() {
@@ -11,7 +11,7 @@ next_release_info() {
   last="$(printf '%s' "$2" | jq -c '[.[] | select(.state == "closed")] | sort_by(.closed_at // "") | .[-1] // null')"
   [ "$last" != null ] || { printf 'null'; return 0; }
   . "$SCRUM_ROOT/lib/cmd_release.sh"
-  branch="$(release_default_branch "$repo" 2>/dev/null)" || { printf 'null'; return 0; }
+  branch="$(branch_role release)"
   vtags="$(release_version_tags "$repo" 2>/dev/null)" || { printf 'null'; return 0; }
   # Version tags that cannot be confirmed on the branch: whether the sprint is released is unknown.
   prev="$(release_latest_tag "$repo" "$branch" "$vtags")" || { printf 'null'; return 0; }
@@ -20,8 +20,45 @@ next_release_info() {
     '{sprint: $m.title, tag: ($p.name // null), since: ($p.date // null), issues: $i}'
 }
 
+# next_flow_info REPO  Presets with a working branch (spec next-step-guidance "Branch flow steps"):
+# {unprotected: [long-lived branches with no rule], back_merge: [open back-merge pull requests],
+#  promotion_open, release_open, issues: [open issues with a location label]}. What GitHub does
+# not answer is left out (no step from it) rather than guessed.
+next_flow_info() {
+  local repo="$1" b rules open unprotected='[]' back='[]' promo=false rel=false issues='[]' release working staging
+  release="$(branch_role release)"; working="$(branch_role working)"; staging="$(branch_role staging)"
+  while IFS= read -r b; do
+    [ -n "$b" ] || continue
+    rules="$(branch_rules "$repo" "$b" 2>/dev/null)" || continue
+    if [ "$(printf '%s' "$rules" | jq 'length')" = 0 ]; then
+      unprotected="$(printf '%s' "$unprotected" | jq -c --arg b "$b" '. + [$b]')"
+    fi
+  done <<BRANCHES
+$(branch_role chain)
+BRANCHES
+  while IFS= read -r b; do
+    [ -n "$b" ] || continue
+    open="$(open_prs "$repo" "$release" "$b" 2>/dev/null)" || continue
+    back="$(jq -nc --argjson a "$back" --argjson b "$open" '$a + $b')"
+  done <<BRANCHES
+$(branch_role lower)
+BRANCHES
+  if [ -n "$staging" ]; then
+    if open="$(open_prs "$repo" "$working" "$staging" 2>/dev/null)"; then
+      [ "$(printf '%s' "$open" | jq length)" = 0 ] || promo=true
+    else promo=true; fi
+  fi
+  if open="$(open_prs_matching "$repo" release/ "$release" 2>/dev/null)"; then
+    [ "$(printf '%s' "$open" | jq length)" = 0 ] || rel=true
+  else rel=true; fi
+  . "$SCRUM_ROOT/lib/cmd_release.sh"
+  issues="$(location_issues "$repo" 2>/dev/null)" || issues='[]'
+  jq -nc --argjson u "$unprotected" --argjson b "$back" --argjson p "$promo" --argjson r "$rel" --argjson i "$issues" \
+    '{unprotected: $u, back_merge: $b, promotion_open: $p, release_open: $r, issues: $i}'
+}
+
 cmd_next() {
-  local json=0 init=true pushed=true sprint=null issues='[]' me="" remote result ms='[]' waiting=0 run_open=null ai_blocked='{}' ai f release=null
+  local json=0 init=true pushed=true sprint=null issues='[]' me="" remote result ms='[]' waiting=0 run_open=null ai_blocked='{}' ai f release=null flow=null
   while [ $# -gt 0 ]; do
     case "$1" in
       --json) json=1 ;;
@@ -41,6 +78,9 @@ cmd_next() {
     printf '%s\n' "$remote" | grep -qx scrum-status-sync.yml || pushed=false
   fi
 
+  if [ "$pushed" = true ] && has_working_branch; then
+    flow="$(next_flow_info "$REPO")"
+  fi
   if [ "$pushed" = true ]; then
     ms="$(fetch_milestones "$REPO")"
     sprint="$(jqlib sprint-resolve -n --argjson ms "$ms" --argjson cfg "$CONFIG_JSON" --arg title "" --arg today "$(today)")"
@@ -70,12 +110,13 @@ cmd_next() {
     jqlib next-step -n --argjson init "$init" --argjson pushed "$pushed" --argjson sprint "$sprint" \
       --argjson issues "$issues" --arg me "$me" --arg today "$(today)" --argjson cfg "$CONFIG_JSON" \
       --argjson backlog_count "${waiting:-0}" --argjson run_open "$run_open" --argjson ai_blocked "$ai_blocked" \
-      --argjson release "$release"
+      --argjson release "$release" --argjson flow "$flow"
   }
   result="$(next_step)"
   # The release step reads tags and a sprint's issues, so only when no step above it applies:
-  # these are the steps it comes before (next-step.jq has the order).
-  case "$(printf '%s' "$result" | jq -r .step)" in
+  # these are the steps it comes before (next-step.jq has the order). With a working branch,
+  # tasks become Done only when released, so the release step comes from the branch flow.
+  has_working_branch || case "$(printf '%s' "$result" | jq -r .step)" in
     sprint-new|estimate|assign|run|start|done)
       release="$(next_release_info "$REPO" "$ms")"
       [ "$release" = null ] || result="$(next_step)" ;;

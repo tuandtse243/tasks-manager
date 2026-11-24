@@ -5,12 +5,22 @@
 #    --argjson since TIME|null      keep tasks closed after it (null with --sprint or no tag)
 #    --argjson until TIME|null      keep tasks closed until it (a tag created by an earlier run)
 #    --arg version VERSION          the version the user gave, or ""
-# Output: {error, nothing, previous, suggested, version, tag, bump, reasons, tasks}
+#    [--argjson contained [N]]      presets with a working branch (spec release-pr "Tasks of a
+#        release"): the tasks are the issues with these numbers (In review, contained in the start
+#        ref), not the closed ones; $since and $until are then ignored
+#    [--argjson other [{number, title}]]  merged pull requests in the release that link no task
+#        (spec release-pr "Pull requests without a task"): listed under "Other", never change the
+#        bump; a release with only these is a patch
+# Output: {error, nothing, previous, suggested, version, tag, bump, reasons, tasks, other}
 #   bump: first | major | minor | patch | given; reasons: task numbers by kind
 #   tasks: [{number, title, kind: breaking | feature | bug, parent}], by number
 include "scrum";
 ($cfg.release.tag_prefix // "") as $prefix
-| ($issues | release_tasks($cfg; $since; $until) | sort_by(.number)) as $found
+| ($ARGS.named.contained // null) as $contained
+| ($ARGS.named.other // [] | sort_by(.number) | map({number, title})) as $other
+| (if $contained == null then $issues | release_tasks($cfg; $since; $until)
+   else [$issues[] | select(.number as $n | $contained | index($n)) | select(is_task($cfg))] | unique_by(.number)
+   end | sort_by(.number)) as $found
 | [$found[]
    | {number, title,
       kind: (if has_label_ci($cfg.release.breaking_label) then "breaking"
@@ -32,11 +42,12 @@ include "scrum";
    else null end) as $error
 | (if $version != "" and $given != null then $given else $s.v end) as $v
 | { error: $error,
-    nothing: (($tasks | length) == 0),
+    nothing: (($tasks | length) == 0 and ($other | length) == 0),
     previous: (if $prev == null then null else {tag: $prev.name, version: ($prev.version | semver_text), date: ($prev.date // null)} end),
     suggested: ($s.v | semver_text),
     version: ($v | semver_text),
     tag: ($prefix + ($v | semver_text)),
     bump: (if $version != "" then "given" else $s.bump end),
     reasons: $reasons,
-    tasks: $tasks }
+    tasks: $tasks,
+    other: $other }

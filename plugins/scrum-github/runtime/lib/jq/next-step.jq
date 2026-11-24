@@ -7,11 +7,14 @@
 #    [--argjson release {sprint, tag, since, issues}|null]  the most recently closed sprint, the
 #        latest version tag on the default branch (null: none yet) and its commit date, and the
 #        issues of that sprint; null or left out when not read (then there is no release step)
+#    [--argjson flow {unprotected, back_merge, promotion_open, release_open, issues}|null]
+#        presets with a working branch (cmd_next.sh next_flow_info); null or left out in trunk
 # Output: {step, message, command, issues: [numbers]}
 include "scrum";
 ($ARGS.named.run_open // null) as $run_open
 | ($ARGS.named.ai_blocked // {}) as $ai_blocked
 | ($ARGS.named.release // null) as $release
+| ($ARGS.named.flow // null) as $flow
 | 
 def step($id; $message; $command; $issues): {step: $id, message: $message, command: $command, issues: $issues};
 def refs: map("#\(.number) \"\(.title)\"") | join(", ");
@@ -25,12 +28,39 @@ def release_step:
   | if ($u | length) == 0 then empty
     else step("release"; "\($release.sprint) is closed and \($u | length) of its Done task\(if ($u | length) == 1 then " is" else "s are" end) in no version yet\(if $release.tag == null then "" else " (latest: \($release.tag))" end). Publish a version with the tag and release notes.";
               "/scrum-github:release"; $u) end;
+# Branch flow steps (spec next-step-guidance "Branch flow steps"), in this order, after the setup
+# steps: protect, merge an open back-merge, promote (environments), release.
+def flow_tasks($branch):
+  [$flow.issues[]? | select(.state == "open" and is_task($cfg) and task_role($cfg) == "in_review")
+   | select(task_location($cfg) == $branch)] | sort_by(.number);
+def flow_step:
+  if $flow == null then empty
+  else branching($cfg) as $b
+  | flow_tasks($b.working) as $on_working
+  | flow_tasks(release_source_branch($cfg)) as $ready
+  | if ($flow.unprotected | length) > 0 then
+      step("protect"; "\($flow.unprotected | join(", ")) \(if ($flow.unprotected | length) == 1 then "has" else "have" end) no branch rule: anyone with write access can push to \(if ($flow.unprotected | length) == 1 then "it" else "them" end) directly. Protect the long-lived branches of the \($b.preset) preset.";
+           "/scrum-github:protect"; [])
+    elif ($flow.back_merge | length) > 0 then
+      ($flow.back_merge[0]) as $p
+      | step("back-merge"; "The back-merge pull request #\($p.number) \"\($p.title)\" is open: \($p.html_url). Merge it with a merge commit (not squash) so that \($p.base) holds what was released.";
+             "gh pr merge \($p.number) --merge"; [$p.number])
+    elif $b.staging != null and ($flow.promotion_open | not) and ($on_working | length) > 0 then
+      step("promote"; "\($on_working | length) task\(if ($on_working | length) == 1 then " is" else "s are" end) on \($b.working) and not on \($b.staging) yet (\($on_working | map("#\(.number)") | join(", "))). Promote \($b.working) to \($b.staging) to test \(if ($on_working | length) == 1 then "it" else "them" end) there.";
+           "/scrum-github:promote"; [$on_working[].number])
+    elif ($flow.release_open | not) and ($ready | length) > 0 then
+      step("release"; "\($ready | length) task\(if ($ready | length) == 1 then " is" else "s are" end) on \(release_source_branch($cfg)) waiting to be released (\($ready | map("#\(.number)") | join(", "))). Open the release pull request into \($b.release).";
+           "/scrum-github:release"; [$ready[].number])
+    else empty end
+  end;
 
 if $init | not then
   step("init"; "Scrum on GitHub is not set up in this repository yet."; "/scrum-github:init"; [])
 elif $pushed | not then
   step("push"; "The workflows are not on the default branch on GitHub yet, so statuses will not change on their own. Commit and push .github/ (directly or through a pull request).";
        "git add .github && git commit -m \"Set up Scrum on GitHub\" && git push"; [])
+elif ([flow_step] | length) > 0 then
+  first(flow_step)
 elif $sprint == null then
   first(release_step, step("sprint-new"; "There is no open sprint."; "/scrum-github:sprint-new"; []))
 else

@@ -79,7 +79,7 @@ the full path, and the skills now use the full path from the first call). Elsewh
 |---|---|---|
 | `/scrum-github:init` | `scrum init [--dry-run] [--force] [--force-file PATH]` | Create `.github/scrum.yml`, sync labels, install or update templates, workflows and the runtime |
 | `/scrum-github:doctor` | `scrum doctor [--json]` | Check tools, `gh` login and scopes, configuration, labels, what is pushed, versions and the board secret; each problem with its fix. Read-only |
-| `/scrum-github:next` | `scrum next [--json]` | The one thing to do next, with its command. Read-only |
+| `/scrum-github:next` | `scrum next [--json]` | The one thing to do next, with its command; with a working branch also protect, back-merge, promote and release steps. Read-only |
 | – | `scrum team [--json]` | Team members (from `team` in `.github/scrum.yml`, or GitHub's assignable users), their areas, capacity and load in the open sprint. Read-only |
 | – | `scrum config` | Print the merged configuration (`.github/scrum.yml` over the defaults) as JSON; offline |
 | – | `scrum uninstall [--dry-run] [--yes]` | Remove what `init` installed from the working tree; keeps `.github/scrum.yml`, files you edited, and everything on GitHub |
@@ -104,7 +104,7 @@ the full path, and the skills now use the full path from the first call). Elsewh
 | `/scrum-github:branches` | `scrum branches [--json]` | What each long-lived branch holds that the next one lacks, drift, open promotion, release and back-merge pull requests, stale task branches. Read-only |
 | `/scrum-github:cleanup` | `scrum cleanup [--json] [--yes]` | Local and remote branches whose pull request was merged or that a long-lived branch contains (never long-lived, current or with an open pull request); deletes them with `--yes` |
 | `/scrum-github:promote` | `scrum promote [--json] [--yes]` | Preset `environments`: the tasks on the working branch that staging lacks; with `--yes` open the promotion pull request |
-| `/scrum-github:hotfix` | `scrum hotfix N`, `scrum hotfix prepare [--json] [--yes]` | Start a fix from the release branch (`hotfix/N-slug`), then set its version and version files before the pull request |
+| `/scrum-github:hotfix` | `scrum hotfix N`, `scrum hotfix prepare [--json] [--yes]` | Start a fix from the release branch (`hotfix/N-slug`), then set its version, version files and the `scrum-release-tag` marker before the pull request. See "Releasing a version" |
 | `/scrum-github:project-setup` | `bash wizards/project-board.sh`, then `scrum project init` | Turn on the project board: a wizard for the steps only you can do |
 
 Plan files have their own commands too (all but `check` and `apply` work offline):
@@ -541,57 +541,176 @@ cannot detect it, so read the `--dry-run` output first.
 
 ## Releasing a version
 
-`/scrum-github:release` (or `scrum release`) publishes a version of the target repository from the
-tasks that are done. Without `--yes` it only prints; with `--yes` it writes to GitHub.
+`/scrum-github:release` (or `scrum release`) publishes a version of the target repository. Without
+`--yes` it only prints; with `--yes` it writes to GitHub. How it publishes depends on
+`branching.preset`:
+
+| Preset | `scrum release … --yes` | Tasks of the release | Tasks become Done |
+|---|---|---|---|
+| `trunk` (or no `branching` block) | tag and GitHub Release on the head of `main` | closed as completed since the previous tag (or `--sprint`) | when their pull request is merged |
+| `standard` | opens the release pull request `release/<tag>` → `main`, from the head of `develop` | In review, `on: develop`, contained in the start point | when the release pull request is merged |
+| `environments` | the same, from the head of `staging` | In review, contained in `staging` (so `on: staging`) | when the release pull request is merged |
+
+The release branch is `branching.main` in every preset; no command reads the default branch of the
+repository for it (only `doctor` checks that the two are the same).
+
+### Version and notes (every preset)
 
 1. **Previous version.** The tag `<release.tag_prefix>X.Y.Z` (or `X.Y.Z`) with the highest version
-   that is on the default branch (GitHub's compare says `ahead` or `identical`; at most 20 tags are
+   that is on the release branch (GitHub's compare says `ahead` or `identical`; at most 20 tags are
    checked, newest first; a tag on another branch is skipped). Tags read through the API, so a
    clone without tags works too. `--since TAG` names it instead. When version tags exist but none
-   can be confirmed on the default branch (a comparison failed, all 20 checks were used, or none is
+   can be confirmed on the release branch (a comparison failed, all 20 checks were used, or none is
    on it), the command stops and asks for `--since TAG`; it never falls back to
    `release.first_version` then. Tag and branch names are URL-encoded in API paths, so a
    `tag_prefix` such as `release/` works.
-2. **Tasks.** The tasks closed as completed after the time the previous tag was made (the tagger
-   date of an annotated tag, else the creation time of its release, else its commit date: a task
-   closed by the last merge before the tag belongs to that tag), or with `--sprint S`
-   (repeatable) the Done tasks of those sprints. Not planned, epics, features, meta issues and
-   pull requests are left out. Each task comes with the merged pull requests that closed it (from
-   its timeline: a merged pull request whose body closes it, else the pull request whose merge
-   commit closed the task), read for at most 100 tasks; a task
-   past that, or whose timeline cannot be read, has no pull request number.
-3. **Version.** Without `VERSION`: major when a task has the `release.breaking_label` label,
+2. **Version.** Without `VERSION`: major when a task has the `release.breaking_label` label,
    otherwise minor when a task has no `labels.bug` label, otherwise patch (labels compared without
    case); `release.first_version` when there is no version tag yet. A `VERSION` you give (`1.5.0`
    or `v1.5.0`) must be `X.Y.Z` and greater than the previous version, otherwise the command stops
    before writing.
-4. **Notes.** Markdown in the `language` of the configuration: breaking changes, features (tasks
+3. **Notes.** Markdown in the `language` of the configuration: breaking changes, features (tasks
    without a parent first, then one heading per parent feature, from GitHub's sub-issue link or
-   "Part of #N" in the body), bug fixes; empty groups are left out. Each line is
-   `- Title (#12, PR #40)`; an `@name` in a title is put in backticks so publishing notifies nobody. A link comparing the previous and the new tag ends the notes.
-   `--notes-file FILE` replaces them with your own text.
-5. **Publish** (`VERSION --yes`). `--yes` needs the version shown by the preview, so what is
-   published is what was previewed (the skill also passes the previewed notes with
-   `--notes-file`). The releases are read again, drafts included: a release or a draft for the tag
-   stops the command before any write. An annotated tag "Release vX.Y.Z" on the head commit of the default branch
-   on GitHub (`git/tags`, then `git/refs`), then a GitHub Release with the notes (a draft with
-   `--draft`). If the tag already exists with a release, the command stops. If the tag exists
-   without a release (a run that failed after creating it), the command keeps the tag and creates
-   only the release; run the same command again, with the same options. A tag given as `VERSION`
-   that is not on the default branch stops the command.
+   "Part of #N" in the body), bug fixes, then "Other" (merged pull requests without a task, presets
+   with a working branch only); empty groups are left out. Each line is `- Title (#12, PR #40)`;
+   an `@name` in a title is put in backticks so publishing notifies nobody. A link comparing the
+   previous and the new tag ends the notes. `--notes-file FILE` replaces them with your own text.
 
-`--json` prints `{previous, suggested, version, tag, bump, reasons, tasks, notes, draft, branch,
-tag_exists, nothing}`, plus `published: {tag, url, draft, tag_created}` with `--yes` (one JSON
-value on stdout; progress lines go to stderr); `bump` is `first`, `major`, `minor`, `patch` or `given`, and `reasons` holds
-the task numbers that are breaking, features and bugs. Creating a tag needs `contents: write` on
-the token; a 403 points to `/scrum-github:doctor`. The command does not edit version files or
-`CHANGELOG.md`, deploy, publish packages or sign tags.
+`--json` prints `{previous, suggested, version, tag, bump, reasons, tasks, other, notes, draft,
+branch, tag_exists, nothing}`; `bump` is `first`, `major`, `minor`, `patch` or `given`, and
+`reasons` holds the task numbers that are breaking, features and bugs. `--yes` needs the version
+shown by the preview, so what is published is what was previewed (the skill also passes the
+previewed notes with `--notes-file`).
+
+### `trunk`: tag directly
+
+- **Tasks.** The tasks closed as completed after the time the previous tag was made (the tagger
+  date of an annotated tag, else the creation time of its release, else its commit date: a task
+  closed by the last merge before the tag belongs to that tag), or with `--sprint S` (repeatable)
+  the Done tasks of those sprints. Not planned, epics, features, meta issues and pull requests are
+  left out. Each task comes with the merged pull requests that closed it (from its timeline: a
+  merged pull request whose body closes it, else the pull request whose merge commit closed the
+  task), read for at most 100 tasks; a task past that, or whose timeline cannot be read, has no
+  pull request number.
+- **Publish** (`VERSION --yes`). The releases are read again, drafts included: a release or a
+  draft for the tag stops the command before any write. An annotated tag "Release vX.Y.Z" on the
+  head commit of the release branch on GitHub (`git/tags`, then `git/refs`), then a GitHub Release
+  with the notes (a draft with `--draft`). If the tag already exists with a release, the command
+  stops. If the tag exists without a release (a run that failed after creating it), the command
+  keeps the tag and creates only the release; run the same command again, with the same options. A
+  tag given as `VERSION` that is not on the release branch stops the command. With `--json --yes`
+  the JSON value gains `published: {tag, url, draft, tag_created}` (progress lines go to stderr).
+- `--from` is refused, and version files and the changelog are not changed in `trunk`.
+
+### `standard` and `environments`: the release pull request
+
+- **Start point.** The head of `develop` (`standard`), of `staging` (`environments`), or
+  `--from REF` (a branch, tag or commit on GitHub): release up to a commit and leave out what was
+  merged after it, for example an unfinished feature (feature flags avoid the need).
+- **Tasks.** The open tasks In review with a location label (`on: develop`, `on: staging`) whose
+  merged pull requests the start point contains (GitHub's compare of each merge commit, at most 100
+  tasks; a task whose pull requests cannot be read is named and left out). A task whose code is not
+  in the start point is not listed.
+- **Pull requests without a task.** Merged pull requests into the working branch whose merge commit
+  is between the previous tag and the start point (one compare, which lists up to 250 commits; the
+  100 closed pull requests into the working branch updated last) and whose description closes no
+  task are listed under "Other". They never change the version; a release with only those is a
+  patch. Release, promotion and back-merge pull requests are left out. With no task and no such
+  pull request the command says there is nothing to release and creates nothing.
+- **`--yes`.** A pull request from a `release/*` branch into the release branch that is already
+  open stops the command and is named. Otherwise, in order: the version files are checked (below);
+  `release/<tag>` is created at the start point (`git/refs`); one commit with the version files and
+  the changelog is added to it through the Git data API (`git/trees`, `git/commits`, then the
+  branch is moved), none when neither is configured; then the pull request "Release <tag>" into the
+  release branch, with the notes between `<!-- scrum-release-notes -->` and
+  `<!-- /scrum-release-notes -->`. No tag and no GitHub Release are created here. A
+  `release/<tag>` branch left by a failed run is reused. `--sprint` and `--draft` are refused.
+  `--json --yes` adds `pull_request: {number, url}` and `committed` (the files).
+
+### Version files and changelog
+
+```yaml
+release:
+  version_files:
+    - path: package.json                 # .json with only a path: the top-level "version" is set
+    - path: pyproject.toml
+      pattern: 'version = "{version}"'   # any other file: the first match with the previous version is replaced
+  changelog: CHANGELOG.md                # the notes go on top, under "## vX.Y.Z (date)", after a "# ..." title line
+```
+
+A listed file that does not exist, or has no version to replace, stops the command before the
+branch is created and names the file. A file that already holds the new version is left as it is.
+Before the first release (no previous tag) `{version}` matches any `X.Y.Z`. The files are written
+with mode 100644; a JSON file is written back with two-space indentation.
+
+### Publishing on merge: `scrum release finish`
+
+`init` installs `.github/workflows/scrum-release.yml` in presets with a working branch. It runs on
+`pull_request_target` `closed` into the release branch, only for a merged pull request from
+`release/*` or `hotfix/*`, with `contents: write`, `pull-requests: write` and `issues: write`, and
+checks out only `.github` of the release branch, never the code of the pull request. It runs
+`scrum release finish`, which reads the event (or `--pr N` by hand) and, each step checking first:
+
+1. **Tag and GitHub Release.** The tag comes from the branch name (`release/v1.4.0`) or, for a
+   hotfix, from the line `<!-- scrum-release-tag: v1.4.1 -->` in its description. An annotated
+   tag on the merge commit, then the GitHub Release with the notes between the markers of the
+   description (edits made there before the merge are published); when the markers are gone, the
+   notes are written again from the tasks. A tag that already has a release is reported as already
+   published and left alone; a tag left without its release by a failed run gets only the release.
+2. **Tasks Done.** Every open task In review with a location label that the merge commit contains,
+   and for a hotfix the tasks its description closes: `status: Done`, location label removed,
+   closed as completed. A task already Done and closed is not touched.
+3. **Back-merge.** For each long-lived branch below the release branch (`develop`; `staging` and
+   `develop` in `environments`) that does not contain the head of the release branch, a pull
+   request "Back-merge main into develop" from the release branch, unless one is open. Merge it
+   with a **merge commit**, not squash: a squash breaks the history and the next release
+   conflicts. `scrum next` points to an open back-merge.
+
+A release pull request closed without merging changes nothing. Pull requests opened by the
+workflow's own token do not start other workflows, so required checks of the back-merge pull
+request may have to be started by hand (or merged by an admin).
+
+### Hotfix
+
+`/scrum-github:hotfix` (presets `standard` and `environments`) fixes production without waiting for
+the next release:
+
+1. `scrum hotfix N` (open task only; a closed issue is refused) creates or checks out
+   `hotfix/N-<slug>` from `origin/main`, assigns the task to you when nobody has it and sets it In
+   progress. In `trunk` it stops: `task start` already branches from `main`.
+2. `scrum hotfix prepare [--json] [--yes]` on that branch: the version it publishes (the labels of
+   the task, a patch for a bug, after the highest version tag on `main`) and the marker line;
+   `--json` prints `{tag, version, previous, task, marker, notes}`. With `--yes` it writes the
+   version files and the changelog in the working tree and commits them (one local commit, never
+   pushed).
+3. The pull request (`/scrum-github:task-pr`) targets `main`, closes the task and carries the
+   marker. Merging it publishes the version through `scrum release finish` and opens the
+   back-merge pull requests.
+
+### Promote (`environments`)
+
+`/scrum-github:promote` (`scrum promote [--json] [--yes]`) lists the tasks In review `on: develop`
+whose merge commits `staging` does not contain yet. With `--yes` it opens "Promote develop to
+staging" with that list between `<!-- scrum-promotion -->` markers; when it is merged, the tasks
+move to `on: staging` (computed from the commits). It says there is nothing to promote when
+`staging` already contains the head of `develop`, names an open promotion instead of opening a
+second one, and in the other presets stops and points to `/scrum-github:release`.
+
+### Suggestions
 
 After closing a sprint with Done tasks, `scrum sprint close` suggests
-`/scrum-github:release --sprint "<sprint>"`. `scrum next` suggests `/scrum-github:release` when
-the most recently closed sprint has Done tasks closed after the latest version tag: before
-creating a new sprint when none is open, otherwise after your own task in progress. It reads the
-tags only when no step above it applies, and skips the step when they cannot be read.
+`/scrum-github:release --sprint "<sprint>"`. In `trunk`, `scrum next` suggests
+`/scrum-github:release` when the most recently closed sprint has Done tasks closed after the latest
+version tag: before creating a new sprint when none is open, otherwise after your own task in
+progress. It reads the tags only when no step above it applies, and skips the step when they
+cannot be read. With a working branch, `scrum next` suggests, right after the setup steps and in
+this order: `/scrum-github:protect` when a long-lived branch has no rule, merging an open
+back-merge (with its link), `/scrum-github:promote` (`environments`, tasks on `develop` and no
+promotion open) and `/scrum-github:release` (tasks In review waiting on the branch the release
+starts from and no release pull request open, with how many).
+
+Creating a tag or a branch needs `contents: write` on the token; a 403 points to
+`/scrum-github:doctor`. The command does not deploy, publish packages or sign tags.
 
 ## Protecting the repository
 

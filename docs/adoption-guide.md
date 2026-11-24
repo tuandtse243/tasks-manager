@@ -100,6 +100,8 @@ skills call it by its full path instead. Once set up, the project repository als
 | `sync` | Dev: bring the latest working branch into your task branch; conflicts are listed, never resolved | `scrum sync` | `/scrum-github:sync` |
 | `branches` | Tech lead, SM: what waits on `develop`, drift from `main`, stale branches | `scrum branches [--json]` | `/scrum-github:branches what is not released yet?` |
 | `cleanup` | Dev, tech lead: delete merged branches locally and on origin, after confirming | `scrum cleanup [--json] [--yes]` | `/scrum-github:cleanup` |
+| `promote` | Tech lead, preset `environments`: move what is on `develop` to `staging` for testing | `scrum promote [--json] [--yes]` | `/scrum-github:promote` |
+| `hotfix` | Dev, presets `standard` and `environments`: fix production from `main` without waiting for the next release | `scrum hotfix N`, `scrum hotfix prepare [--json] [--yes]` | `/scrum-github:hotfix 31` |
 
 Every command that writes to GitHub shows you what it will do and asks first.
 

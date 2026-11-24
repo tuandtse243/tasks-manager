@@ -165,6 +165,8 @@ test_workflows_never_check_out_pr_code() {
     perms="$(yq -o=json '.permissions' "$wf" | jq -c -S .)"
     case "$(basename "$wf")" in
       scrum-project-sync.yml) assert_eq '{"contents":"read","issues":"write"}' "$perms" "$(basename "$wf") permissions" ;;
+      # Tag, GitHub Release, back-merge pull requests (spec release-pr "Publishing on merge").
+      scrum-release.yml) assert_eq '{"contents":"write","issues":"write","pull-requests":"write"}' "$perms" "$(basename "$wf") permissions" ;;
       *) assert_eq '{"contents":"read","issues":"write","pull-requests":"read"}' "$perms" "$(basename "$wf") permissions" ;;
     esac
   done
