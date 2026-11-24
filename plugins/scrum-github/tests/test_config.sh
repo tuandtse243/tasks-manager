@@ -477,7 +477,101 @@ test_release_validation_messages() {
   assert_eq "" "$(errors_with '.release.tag_prefix = "" | .release.first_version = "1.0.0" | .release.breaking_label = "major"')"
 }
 
+# The keys the template sets (version_files and changelog are commented out there).
 test_template_matches_defaults_for_release() {
-  assert_eq "$(jq -c .release "$PLUGIN_DIR/runtime/share/defaults.json")" \
-    "$(yq -o=json '.' "$PLUGIN_DIR/templates/scrum.yml" | jq -c .release)"
+  local tpl
+  tpl="$(yq -o=json '.' "$PLUGIN_DIR/templates/scrum.yml" | jq -c .release)"
+  assert_eq "$(jq -c --argjson t "$tpl" '.release | with_entries(select(.key as $k | $t | has($k)))' "$PLUGIN_DIR/runtime/share/defaults.json")" "$tpl"
+}
+
+# ---------- spec scrum-config (branching-and-release-flow) ----------
+# validate CONFIG_JQ_FILTER  The errors of the defaults changed by the filter, one per line.
+validate_with() { jq "$1" "$PLUGIN_DIR/runtime/share/defaults.json" | jqt validate-config | jq -r '.[]'; }
+
+test_branching_defaults() {
+  setup_fake_gh
+  setup_repo 'branching: {preset: standard}
+statuses: {in_review: In review}'
+  run_scrum config
+  assert_status 0 "$STATUS" "$ERR"
+  assert_json_eq '{"preset":"standard","main":"main","develop":"develop","staging":"staging","location_prefix":"on: ","stale_days":5}' \
+    "$(printf '%s' "$OUT" | jq -c .branching)"
+  assert_json_eq '{"preset":"standard","main":"main","develop":"develop","staging":null,"working":"develop","release":"main","lower":["develop"],"chain":["develop","main"]}' \
+    "$(printf '%s' "$OUT" | jq -c -L "$PLUGIN_DIR/runtime/lib/jq" 'include "scrum"; branching(.)')"
+}
+
+test_branching_duplicate_names() {
+  local errs
+  errs="$(validate_with '.branching += {preset: "standard", develop: "main"} | .statuses.in_review = "In review"')"
+  assert_contains "$errs" "branching.main and branching.develop: must be different branches"
+}
+
+test_branching_unknown_preset() {
+  local errs
+  errs="$(validate_with '.branching.preset = "gitflow"')"
+  assert_contains "$errs" 'branching.preset: must be trunk, standard or environments (got "gitflow")'
+}
+
+test_branching_missing_review_status() {
+  local errs
+  errs="$(validate_with '.branching.preset = "standard"')"
+  assert_contains "$errs" "statuses.in_review: must be set with branching.preset standard"
+  errs="$(validate_with '.branching.preset = "trunk"')"
+  assert_eq "" "$errs" "trunk needs no review status"
+}
+
+test_branching_stale_days_positive() {
+  assert_contains "$(validate_with '.branching.stale_days = 0')" "branching.stale_days"
+}
+
+test_governance_solo_project() {
+  assert_eq "" "$(validate_with '.governance.approvals = 0')"
+}
+
+test_governance_invalid_approvals() {
+  assert_contains "$(validate_with '.governance.approvals = -1')" "governance.approvals: must be a whole number from 0 to 6"
+  assert_contains "$(validate_with '.governance.approvals = 7')" "governance.approvals"
+  assert_contains "$(validate_with '.governance.required_checks = "test"')" "governance.required_checks"
+}
+
+test_release_version_files_json_manifest() {
+  assert_eq "" "$(validate_with '.release.version_files = [{path: "package.json"}]')"
+}
+
+test_release_version_files_pattern_without_placeholder() {
+  local errs
+  errs="$(validate_with '.release.version_files = [{path: "VERSION.txt", pattern: "version 1.0"}]')"
+  assert_contains "$errs" "release.version_files[0].pattern: needs {version}"
+  assert_contains "$(validate_with '.release.version_files = [{pattern: "v{version}"}]')" "release.version_files[0].path: is required"
+  assert_contains "$(validate_with '.release.version_files = [{path: "pyproject.toml"}]')" "release.version_files[0].pattern: is required"
+  assert_eq "" "$(validate_with '.release.version_files = [{path: "pyproject.toml", pattern: "version = \"{version}\""}] | .release.changelog = "CHANGELOG.md"')"
+  assert_contains "$(validate_with '.release.changelog = "/etc/x"')" "release.changelog"
+}
+
+test_deploy_unknown_platform() {
+  assert_contains "$(validate_with '.deploy.platform = "heroku"')" 'deploy.platform: must be none, vercel, cloudflare or docker (got "heroku")'
+  assert_eq "" "$(validate_with '.deploy.platform = "docker"')"
+}
+
+test_attention_promote_days_default() {
+  assert_eq "5" "$(jq -r .attention.promote_days "$PLUGIN_DIR/runtime/share/defaults.json")"
+  assert_contains "$(validate_with '.attention.promote_days = 0')" "attention.promote_days"
+}
+
+test_shipped_template_validates_as_standard() {
+  setup_fake_gh
+  setup_repo "$(cat "$PLUGIN_DIR/templates/scrum.yml")"
+  run_scrum config
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "standard" "$(printf '%s' "$OUT" | jq -r .branching.preset)"
+  assert_eq "In review" "$(printf '%s' "$OUT" | jq -r .statuses.in_review)"
+}
+
+test_config_without_branching_is_trunk() {
+  setup_fake_gh
+  setup_repo 'version: 1'
+  run_scrum config
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "null" "$(printf '%s' "$OUT" | jq -c .branching.preset)"
+  assert_eq "trunk main main" "$(printf '%s' "$OUT" | jq -r -L "$PLUGIN_DIR/runtime/lib/jq" 'include "scrum"; branching(.) | "\(.preset) \(.working) \(.release)"')"
 }

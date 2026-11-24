@@ -98,7 +98,13 @@ the full path, and the skills now use the full path from the first call). Elsewh
 | `/scrum-github:sprint-status` | `scrum status [SPRINT]` | Table by person and status with points; work and review minutes left when tasks have time estimates |
 | `/scrum-github:sprint-report` | `scrum report [SPRINT] [--out FILE]` | Self-contained HTML burndown and velocity |
 | `/scrum-github:sprint-close` | `scrum sprint close [SPRINT] [--yes] [--create-next]` | Record velocity, carry over open tasks, close the milestone; suggests a release when the sprint had Done tasks |
-| `/scrum-github:release` | `scrum release [VERSION] [--since TAG] [--sprint S]… [--draft] [--notes-file FILE] [--json] [--yes]` | Suggest the next version from the Done tasks since the last version tag (or of the sprints), write the release notes, and with `--yes` create the tag and the GitHub Release. See "Releasing a version" |
+| `/scrum-github:release` | `scrum release [VERSION] [--since TAG] [--sprint S]… [--from REF] [--draft] [--notes-file FILE] [--json] [--yes]`, `scrum release finish [--pr N]` | Suggest the next version, write the release notes, and with `--yes` create the tag and the GitHub Release (`trunk`) or open the release pull request (presets with a working branch); `release finish` publishes after that pull request is merged. See "Releasing a version" |
+| `/scrum-github:protect` | `scrum protect [--json] [--yes]` | Create the long-lived branches of the preset, apply branch and tag rules and the merge settings; preview first, writes with `--yes` |
+| `/scrum-github:sync` | `scrum sync` | Merge the working branch (the release branch on a hotfix branch) into the current task branch; lists conflicts with who last changed each file |
+| `/scrum-github:branches` | `scrum branches [--json]` | What each long-lived branch holds that the next one lacks, drift, open promotion, release and back-merge pull requests, stale task branches. Read-only |
+| `/scrum-github:cleanup` | `scrum cleanup [--json] [--yes]` | Local and remote branches that are merged; deletes them with `--yes` |
+| `/scrum-github:promote` | `scrum promote [--json] [--yes]` | Preset `environments`: the tasks on the working branch that staging lacks; with `--yes` open the promotion pull request |
+| `/scrum-github:hotfix` | `scrum hotfix N`, `scrum hotfix prepare [--json] [--yes]` | Start a fix from the release branch (`hotfix/N-slug`), then set its version and version files before the pull request |
 | `/scrum-github:project-setup` | `bash wizards/project-board.sh`, then `scrum project init` | Turn on the project board: a wizard for the steps only you can do |
 
 Plan files have their own commands too (all but `check` and `apply` work offline):
@@ -161,6 +167,7 @@ attention:                         # "Needs attention" in status, digest and rep
   stale_days: 2                    # In progress with no activity for this many working days
   review_days: 2                   # In review with no activity for this many working days (when on)
   behind_percent: 15               # remaining above the ideal line by more than this % of scope
+  promote_days: 5                  # merged into a long-lived branch and waiting longer than this to be released
 colors: {}                         # label name -> hex color, overrides the defaults
 planning:
   dir: docs/plans                  # plan folders: <dir>/<slug>/plan.json, plan.md, brief.md
@@ -176,6 +183,22 @@ release:                           # /scrum-github:release, see "Releasing a ver
   tag_prefix: v                    # tags are <tag_prefix>X.Y.Z; "" for none
   breaking_label: breaking         # a task with this label makes a major version
   first_version: "0.1.0"           # the first release when there is no version tag yet
+  version_files: []                # files the release pull request updates: {path, pattern: "...{version}..."}
+  changelog: null                  # file that gets the release notes at the top, e.g. CHANGELOG.md
+branching:                         # see "Branches and releases" below
+  preset: trunk                    # trunk (main only), standard (develop + main), environments (develop + staging + main);
+                                   # init writes standard into a new .github/scrum.yml
+  main: main                       # release branch, the default branch of the repository; tags live here
+  develop: develop                 # working branch of standard and environments
+  staging: staging                 # environments only
+  location_prefix: "on: "          # label of a task merged into a long-lived branch: "on: develop"
+  stale_days: 5                    # task branches without a commit for this many working days are stale
+governance:                        # /scrum-github:protect and the files init installs
+  approvals: 1                     # approvals a pull request needs, 0 to 6
+  required_checks: []              # status checks each long-lived branch requires, besides the task-link check
+  codeowners: []                   # owners written into CODEOWNERS, e.g. ["@acme/web"]
+deploy:
+  platform: none                   # none, vercel, cloudflare or docker: the deployment workflow init installs
 project:                           # optional board, see "Project board" below
   enabled: false
   owner: null                      # user or organization that owns the project

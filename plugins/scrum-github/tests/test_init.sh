@@ -77,7 +77,8 @@ test_init_creates_config_labels_and_files() {
   assert_status 0 "$STATUS" "$ERR"
   [ -f "$SCRUM_REPO_DIR/.github/scrum.yml" ] || _fail "config not created"
   assert_eq "$(cat "$PLUGIN_DIR/templates/scrum.yml")" "$(cat "$SCRUM_REPO_DIR/.github/scrum.yml")"
-  assert_eq "12" "$(gh_writes | grep -c 'POST repos/acme/blog/labels')" "12 labels created"
+  # 12 labels, plus "status: In review" and "on: develop" of preset standard (the template's)
+  assert_eq "14" "$(gh_writes | grep -c 'POST repos/acme/blog/labels')" "14 labels created"
   for f in ISSUE_TEMPLATE/task.yml pull_request_template.md workflows/scrum-status-sync.yml workflows/scrum-pr-link-check.yml workflows/scrum-daily-digest.yml scrum/bin/scrum scrum/lib/jq/scrum.jq scrum/share/defaults.json scrum/GENERATED.md; do
     [ -f "$SCRUM_REPO_DIR/.github/$f" ] || _fail "missing .github/$f"
   done
@@ -111,7 +112,7 @@ test_init_second_run_makes_no_writes() {
   init_env
   run_scrum init
   assert_status 0 "$STATUS" "$ERR"
-  cp "$FIXTURES/labels-after-init.json" "$FAKE_GH_DIR/labels.json"
+  cp "$FIXTURES/labels-after-init-standard.json" "$FAKE_GH_DIR/labels.json"
   : > "$FAKE_GH_LOG"
   run_scrum init
   assert_status 0 "$STATUS" "$ERR"
@@ -385,4 +386,29 @@ test_label_plan_creates_ai_ready() {
   assert_eq '["ai-ready"]' "$(printf '%s' "$plan" | jq -c '[.create[].name]')"
   plan="$(label_plan "$(defaults | jq '.labels.ai_ready = "agent: ready"')" "[]")"
   assert_contains "$(printf '%s' "$plan" | jq -c '[.create[].name]')" '"agent: ready"'
+}
+
+# spec branching-presets: one location label per long-lived branch below the release branch.
+test_label_plan_location_labels_by_preset() {
+  local cfg
+  cfg="$(defaults | jq '.statuses.in_review = "In review" | .branching.preset = "standard"')"
+  assert_json_eq '[{"name":"on: develop","color":"c5def5","description":"Task merged into develop, not released yet"}]' \
+    "$(label_plan "$cfg" "[]" | jq -c '[.create[] | select(.name | startswith("on: "))]')"
+  cfg="$(defaults | jq '.statuses.in_review = "In review" | .branching.preset = "environments"')"
+  assert_json_eq '["on: develop","on: staging"]' "$(label_plan "$cfg" "[]" | jq -c '[.create[].name | select(startswith("on: "))]')"
+  assert_json_eq '[]' "$(label_plan "$(defaults)" "[]" | jq -c '[.create[].name | select(startswith("on: "))]')" "trunk has no location label"
+}
+
+test_label_plan_reports_obsolete_location_label() {
+  local cfg
+  cfg="$(defaults | jq '.statuses.in_review = "In review" | .branching.preset = "standard" | .branching.develop = "dev"')"
+  assert_json_eq '["on: develop"]' "$(label_plan "$cfg" '[{"name":"on: develop","color":"c5def5","description":""}]' | jq -c .obsolete)"
+}
+
+test_init_new_setup_writes_preset_standard() {
+  init_env
+  run_scrum init
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "standard" "$(yq '.branching.preset' "$SCRUM_REPO_DIR/.github/scrum.yml")"
+  assert_contains "$(gh_calls)" '"name":"on: develop"'
 }

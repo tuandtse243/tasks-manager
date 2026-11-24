@@ -346,3 +346,7 @@ release_publish() {
     printf '%s' "$plan" | jq -c --arg u "$url" --argjson c "$created" '. + {published: {tag: .tag, url: $u, draft: .draft, tag_created: $c}}'
   fi
 }
+
+# scrum release finish: after a release or hotfix pull request is merged into the release branch
+# (spec release-pr "Publishing on merge", "Back-merge after the release branch changes").
+cmd_release_finish() { die "scrum release finish is not implemented yet"; }

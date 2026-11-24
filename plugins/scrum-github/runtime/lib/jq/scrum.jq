@@ -250,6 +250,116 @@ def labels_with_status($cfg; $role):
   | [$cur[] | select(. as $n | (status_labels($cfg) | any(.[]; . == $n)) or ($p != "" and ($n | startswith($p))) | not)]
     + [status_label($cfg; $role)];
 
+# ---------- branching presets (spec branching-presets, design 1) ----------
+# The one place that decides branch roles; every command asks it instead of the default branch.
+# A configuration without branching.preset is "trunk" (design 2).
+def preset($cfg): ($cfg.branching.preset // "trunk");
+# {preset, main, develop, staging, working, release, lower, chain}
+#   chain: the long-lived branches from the working branch up to the release branch.
+#   lower: the long-lived branches below the release branch, lowest first ([] in trunk).
+#   develop and staging are null when the preset has no such branch.
+def branching($cfg):
+  ($cfg.branching // {}) as $b
+  | preset($cfg) as $p
+  | ($b.main // "main") as $m | ($b.develop // "develop") as $d | ($b.staging // "staging") as $s
+  | if $p == "standard" then
+      {preset: $p, main: $m, develop: $d, staging: null, working: $d, release: $m, lower: [$d], chain: [$d, $m]}
+    elif $p == "environments" then
+      {preset: $p, main: $m, develop: $d, staging: $s, working: $d, release: $m, lower: [$d, $s], chain: [$d, $s, $m]}
+    else
+      {preset: "trunk", main: $m, develop: null, staging: null, working: $m, release: $m, lower: [], chain: [$m]}
+    end;
+def working_branch($cfg): branching($cfg).working;
+def release_branch($cfg): branching($cfg).release;
+def staging_branch($cfg): branching($cfg).staging;
+def has_working_branch($cfg): preset($cfg) != "trunk";
+def has_staging_branch($cfg): preset($cfg) == "environments";
+def is_long_lived($cfg; $name): branching($cfg).chain | index($name) != null;
+# The branch a release starts from: staging in environments, else the working branch.
+def release_source_branch($cfg): branching($cfg) | (.staging // .working);
+# The role of a branch name: release | staging | working | release_pr (release/*) |
+# hotfix (hotfix/*) | task. In trunk the release branch is "release" (it is also the working one).
+def branch_kind($cfg; $name):
+  branching($cfg) as $b
+  | if $name == $b.release then "release"
+    elif $b.staging != null and $name == $b.staging then "staging"
+    elif $name == $b.working then "working"
+    elif ($name | startswith("release/")) then "release_pr"
+    elif ($name | startswith("hotfix/")) then "hotfix"
+    else "task" end;
+# The kind of a pull request from $head into $base:
+#   release (release/* into the release branch), hotfix (hotfix/* into the release branch),
+#   promotion (working into staging), back_merge (release branch into a lower long-lived branch,
+#   or staging into the working branch), task (anything else).
+# Release, promotion and back-merge pull requests are exempt from the title, source-branch and
+# task-link checks (design 8, 10).
+def pr_kind($cfg; $head; $base):
+  branching($cfg) as $b
+  | if ($b.preset == "trunk") then "task"
+    elif $base == $b.release and ($head | startswith("release/")) then "release"
+    elif $base == $b.release and ($head | startswith("hotfix/")) then "hotfix"
+    elif $b.staging != null and $base == $b.staging and $head == $b.working then "promotion"
+    elif $head == $b.release and ($b.lower | index($base)) != null then "back_merge"
+    elif $b.staging != null and $head == $b.staging and $base == $b.working then "back_merge"
+    else "task" end;
+def pr_exempt($cfg; $head; $base): ["release", "promotion", "back_merge"] | index(pr_kind($cfg; $head; $base)) != null;
+# Whether a pull request from $head may target $base (spec "Allowed source branches"):
+# {allowed, base_kind, accepts: [patterns the base accepts], target: branch $head should target}.
+# The release branch accepts release/* and hotfix/*; staging accepts the working and the release
+# branch; the working branch accepts anything but staging; other bases accept anything. Trunk: all.
+def allowed_source($cfg; $head; $base):
+  branching($cfg) as $b
+  | branch_kind($cfg; $base) as $k
+  | (if ($head | startswith("hotfix/")) then $b.release else $b.working end) as $target
+  | if $b.preset == "trunk" then {allowed: true, base_kind: $k, accepts: ["*"], target: $target}
+    elif $k == "release" then
+      {allowed: (($head | startswith("release/")) or ($head | startswith("hotfix/"))),
+       base_kind: $k, accepts: ["release/*", "hotfix/*"], target: $target}
+    elif $k == "staging" then
+      {allowed: ($head == $b.working or $head == $b.release), base_kind: $k, accepts: [$b.working, $b.release], target: $target}
+    elif $k == "working" then
+      {allowed: ($b.staging == null or $head != $b.staging), base_kind: $k,
+       accepts: ["any branch except \($b.staging // "")"], target: $target}
+    else {allowed: true, base_kind: $k, accepts: ["*"], target: $target} end;
+# Name of the release branch of a tag, and of a hotfix branch.
+def release_pr_branch($tag): "release/\($tag)";
+def hotfix_branch($n; $slug): "hotfix/\($n)-\($slug)";
+def back_merge_title($cfg; $branch): "Back-merge \(release_branch($cfg)) into \($branch)";
+def promotion_title($cfg): "Promote \(working_branch($cfg)) to \(staging_branch($cfg))";
+
+# ---------- location labels (design 3) ----------
+# One label "<location_prefix><branch>" per long-lived branch below the release branch. A task
+# In review with such a label is merged into that branch and waits for the release.
+def location_prefix($cfg): ($cfg.branching.location_prefix // "on: ");
+def location_label($cfg; $branch): location_prefix($cfg) + $branch;
+def location_labels($cfg): [branching($cfg).lower[] | location_label($cfg; .)];
+def is_location_label($cfg; $name): location_labels($cfg) | index($name) != null;
+# Input: an issue. The branch of its location label, or null (always null in trunk).
+def task_location($cfg):
+  location_prefix($cfg) as $p
+  | [label_names[] | select(is_location_label($cfg; .)) | ltrimstr($p)]
+  | if has_working_branch($cfg) then .[0] else null end;
+# Input: an issue. Its label set with every location label removed and, when $branch is not
+# null, the label of $branch added. Any label with the location prefix counts, so a label of a
+# branch renamed since is removed too. A task has at most one location label.
+def labels_with_location($cfg; $branch):
+  location_prefix($cfg) as $p
+  | [label_names[] | select(startswith($p) | not)]
+    + (if $branch == null then [] else [location_label($cfg; $branch)] end);
+# Input: an issue. Where a task In review is: "code_review" (no location label: its pull request
+# is open) or {branch} of its location label; null when it is not In review or in trunk.
+def review_location($cfg):
+  if (has_working_branch($cfg) | not) or (task_role($cfg) != "in_review") then null
+  else (task_location($cfg)) as $l | if $l == null then "code_review" else $l end end;
+
+# ---------- deployment environments (spec deploy-templates "Branches map to environments") ----------
+# {branch: environment} for the preset's long-lived branches.
+def deploy_environments($cfg):
+  branching($cfg) as $b
+  | if $b.preset == "standard" then {($b.develop): "staging", ($b.main): "production"}
+    elif $b.preset == "environments" then {($b.develop): "development", ($b.staging): "staging", ($b.main): "production"}
+    else {($b.main): "production"} end;
+
 # ---------- sprints (milestones) ----------
 def sprint_info:
   (.description // "") as $d

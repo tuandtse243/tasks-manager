@@ -15,7 +15,8 @@ doctor_env() {
   cp "$FIXTURES/actions-secrets.json" "$FAKE_GH_DIR/secrets.json"
   run_scrum init
   assert_status 0 "$STATUS" "$ERR"
-  cp "$FIXTURES/labels-after-init.json" "$FAKE_GH_DIR/labels.json"
+  # init writes preset standard (statuses.in_review and the "on: develop" label).
+  cp "$FIXTURES/labels-after-init-standard.json" "$FAKE_GH_DIR/labels.json"
   : > "$FAKE_GH_LOG"
 }
 
@@ -151,7 +152,7 @@ test_doctor_invalid_config() {
 
 test_doctor_missing_label() {
   doctor_env
-  jq 'map(select(.name != "type: epic"))' "$FIXTURES/labels-after-init.json" > "$FAKE_GH_DIR/labels.json"
+  jq 'map(select(.name != "type: epic"))' "$FIXTURES/labels-after-init-standard.json" > "$FAKE_GH_DIR/labels.json"
   doctor_json
   assert_eq "warn" "$(status_of labels)"
   assert_contains "$(check_of labels)" "missing labels: type: epic"

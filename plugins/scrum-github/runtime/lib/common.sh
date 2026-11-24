@@ -180,6 +180,10 @@ set_status() {
   fi
 }
 
+# Branching presets: branch_role, branch_contents (spec branching-presets).
+# shellcheck source=branching.sh
+. "$SCRUM_ROOT/lib/branching.sh"
+
 # GitHub Projects board sync (project_touch and friends).
 # shellcheck source=project.sh
 . "$SCRUM_ROOT/lib/project.sh"

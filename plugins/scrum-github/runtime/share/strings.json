@@ -218,7 +218,14 @@
     "release_breaking": "Breaking changes",
     "release_features": "Features",
     "release_fixes": "Bug fixes",
-    "release_full_changelog": "Full changelog"
+    "release_full_changelog": "Full changelog",
+    "loc_code_review": "in code review",
+    "loc_on_branch": "on {branch}",
+    "attention_waiting_release": "{ref} is waiting on {branch} for {n} working days.",
+    "attention_waiting_release_one": "{ref} is waiting on {branch} for {n} working day.",
+    "close_unreleased_title": "Merged but not released",
+    "close_unreleased_note": "Not counted in the velocity: their code is not on {branch} yet. Release first: /scrum-github:release",
+    "release_other": "Other"
   },
   "vi": {
     "assignee": "Người nhận",
@@ -424,6 +431,12 @@
     "release_breaking": "Thay đổi không tương thích",
     "release_features": "Tính năng",
     "release_fixes": "Sửa lỗi",
-    "release_full_changelog": "Toàn bộ thay đổi"
+    "release_full_changelog": "Toàn bộ thay đổi",
+    "loc_code_review": "đang review code",
+    "loc_on_branch": "trên {branch}",
+    "attention_waiting_release": "{ref} đang chờ trên {branch} {n} ngày làm việc.",
+    "close_unreleased_title": "Đã merge nhưng chưa phát hành",
+    "close_unreleased_note": "Không tính vào velocity: code của chúng chưa có trên {branch}. Hãy phát hành trước: /scrum-github:release",
+    "release_other": "Khác"
   }
 }

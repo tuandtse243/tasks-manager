@@ -71,7 +71,8 @@
   "attention": {
     "stale_days": 2,
     "behind_percent": 15,
-    "review_days": 2
+    "review_days": 2,
+    "promote_days": 5
   },
   "team": [],
   "run": {
@@ -82,6 +83,23 @@
   "release": {
     "tag_prefix": "v",
     "breaking_label": "breaking",
-    "first_version": "0.1.0"
+    "first_version": "0.1.0",
+    "version_files": [],
+    "changelog": null
+  },
+  "branching": {
+    "main": "main",
+    "develop": "develop",
+    "staging": "staging",
+    "location_prefix": "on: ",
+    "stale_days": 5
+  },
+  "governance": {
+    "approvals": 1,
+    "required_checks": [],
+    "codeowners": []
+  },
+  "deploy": {
+    "platform": "none"
   }
 }

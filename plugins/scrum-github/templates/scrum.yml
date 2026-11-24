@@ -28,9 +28,11 @@ statuses:
   label_prefix: "status: "
   new: New
   in_progress: In progress
-  # Optional fourth status between In progress and Done. When set, a pull request ready for review
-  # moves its task here and a draft moves it back to In progress. Run init again after setting it.
-  # in_review: In review
+  # Fourth status between In progress and Done. A pull request ready for review moves its task
+  # here and a draft moves it back to In progress. Required with branching.preset standard or
+  # environments: a merged task waits here (with an "on: <branch>" label) until it is released.
+  # Comment it out only with preset trunk. Run init again after changing it.
+  in_review: In review
   done: Done
 
 labels:
@@ -45,6 +47,25 @@ labels:
   no_task: no-task
   # A task ready to be worked by an AI agent with /scrum-github:run.
   ai_ready: ai-ready
+
+branching:
+  # How the long-lived branches are organised. Code moves one way: task branch -> develop ->
+  # (staging) -> main; only hotfix/* starts from main. Tags live only on main, which stays the
+  # default branch of the repository.
+  #   standard      develop (working branch) + main (release branch). Release by pull request.
+  #   environments  develop + staging + main; /scrum-github:promote moves develop to staging.
+  #   trunk         main only: task branches start from main and a merge makes a task Done.
+  # Left out, the preset is trunk (as before 0.13.0). After changing it run init again (labels,
+  # workflows), push .github/ to the default branch, then /scrum-github:protect.
+  preset: standard
+  # Branch names. Change them only if the repository already uses other names.
+  # main: main
+  # develop: develop
+  # staging: staging            # environments only
+  # Label of a task merged into a long-lived branch and not released yet: "on: develop".
+  # location_prefix: "on: "
+  # /scrum-github:branches lists task branches with no commit for this many working days.
+  # stale_days: 5
 
 branch:
   # Branch created by task-start. {number} is the issue number, {slug} comes from its title.
@@ -67,6 +88,9 @@ attention:
   behind_percent: 15
   # With statuses.in_review set: a task In review with no activity for this many working days.
   review_days: 2
+  # Presets with a working branch: a task merged into a long-lived branch and waiting there for
+  # more than this many working days to be promoted or released.
+  promote_days: 5
 
 planning:
   # Where /plan and /discover keep plans: <dir>/<slug>/plan.json, plan.md, brief.md.
@@ -101,6 +125,15 @@ release:
   breaking_label: breaking
   # The version of the first release, when the repository has no version tag yet.
   first_version: "0.1.0"
+  # Presets with a working branch: files whose version the release pull request updates. A
+  # .json file with only a path gets its top-level "version"; any other file needs a pattern
+  # with {version} (the first match with the previous version is replaced).
+  # version_files:
+  #   - path: package.json
+  #   - path: pyproject.toml
+  #     pattern: 'version = "{version}"'
+  # File that gets the release notes at the top, or null for none.
+  # changelog: CHANGELOG.md
 
 # Optional: who is on the team. /plan suggests an assignee for each task from this list (by
 # areas and current load), `scrum team` shows each person's load, and task new, task assign and
@@ -113,6 +146,18 @@ release:
 #     review_hours: 6                # optional: hours of review per sprint (sprint fill warns above it)
 #   - login: an-nguyen
 #     areas: [frontend]
+
+# Optional: repository rules applied by /scrum-github:protect, and the files init installs.
+# governance:
+#   approvals: 1                   # approvals a pull request needs (0 to 6; 0 for a solo project)
+#   required_checks: []            # status checks every pull request must pass, e.g. [test, lint];
+#                                  # the task-link check of the plugin is always required
+#   codeowners: []                 # owners written into CODEOWNERS, e.g. ["@acme/web", "@tuandt"]
+
+# Optional: a deployment workflow for a web project, mapped to the branches of the preset.
+# none (default), vercel (settings written into CONTRIBUTING.md), cloudflare or docker.
+# deploy:
+#   platform: none
 
 # Override label colors: label name -> 6-digit hex color.
 colors: {}
