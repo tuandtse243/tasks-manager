@@ -51,7 +51,7 @@
 ## 9. Kiểm tra tích hợp
 
 - [x] 9.1 Toàn bộ `bash tests/run.sh` (jq 1.8.1 và 1.8.2), `shellcheck`, `openspec validate team-and-backlog-tasks --strict`, `claude plugin validate .`. Kiểm tra: tất cả đạt
-- [ ] 9.2 Thử trên một repo thật: `/plan` một yêu cầu nhỏ, mở `plan.html`, duyệt một lần, issue có milestone và assignee; `scrum mine`; `task new` khi không có sprint mở. Kiểm tra: kết quả khớp spec, ghi lại trong mô tả PR
+- [x] 9.2 Thử trên một repo thật: `/plan` một yêu cầu nhỏ, mở `plan.html`, duyệt một lần, issue có milestone và assignee; `scrum mine`; `task new` khi không có sprint mở. Kiểm tra: kết quả khớp spec, ghi lại trong mô tả PR
 
 ## Workflow follow-up
 
