@@ -4,18 +4,6 @@ All notable changes to the `scrum-github` plugin. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the plugin uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-
-### Fixed
-
-- **Parallel `scrum run` commands could lose a change to the run's state.** The lock on
-  `.scrum/run/<id>.json` was a folder made with `mkdir`, which is not atomic everywhere: with the
-  uutils `mkdir` of Ubuntu 26.04 (today's `ubuntu-latest` runners) several commands could hold
-  the lock at once, and the last write won. The lock is now a file the shell creates with
-  noclobber (`O_EXCL`), so exactly one command holds it. A `.lock` folder left by an older
-  version (only when a command was killed while holding the lock) makes a run command wait and
-  then stop with "remove that file": remove that folder with `rmdir`.
-
 ## [0.13.0] - 2026-11-24
 
 ### Breaking
@@ -78,6 +66,16 @@ All notable changes to the `scrum-github` plugin. The format follows
 - `doctor` checks the default branch, the long-lived branches and their rules, a missing
   back-merge, the governance files and, with a deployment platform, required reviewers on the
   environment `production` (with the settings page).
+
+### Fixed
+
+- **Parallel `scrum run` commands could lose a change to the run's state.** The lock on
+  `.scrum/run/<id>.json` was a folder made with `mkdir`, which is not atomic everywhere: with the
+  uutils `mkdir` of Ubuntu 26.04 (today's `ubuntu-latest` runners) several commands could hold
+  the lock at once, and the last write won. The lock is now a file the shell creates with
+  noclobber (`O_EXCL`), so exactly one command holds it. A `.lock` folder left by an older
+  version (only when a command was killed while holding the lock) makes a run command wait and
+  then stop with "remove that file": remove that folder with `rmdir`.
 
 ### Notes
 
