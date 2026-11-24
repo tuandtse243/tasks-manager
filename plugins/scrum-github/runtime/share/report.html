@@ -114,6 +114,13 @@ tr.total td { font-weight: 700; border-bottom: 0; }
     at.appendChild(ul); app.appendChild(at);
   }
 
+  // Where the tasks in review are (only with a working branch: d.review is absent in trunk)
+  if (d.review && d.review.length) {
+    var rv = el("section", { "class": "attention" }); rv.appendChild(el("h2", null, d.statuses.in_review));
+    var rl = el("ul"); d.review.forEach(function (r) { rl.appendChild(el("li", null, "#" + r.number + " " + r.title + ": " + r.where)); });
+    rv.appendChild(rl); app.appendChild(rv);
+  }
+
   // Burndown
   (function () {
     var sec = el("section"); sec.appendChild(el("h2", null, t("report_burndown")));

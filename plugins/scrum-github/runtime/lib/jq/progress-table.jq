@@ -1,6 +1,7 @@
 # Input: output of progress.jq. --argjson cfg CONFIG --argjson strings STRINGS (one language)
 # Output: a text table; with time estimates in the sprint, two more columns (work and review
-# minutes left) and a line with the tasks not done that have no time estimate.
+# minutes left) and a line with the tasks not done that have no time estimate. With a working
+# branch, the tasks In review follow, each in code review or on a branch.
 include "scrum";
 def cell: tr($strings; "cell"; {count: .count, pts: trn($strings; "pts"; .points; {})});
 def pad($n): tostring | . + ([range(0; ($n - length) | if . < 0 then 0 else . end)] | map(" ") | join(""));
@@ -23,4 +24,9 @@ def who: if . == "Unassigned" then tr($strings; "unassigned") else . end;
   "",
   (if $p.pct_done == null then tr($strings; "done_line_na"; {unest: $p.unestimated})
    else tr($strings; "done_line"; {pct: $p.pct_done, done: $p.total.done.points, total: $p.total.total.points, unest: $p.unestimated}) end),
-  (if $timed then tr($strings; "time_missing_line"; {n: $p.time_missing}) else empty end)
+  (if $timed then tr($strings; "time_missing_line"; {n: $p.time_missing}) else empty end),
+  # With a working branch: where each task In review is (input `review`, absent in trunk).
+  (if (($p.review // []) | length) > 0 then
+     "", "\($cfg.statuses.in_review):",
+     ($p.review[] | "  #\(.number) \(.title): \(location_text($strings; .location))")
+   else empty end)

@@ -50,9 +50,10 @@ cmd_mine() {
   out="$(jqlib mine -n --argjson cfg "$CONFIG_JSON" --arg login "$login" --argjson issues "$issues" --argjson ms "$ms" \
     --argjson sprint "$sprint" --argjson blocked "$blocked" --argjson prs "$prs")"
   if [ "$json" = 1 ]; then printf '%s\n' "$out"; return 0; fi
-  printf '%s' "$out" | jq -r -L "$JQ_LIB" --arg ai "$(config_get .labels.ai_ready)" 'include "scrum";
+  printf '%s' "$out" | jq -r -L "$JQ_LIB" --arg ai "$(config_get .labels.ai_ready)" --argjson s "$(strings_json)" 'include "scrum";
     def plural($n; $w): "\($n) \($w)\(if $n == 1 then "" else "s" end)";
     def pts: if .points == null then "-" else "\(.points) pt" end;
+    def where: if .location == null then "" else "  (\(location_text($s; .location)))" end;
     def notes: if .blocked_by == null then "  (blocked-by not checked)"
                elif (.blocked_by | length) > 0 then "  (blocked by \(.blocked_by | map("#\(.)") | join(", ")))"
                else "" end;
@@ -61,7 +62,7 @@ cmd_mine() {
       "Open tasks of @\(.login): \(plural(.total.tasks; "task")), \(.total.points) points"
         + (if .sprint == null then " (no sprint is open)" else "" end),
       (.groups[] | "", "\(.title)",
-        (.tasks[] | "  #\(.number)  \(pts)  \(.sprint // "backlog")  \(.title)\(estimate_brief)\(notes)"))
+        (.tasks[] | "  #\(.number)  \(pts)  \(.sprint // "backlog")  \(.title)\(estimate_brief)\(where)\(notes)"))
     end,
     (.sprint.title as $st | .time | if . == null then empty
      elif .estimated == 0 then "", "Time left in \($st): \(plural(.tasks; "task")) without a time estimate. Add one: scrum task estimate N --work 25m --review 20m"
