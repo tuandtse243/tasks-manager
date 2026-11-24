@@ -242,7 +242,7 @@ run_issue_to_new() {
 
 # scrum run start [N,N...] [--max-parallel K] [--pr-per-wave]  (spec ai-run "Bắt đầu lần chạy")
 cmd_run_start() {
-  local nums="" numbers=null k="" per_wave=false expect="" repo login dir unfinished default base now id branch pattern sprint_title n issue file base_sha diff
+  local nums="" numbers=null k="" per_wave=false expect="" repo login dir unfinished default base now id branch pattern sprint_title n issue file base_sha diff what
   while [ $# -gt 0 ]; do
     case "$1" in
       --max-parallel) k="$(run_optval --max-parallel "${2:-}")"; shift ;;
@@ -282,13 +282,14 @@ cmd_run_start() {
     [ -z "$diff" ] || die "$diff. Nothing was changed; show the plan again: scrum run plan"
   fi
 
-  default="$(ghx repo view "$repo" --json defaultBranchRef -q .defaultBranchRef.name 2>/dev/null || true)"
-  [ -n "$default" ] || default="main"
+  # The working branch of the preset (the default branch in trunk): the integration branch starts
+  # from it and its pull requests target it (spec branching-presets "Run in standard").
+  default="$(work_base_branch "$repo")"
   git -C "$dir" fetch -q origin "$default" 2>/dev/null \
     || warn "cannot fetch $default from origin; the integration branch starts from the copy of $default you already have"
   if git -C "$dir" rev-parse --verify -q "refs/remotes/origin/$default" >/dev/null; then base="origin/$default"
   elif git -C "$dir" rev-parse --verify -q "refs/heads/$default" >/dev/null; then base="$default"
-  else die "cannot find the default branch $default (locally or on origin)"; fi
+  else die "cannot find the branch $default (locally or on origin)"; fi
 
   now="$(now_iso)"
   id="$(printf '%s' "$now" | sed 's/^\([0-9]\{4\}\)-\([0-9]\{2\}\)-\([0-9]\{2\}\)T\([0-9]\{2\}\):\([0-9]\{2\}\).*/\1\2\3-\4\5/')-$login"
@@ -299,7 +300,14 @@ cmd_run_start() {
     'include "scrum"; ($s | slug_text | if . == "" then "no-sprint" else . end) as $sl
      | $p | gsub("\\{sprint\\}"; $sl) | gsub("\\{login\\}"; $l) | gsub("\\{date\\}"; $d)')"
   git check-ref-format --branch "$branch" >/dev/null 2>&1 || die "run.branch_pattern gives \"$branch\", which is not a valid branch name"
-  [ "$branch" != "$default" ] || die "run.branch_pattern gives \"$branch\", the default branch; the integration branch must be another one"
+  if [ "$(printf '%s' "$CONFIG_JSON" | jq -L "$JQ_LIB" --arg b "$branch" 'include "scrum"; is_long_lived(.; $b)')" = true ] \
+     && [ "$branch" != "$default" ]; then
+    die "run.branch_pattern gives \"$branch\", a long-lived branch of the preset; the integration branch must be another one"
+  fi
+  if [ "$branch" = "$default" ]; then
+    if has_working_branch; then what="the working branch"; else what="the default branch"; fi
+    die "run.branch_pattern gives \"$branch\", $what; the integration branch must be another one"
+  fi
   if git -C "$dir" show-ref --verify --quiet "refs/heads/$branch"; then
     die "the branch $branch already exists. Delete it (git branch -D $branch) if its work is merged, or put {date} in run.branch_pattern"
   fi
