@@ -355,7 +355,8 @@ Who uses it in practice beyond a sandbox repo: unknown.
   and `tests/` (not `vendor/`), with `tests/.shellcheckrc` and `wizards/.shellcheckrc`;
   `claude plugin validate plugins/scrum-github` by hand (README.md "Development").
 - **CI for this repo**: `.github/workflows/ci.yml` runs the tests on Ubuntu and shellcheck on
-  every pull request, and the tests on macOS too on every push to `main` (.github/workflows/ci.yml).
+  every pull request and every merge, and the tests on macOS too on pull requests into `main`
+  (release and hotfix) (.github/workflows/ci.yml).
 - **Manual end-to-end**: scenarios against `tuandtse243/scrum-sandbox` in docs/e2e-testing.md,
   with sections up to 0.4.0 (last runs 2026-11-18 and 2026-11-19); the In review flow was checked
   on a real repository with 0.8.1 (plugins/scrum-github/README.md). A recorded run of branching,

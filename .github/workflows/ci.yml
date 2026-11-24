@@ -9,19 +9,24 @@ on:
 permissions:
   contents: read
 
+# A new push to a pull request cancels its older run. Pushes to develop and main (merges) are
+# never cancelled, so every merged commit gets a complete result.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test:
     name: test (${{ matrix.os }})
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        # Pull requests run on Ubuntu only, to keep them fast; every push to develop or main (a
-        # merge) runs on macOS too, where the plugin's users run it with Bash 3.2.
-        os: ${{ github.event_name == 'push' && fromJSON('["ubuntu-latest", "macos-latest"]') || fromJSON('["ubuntu-latest"]') }}
+        # Ubuntu always. macOS (Bash 3.2 and BSD tools, as the plugin's users have) only on pull
+        # requests into main, i.e. release and hotfix pull requests: hosted macOS runners are
+        # sometimes not available at all ("not acquired"), which cancels the job and fails the
+        # run. There a rerun before the merge fixes it, and develop and main stay green.
+        os: ${{ (github.event_name == 'pull_request' && github.base_ref == 'main') && fromJSON('["ubuntu-latest", "macos-latest"]') || fromJSON('["ubuntu-latest"]') }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
