@@ -318,3 +318,37 @@ test_cleanup_skips_work_after_the_merge() {
   assert_eq '[{"branch":"feat/7-signup","local":false,"remote":true}]' \
     "$(printf '%s' "$OUT" | jq -c '[.[] | select(.branch == "feat/7-signup") | {branch, local, remote}]')"
 }
+
+# ---------- skills ----------
+
+# "Skills for the branch commands: Cleanup skill": the list first, --yes only after the user agrees.
+test_branch_skills() {
+  local f s
+  for f in sync branches cleanup; do
+    [ -f "$PLUGIN_DIR/skills/$f/SKILL.md" ] || _fail "no skills/$f/SKILL.md"
+    assert_eq "name: $f" "$(sed -n 2p "$PLUGIN_DIR/skills/$f/SKILL.md")"
+  done
+  assert_contains "$(cat "$PLUGIN_DIR/skills/sync/SKILL.md")" '`scrum sync`'
+  assert_contains "$(cat "$PLUGIN_DIR/skills/sync/SKILL.md")" 'Do not resolve the conflicts on your own'
+  assert_contains "$(cat "$PLUGIN_DIR/skills/branches/SKILL.md")" '`scrum branches`'
+  f="$PLUGIN_DIR/skills/cleanup/SKILL.md"
+  s="$(cat "$f")"
+  assert_contains "$s" "**Wait for the user's answer.**"
+  [ "$(grep -n "Wait for the user's answer" "$f" | cut -d: -f1)" -lt "$(grep -n 'Run `scrum cleanup --yes`' "$f" | cut -d: -f1)" ] \
+    || _fail "the cleanup skill deletes before the user agrees"
+}
+
+# pr-task-linking "Soạn mô tả PR cho task": base by preset and for hotfix/*, Conventional Commits
+# title, warning when behind; branch-promotion "Pull request of a hotfix branch".
+test_task_pr_skill_follows_the_preset() {
+  local s
+  s="$(cat "$PLUGIN_DIR/skills/task-pr/SKILL.md")"
+  assert_contains "$s" '`.branching.develop // "develop"`'
+  assert_contains "$s" 'On a `hotfix/*` branch: the release branch, `.branching.main // "main"`'
+  assert_contains "$s" 'git rev-list --count HEAD..origin/<base>'
+  assert_contains "$s" '`/scrum-github:sync`'
+  assert_contains "$s" 'The title is a Conventional Commit'
+  assert_contains "$s" '`scrum hotfix prepare --yes`'
+  assert_contains "$s" '`marker` line of'
+  assert_contains "$s" 'gh pr create --base <base>'
+}

@@ -15,7 +15,8 @@ Run everything from the root of the target repository, on its main working tree 
 The runtime does every step that touches git or GitHub and keeps the state of the run in
 `.scrum/run/<id>.json` (outside git), so you can stop anywhere and continue later. You only
 confirm with the user, start the agents, and call `scrum run ...` in the order below. Never push
-a branch yourself, never merge into the default branch, and never push the branch of a task.
+a branch yourself, never merge into the working branch (`develop` with a working branch, the
+default branch in `trunk`) or the release branch, and never push the branch of a task.
 
 Arguments: task numbers (`102,107` or `102 107`; default: my New tasks of the open sprint labelled
 `ai-ready`), `--dry-run`, `--pr-per-wave`, `--max-parallel K` (default `run.max_parallel`, 3).
@@ -71,7 +72,8 @@ lists are the task numbers of the plan the user confirmed (never a new default c
 before changing anything when the working tree has uncommitted changes (ask the user to commit or
 stash them), when the integration branch already exists, or when the tasks to run are no longer
 the confirmed ones (then show the plan again and ask again). It creates the
-integration branch from the latest default branch and checks it out. Then run
+integration branch from the latest working branch on origin (`origin/develop` in the `standard`
+and `environments` presets, the default branch in `trunk`) and checks it out. Then run
 `scrum run status --json` and keep its `branch`, `test_command`, `max_parallel` and `waves`.
 
 Never put text written by an agent or taken from an issue on a command line. When a command needs
@@ -128,7 +130,7 @@ For the wave W (`next_wave` of `scrum run status --json`, then the next one):
    tests pass: `scrum run finish --wave W`, also when nothing of the wave was merged (it then
    opens nothing, and after the last wave it closes the run). It pushes the integration branch
    at this point as `<branch>-wave-W` and opens a pull request based on the one of the wave
-   before, which it names to merge first, saying to change its base to the default branch once
+   before, which it names to merge first, saying to change its base to the working branch once
    that one is merged. Never start the next wave while `pr_due` of `scrum run status --json` is
    not empty.
 
@@ -137,7 +139,8 @@ For the wave W (`next_wave` of `scrum run status --json`, then the next one):
 Without `--pr-per-wave`, after the last wave: `scrum run finish` (with `--pr-per-wave` the
 last `finish --wave` already closed the run). It refuses while a task is not
 settled (merge it or record it as failed), pushes only the integration branch and opens one pull
-request into the default branch with `Closes #N` for each merged task. When no task was merged
+request into the working branch with `Closes #N` for each merged task (with a working branch,
+merging it leaves the tasks In review on that branch until they are released). When no task was merged
 it pushes nothing and opens nothing.
 
 Then report: the pull request link (or links), the tasks merged, the tasks that failed or were left

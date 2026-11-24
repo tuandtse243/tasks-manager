@@ -91,10 +91,10 @@ the full path, and the skills now use the full path from the first call). Elsewh
 | `/scrum-github:plan` | `scrum team --json`, `scrum plan init`, `scrum plan check FILE [--json]`, `scrum plan apply FILE` | Break a requirement into an epic, features and tasks in a plan file, with suggested assignees and sprint; one review (`plan.html`); after approval create the issues in their sprint, assigned |
 | `/scrum-github:task-new` | `scrum task new --title T [--points N] [--assignee LOGIN] [--sprint S \| --backlog] [--bug] [--work D] [--review D] [--by ai\|human]` | Create a task in the open sprint, or in the backlog when none is open (or with `--backlog`); says where it went. Optional time estimate, see "Time estimates" |
 | `/scrum-github:my-tasks` | `scrum mine [--user LOGIN] [--json]` | Every open task of one person in every sprint and the backlog, what blocks them, their time estimates and the time left in the open sprint, pull requests waiting for their review, and the task to do next; offers to start it. Read-only |
-| `/scrum-github:task-start` | `scrum task start N` | Assign yourself, set In progress, create branch `feat/N-slug` |
-| `/scrum-github:run` | `scrum run plan [N,…]`, `scrum run start`, `scrum run record`, `scrum run merge N`, `scrum run finish [--wave W]`, `scrum run status [ID]` | Work your `ai-ready` tasks with AI agents, one local git worktree each, wave by wave, into one pull request ready for review; `--dry-run` shows the plan only. See "Running tasks with agents" |
+| `/scrum-github:task-start` | `scrum task start N` | Assign yourself, set In progress, create branch `feat/N-slug` from the latest working branch on origin (`develop`, or the default branch in `trunk`) |
+| `/scrum-github:run` | `scrum run plan [N,…]`, `scrum run start`, `scrum run record`, `scrum run merge N`, `scrum run finish [--wave W]`, `scrum run status [ID]` | Work your `ai-ready` tasks with AI agents, one local git worktree each, wave by wave, into one pull request ready for review, based on the working branch; `--dry-run` shows the plan only. See "Running tasks with agents" |
 | `/scrum-github:task` | `scrum task list [--mine] [--sprint S \| --backlog] [--status ROLE]`, `scrum task move N… --sprint S \| --backlog`, `scrum task estimate N [P] [--work D] [--review D] [--by ai\|human]`, `scrum task assign N LOGIN… [--unassign]`, `scrum task drop N [--reason T]` | See tasks; move, re-estimate, assign or drop them without editing labels by hand |
-| `/scrum-github:task-pr` | `gh pr create` / `gh pr edit`, after you approve | Write the pull request description for the task of the current branch |
+| `/scrum-github:task-pr` | `gh pr create` / `gh pr edit`, after you approve; `scrum hotfix prepare` on a hotfix branch | Write the pull request description for the task of the current branch, with a Conventional Commits title, into the working branch (the release branch from `hotfix/*`); warns when the branch is behind its base |
 | `/scrum-github:sprint-status` | `scrum status [SPRINT]` | Table by person and status with points; work and review minutes left when tasks have time estimates |
 | `/scrum-github:sprint-report` | `scrum report [SPRINT] [--out FILE]` | Self-contained HTML burndown and velocity |
 | `/scrum-github:sprint-close` | `scrum sprint close [SPRINT] [--yes] [--create-next]` | Record velocity, carry over open tasks, close the milestone; suggests a release when the sprint had Done tasks |
@@ -102,7 +102,7 @@ the full path, and the skills now use the full path from the first call). Elsewh
 | `/scrum-github:protect` | `scrum protect [--json] [--yes]` | Create the long-lived branches of the preset, apply branch and tag rules and the merge settings; preview first, writes with `--yes` |
 | `/scrum-github:sync` | `scrum sync` | Merge the working branch (the release branch on a hotfix branch) into the current task branch; lists conflicts with who last changed each file |
 | `/scrum-github:branches` | `scrum branches [--json]` | What each long-lived branch holds that the next one lacks, drift, open promotion, release and back-merge pull requests, stale task branches. Read-only |
-| `/scrum-github:cleanup` | `scrum cleanup [--json] [--yes]` | Local and remote branches that are merged; deletes them with `--yes` |
+| `/scrum-github:cleanup` | `scrum cleanup [--json] [--yes]` | Local and remote branches whose pull request was merged or that a long-lived branch contains (never long-lived, current or with an open pull request); deletes them with `--yes` |
 | `/scrum-github:promote` | `scrum promote [--json] [--yes]` | Preset `environments`: the tasks on the working branch that staging lacks; with `--yes` open the promotion pull request |
 | `/scrum-github:hotfix` | `scrum hotfix N`, `scrum hotfix prepare [--json] [--yes]` | Start a fix from the release branch (`hotfix/N-slug`), then set its version and version files before the pull request |
 | `/scrum-github:project-setup` | `bash wizards/project-board.sh`, then `scrum project init` | Turn on the project board: a wizard for the steps only you can do |
@@ -293,6 +293,29 @@ To send the digest to a chat as well, add a repository secret `SCRUM_DIGEST_WEBH
 
 A webhook that fails only warns; the digest comment is always posted. Run `/scrum-github:init`
 after updating to 0.7.0 so the digest workflow passes the secret.
+
+## Working with branches
+
+With a working branch (`branching.preset: standard` or `environments`), every task starts from
+the latest `develop` on origin and its pull request goes back into `develop`; only `hotfix/*`
+starts from and returns to `main`. In `trunk` the working branch is the default branch, as
+before.
+
+| Step | Command | What happens |
+|---|---|---|
+| Start a task | `scrum task start N` | `git fetch origin develop`, then `feat/N-slug` from `origin/develop`. When origin cannot be reached, from the local `develop`, with a warning that it may be stale |
+| Keep the branch current | `scrum sync` | Merges `origin/develop` (`origin/main` on a hotfix branch) into the current task branch with `git merge --no-edit` and says how many commits came in. Refuses on a long-lived branch and with uncommitted changes |
+| Open the pull request | `/scrum-github:task-pr` | Base `develop` (`main` from `hotfix/*`), title `feat: …` or `fix: …`; warns and suggests `/scrum-github:sync` when the branch is behind its base |
+| See where work is | `scrum branches [--json]` | For each pair of long-lived branches the commits and tasks the lower one has that the upper one lacks; commits of `main` a lower branch lacks and its back-merge pull request; open release, promotion and back-merge pull requests; task branches on origin without a commit for `branching.stale_days` working days, with the last author. In `trunk`, only open pull requests and stale branches. Read-only |
+| Remove finished branches | `scrum cleanup [--json] [--yes]` | Lists local and remote branches whose pull request was merged (the branch tip is the pull request's head, so squash merges count) or that a long-lived branch contains. Never a long-lived branch, the current branch or a branch with an open pull request. Deletes with `--yes` (`git branch -D`, `git push origin --delete`) |
+
+When `scrum sync` conflicts, it lists each conflicted file with the author and subject of the last
+commit on the base that changed it, and leaves the merge in progress: fix the files, then
+`git add` and `git merge --continue`, or `git merge --abort` to go back. It never resolves a
+conflict, and it exits with an error so scripts notice.
+
+`/scrum-github:run` follows the same rule: its integration branch starts from `origin/develop` and
+its pull requests target `develop`.
 
 ## Running tasks with agents
 
