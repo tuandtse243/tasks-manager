@@ -24,7 +24,9 @@ The "Branches and governance" group checks that the default branch is the releas
 (`main`), that every long-lived branch of the preset exists and has a rule (fix:
 `/scrum-github:protect`), that `main` holds nothing the lower branches lack (otherwise a
 back-merge is missing), and that `CODEOWNERS`, `CONTRIBUTING.md`, `SECURITY.md` and
-`dependabot.yml` exist. An `info` line (no `branching` block) needs no action; it says how to
+`dependabot.yml` exist. With `deploy.platform` set, it warns when the GitHub environment
+`production` is missing or has no required reviewers, with the settings page to open (adding
+reviewers is for the user). An `info` line (no `branching` block) needs no action; it says how to
 adopt a preset.
 
 `skip` lines were not checked because something before them failed; they need no action of

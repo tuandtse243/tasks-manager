@@ -39,4 +39,4 @@ its code reaches `{{RELEASE_BRANCH}}` in a release.
 3. Merge the back-merge pull request with a merge commit.
 
 A hotfix: `/scrum-github:hotfix <task>` creates `hotfix/<task>-<slug>` from `{{RELEASE_BRANCH}}`; its pull request
-targets `{{RELEASE_BRANCH}}` and publishes a patch version when merged.
+targets `{{RELEASE_BRANCH}}` and publishes a patch version when merged.{{DEPLOY_SECTION}}

@@ -334,3 +334,65 @@ test_doctor_no_branching_block_is_informational() {
   assert_contains "$OUT" "info   no branching block"
   assert_contains "$OUT" "Everything looks fine."
 }
+
+# ---------- deployment (delta deploy-templates "Production needs approval") ----------
+
+deploy_on() { # deploy_on PLATFORM  Adds deploy.platform to the configuration and reinstalls.
+  printf 'deploy:\n  platform: %s\n' "$1" >> "$SCRUM_REPO_DIR/.github/scrum.yml"
+  run_scrum init
+  assert_status 0 "$STATUS" "$ERR"
+  jq '. + [{"name":"deploy.yml"}]' "$FIXTURES/remote-workflows.json" > "$FAKE_GH_DIR/workflows.json"
+  : > "$FAKE_GH_LOG"
+}
+REVIEWED='{"name":"production","protection_rules":[{"id":2,"type":"required_reviewers","reviewers":[{"type":"User","reviewer":{"login":"tuandt"}}]}]}'
+
+# Scenario: No reviewer
+test_doctor_production_without_reviewers_warns() {
+  doctor_env
+  deploy_on docker
+  route_json 'api repos/acme/blog/environments/production' \
+    '{"name":"production","protection_rules":[{"id":1,"type":"wait_timer","wait_timer":5}]}'
+  doctor_json
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "warn" "$(status_of production-reviewers)"
+  assert_contains "$(check_of production-reviewers)" "no required reviewers"
+  assert_contains "$(check_of production-reviewers)" "https://github.com/acme/blog/settings/environments"
+  assert_eq "" "$(gh_writes)" "doctor writes nothing"
+}
+
+test_doctor_production_environment_missing_warns() {
+  doctor_env
+  deploy_on cloudflare
+  route 'api repos/acme/blog/environments/production' '!404'
+  doctor_json
+  assert_eq "warn" "$(status_of production-reviewers)"
+  assert_contains "$(check_of production-reviewers)" "does not exist"
+  assert_contains "$(check_of production-reviewers)" "https://github.com/acme/blog/settings/environments"
+}
+
+test_doctor_production_with_reviewers_is_ok() {
+  doctor_env
+  deploy_on docker
+  route_json 'api repos/acme/blog/environments/production' "$REVIEWED"
+  run_scrum doctor
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "Everything looks fine."
+}
+
+test_doctor_no_platform_skips_reviewer_check() {
+  doctor_env
+  doctor_json
+  assert_eq "" "$(status_of production-reviewers)"
+  assert_not_contains "$(gh_calls)" "environments"
+}
+
+test_doctor_ignores_projects_own_deploy_workflow() {
+  doctor_env
+  mkdir -p "$SCRUM_REPO_DIR/.github/workflows"
+  printf 'name: our deploy\n' > "$SCRUM_REPO_DIR/.github/workflows/deploy.yml"
+  deploy_on docker
+  route_json 'api repos/acme/blog/environments/production' "$REVIEWED"
+  doctor_json
+  assert_eq "ok" "$(status_of files)"
+  assert_eq "ok" "$(status_of workflows)"
+}
