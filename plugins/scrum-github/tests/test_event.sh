@@ -224,3 +224,157 @@ test_cmd_event_off_converted_to_draft_writes_nothing() {
   assert_status 0 "$STATUS" "$ERR"
   assert_eq "" "$(gh_writes)"
 }
+
+# ---- Stream A: pr-check title and source branch ----
+# delta repo-governance "Pull request title check", delta branching-presets "Allowed source branches"
+
+# gov_check PRESET TITLE HEAD BASE [BODY]  A pull request event in a repository with PRESET.
+gov_check() {
+  local yaml="branching:
+  preset: $1"
+  [ "$1" = trunk ] || yaml="$yaml
+statuses:
+  in_review: In review"
+  event_env pull_request_target "$(jq -nc --arg t "$2" --arg h "$3" --arg b "$4" --arg body "${5:-Closes #1}" \
+    '{action: "opened", pull_request: {number: 20, title: $t, body: $body, labels: [], head: {ref: $h}, base: {ref: $b}}}')"
+  printf '%s\n' "$yaml" > "$SCRUM_REPO_DIR/.github/scrum.yml"
+}
+
+test_pr_check_valid_title() {
+  gov_check standard 'feat(auth): log in with email' feat/12-login develop
+  run_scrum pr-check --title
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" 'OK: the title "feat(auth): log in with email" is a Conventional Commit.'
+}
+
+test_pr_check_title_types_scope_and_bang() {
+  local t
+  for t in 'fix: crash on save' 'docs: readme' 'chore(deps): bump' 'refactor!: drop v1 API' 'test(api)!: x' \
+           'ci: pin actions' 'perf: faster list' 'build: node 22' 'revert: feat(auth): log in'; do
+    gov_check standard "$t" feat/12-login develop
+    run_scrum pr-check --title
+    assert_status 0 "$STATUS" "title: $t"
+  done
+}
+
+test_pr_check_invalid_title() {
+  gov_check standard 'Login page' feat/12-login develop
+  run_scrum pr-check --title
+  assert_status 1 "$STATUS"
+  assert_contains "$OUT" '::error title=Pull request title::'
+  assert_contains "$ERR" 'Example: feat(auth): log in with email'
+  local t
+  for t in 'feature: x' 'feat:x' 'Feat: x' 'feat(auth) x' 'feat(): x'; do
+    gov_check standard "$t" feat/12-login develop
+    run_scrum pr-check --title
+    assert_status 1 "$STATUS" "title: $t"
+  done
+}
+
+test_pr_check_release_pull_request_is_exempt() {
+  gov_check standard 'Release v1.4.0' release/v1.4.0 main 'Release notes, no task'
+  run_scrum pr-check
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "OK: a release pull request (release/v1.4.0 into main)"
+  run_scrum pr-check --title
+  assert_status 0 "$STATUS" "$ERR"
+  run_scrum pr-check --link
+  assert_status 0 "$STATUS" "$ERR"
+}
+
+test_pr_check_back_merge_and_promotion_are_exempt() {
+  gov_check standard 'Back-merge main into develop' main develop 'No task'
+  run_scrum pr-check
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "back-merge pull request"
+  gov_check environments 'Promote develop to staging' develop staging 'No task'
+  run_scrum pr-check
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "promotion pull request"
+}
+
+test_pr_check_hotfix_is_checked() {
+  gov_check standard 'Hotfix for login' hotfix/40-login main 'No task'
+  run_scrum pr-check
+  assert_status 1 "$STATUS"
+  assert_contains "$OUT" '::error title=Pull request title::'
+  assert_contains "$OUT" '::error title=No linked task::'
+  assert_not_contains "$OUT" '::error title=Source branch::'
+}
+
+test_pr_check_task_branch_into_main() {
+  gov_check standard 'feat: login' feat/12-login main
+  run_scrum pr-check --source
+  assert_status 1 "$STATUS"
+  assert_contains "$OUT" '::error title=Source branch::'
+  assert_contains "$ERR" "must target develop"
+  assert_contains "$ERR" "release/*, hotfix/*"
+}
+
+test_pr_check_release_branch_into_main_passes_source() {
+  gov_check standard 'Release v1.4.0' release/v1.4.0 main
+  run_scrum pr-check --source
+  assert_status 0 "$STATUS" "$ERR"
+}
+
+test_pr_check_back_merge_into_develop_passes_source() {
+  gov_check standard 'chore: sync' main develop
+  run_scrum pr-check --source
+  assert_status 0 "$STATUS" "$ERR"
+}
+
+test_pr_check_task_branch_into_develop_passes() {
+  gov_check standard 'feat: login' feat/12-login develop
+  run_scrum pr-check
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "OK: feat/12-login may target develop."
+  assert_contains "$OUT" "OK: closes #1."
+}
+
+test_pr_check_task_branch_into_staging_fails() {
+  gov_check environments 'feat: login' feat/12-login staging
+  run_scrum pr-check --source
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "must target develop"
+}
+
+test_pr_check_trunk_source_always_passes() {
+  gov_check trunk 'feat: login' feat/12-login main
+  run_scrum pr-check
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "OK: feat/12-login may target main."
+}
+
+test_pr_check_runs_every_check_and_reports_each() {
+  gov_check standard 'Login page' feat/12-login main 'Adds login'
+  run_scrum pr-check
+  assert_status 1 "$STATUS"
+  assert_contains "$OUT" '::error title=Pull request title::'
+  assert_contains "$OUT" '::error title=Source branch::'
+  assert_contains "$OUT" '::error title=No linked task::'
+}
+
+test_pr_check_no_task_label_does_not_skip_title() {
+  gov_check standard 'Bump deps' feat/12-login develop 'Bump'
+  jq '.pull_request.labels = [{"name":"no-task"}]' "$GITHUB_EVENT_PATH" > "$T/ev.json" && mv "$T/ev.json" "$GITHUB_EVENT_PATH"
+  run_scrum pr-check
+  assert_status 1 "$STATUS"
+  assert_contains "$OUT" 'OK: the pull request has the "no-task" label.'
+  assert_contains "$OUT" '::error title=Pull request title::'
+}
+
+test_pr_check_unknown_option() {
+  gov_check standard 'feat: x' feat/1-x develop
+  run_scrum pr-check --all
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "unknown option for pr-check"
+}
+
+test_pr_check_workflow_runs_each_check_as_a_step() {
+  local wf="$PLUGIN_DIR/templates/github/workflows/scrum-pr-link-check.yml"
+  assert_eq '["pr-check"]' "$(yq -o=json '.jobs | keys' "$wf" | jq -c .)"
+  assert_eq '[".github/scrum/bin/scrum pr-check --title",".github/scrum/bin/scrum pr-check --source",".github/scrum/bin/scrum pr-check --link"]' \
+    "$(yq -o=json '[.jobs["pr-check"].steps[] | select(.run != null) | .run]' "$wf" | jq -c .)"
+  assert_eq '["Pull request title","Source branch","Linked task"]' \
+    "$(yq -o=json '[.jobs["pr-check"].steps[] | select(.run != null) | .name]' "$wf" | jq -c .)"
+}

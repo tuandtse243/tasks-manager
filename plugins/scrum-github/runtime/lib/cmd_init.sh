@@ -7,18 +7,30 @@ render_template() {
     'reduce ($v | to_entries[]) as $e (.; gsub("\\{\\{" + $e.key + "\\}\\}"; $e.value | tostring))' "$1"
 }
 
+# Template variables. Branch names come from the preset (jq/scrum.jq). CHECKOUT_REF is the
+# branch that scheduled and issue-triggered workflows check out: the working branch, or empty
+# (the default branch, as before) when the configuration has no branching block.
 template_vars() {
-  printf '%s' "$CONFIG_JSON" | jq -c '{
+  printf '%s' "$CONFIG_JSON" | jq -c -L "$JQ_LIB" 'include "scrum"; . as $cfg | branching($cfg) as $b | {
     STATUS_NEW_LABEL: ((.statuses.label_prefix + .statuses.new) | tojson),
     POINTS_OPTIONS: ([.points.scale[] | "        - \(tostring | tojson)"] | join("\n")),
     NO_TASK_LABEL: .labels.no_task,
     DIGEST_CRON: .digest.cron,
-    PROJECT_POLL_CRON: .project.poll_cron
+    PROJECT_POLL_CRON: .project.poll_cron,
+    WORKING_BRANCH: $b.working,
+    RELEASE_BRANCH: $b.release,
+    STAGING_BRANCH: ($b.staging // ""),
+    CHECKOUT_REF: (if .branching.preset == null then "" else $b.working end),
+    TAG_PREFIX: (.release.tag_prefix // "v"),
+    LOCATION_PREFIX: location_prefix($cfg),
+    CODEOWNERS_LINE: ([.governance.codeowners[]? | select(. != "") | if startswith("@") or test("@") then . else "@" + . end]
+      | if length == 0 then "# * @your-org/your-team" else "* " + join(" ") end)
   }'
 }
 
 # managed_files [all]  Prints "TEMPLATE<TAB>PATH" for every file init installs (needs CONFIG_JSON).
-# "all" also lists the board workflow when the board is off: it may remain from when it was on.
+# "all" also lists the board and release workflows when they are off: they may remain from
+# when they were on.
 managed_files() {
   local tpl="$SCRUM_ROOT/../templates/github"
   printf '%s\t%s\n' \
@@ -30,6 +42,53 @@ managed_files() {
   if [ "${1:-}" = all ] || project_enabled; then
     printf '%s\t%s\n' "$tpl/workflows/scrum-project-sync.yml" ".github/workflows/scrum-project-sync.yml"
   fi
+  # The release workflow (release finish) exists only with a working branch.
+  if [ -f "$tpl/workflows/scrum-release.yml" ] && { [ "${1:-}" = all ] || has_working_branch; }; then
+    printf '%s\t%s\n' "$tpl/workflows/scrum-release.yml" ".github/workflows/scrum-release.yml"
+  fi
+}
+
+# ---------- governance files (spec repo-governance "Governance files") ----------
+# Installed only when the project has none at any place GitHub reads it from; never updated or
+# overwritten afterwards, and not recorded in files.json: from then on they are the project's.
+# governance_files  Prints "TEMPLATE<TAB>PATH<TAB>OTHER PLACES (space separated)".
+governance_files() {
+  local tpl="$SCRUM_ROOT/../templates/governance" preset
+  preset="$(branch_role preset)"
+  printf '%s\t%s\t%s\n' \
+    "$tpl/CODEOWNERS" ".github/CODEOWNERS" "CODEOWNERS docs/CODEOWNERS" \
+    "$tpl/CONTRIBUTING-$preset.md" ".github/CONTRIBUTING.md" "CONTRIBUTING.md docs/CONTRIBUTING.md" \
+    "$tpl/SECURITY.md" ".github/SECURITY.md" "SECURITY.md docs/SECURITY.md" \
+    "$tpl/dependabot.yml" ".github/dependabot.yml" ".github/dependabot.yaml"
+}
+
+# governance_existing REL OTHERS  Prints the path the project already has for this file, if any.
+governance_existing() {
+  local p
+  for p in "$1" $2; do
+    if [ -f "$DIR/$p" ]; then printf '%s' "$p"; return 0; fi
+  done
+  return 1
+}
+
+# install_governance  (uses DIR, DRY, VARS)
+install_governance() {
+  local src rel others have
+  while IFS="$(printf '\t')" read -r src rel others; do
+    [ -n "$src" ] || continue
+    if have="$(governance_existing "$rel" "$others")"; then
+      info "  skipped       $rel (the project has $have; left unchanged)"
+    elif [ "$DRY" = 1 ]; then
+      info "  would create  $rel"
+    else
+      mkdir -p "$(dirname "$DIR/$rel")"
+      render_template "$src" "$VARS" > "$DIR/$rel"
+      info "  created       $rel"
+      FILES_CHANGED=1
+    fi
+  done <<EOF
+$(governance_files)
+EOF
 }
 
 # ---------- record of generated files: .github/scrum/files.json ----------
@@ -191,6 +250,7 @@ cmd_init() {
   done <<EOF
 $(managed_files)
 EOF
+  install_governance
 
   sync_runtime
   [ "$DRY" = 1 ] || record_save

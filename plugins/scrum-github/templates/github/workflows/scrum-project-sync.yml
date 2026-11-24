@@ -22,8 +22,11 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # Scheduled and issue runs use the file of the default branch; the configuration and the
+      # runtime come from the working branch of the preset (empty: the default branch).
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
+          ref: "{{CHECKOUT_REF}}"
           sparse-checkout: .github
       - name: Sync the project board
         run: |
