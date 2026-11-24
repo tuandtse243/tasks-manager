@@ -171,3 +171,18 @@ test_branch_contents_over_the_cap() {
   assert_eq '[12]' "$(printf '%s' "$out" | jq -c .contained)"
   assert_not_contains "$(gh_calls)" "issues/13/timeline" "past the cap nothing is read"
 }
+
+test_open_prs_query() {
+  setup_fake_gh
+  setup_repo 'version: 1'
+  route_json 'api --paginate repos/acme/blog/pulls?state=open&per_page=100&head=acme%3Amain&base=develop' \
+    '[{"number":50,"title":"Back-merge main into develop","html_url":"u","head":{"ref":"main"},"base":{"ref":"develop"}}]'
+  route_json 'api --paginate repos/acme/blog/pulls?state=open&per_page=100&base=main' \
+    '[{"number":51,"title":"Release v1.4.0","html_url":"u","head":{"ref":"release/v1.4.0"},"base":{"ref":"main"},"body":"x"},{"number":52,"title":"t","html_url":"u","head":{"ref":"feat/1-x"},"base":{"ref":"main"}}]'
+  local out
+  # shellcheck disable=SC2016  # expanded by the inner shell
+  out="$(SCRUM_ROOT="$PLUGIN_DIR/runtime" "$BASH" -c '. "$SCRUM_ROOT/lib/common.sh"; load_config
+    open_prs acme/blog main develop | jq -c "[.[].number]"; open_prs_matching acme/blog release/ main | jq -c "[.[].number]"')"
+  assert_eq '[50]
+[51]' "$out"
+}

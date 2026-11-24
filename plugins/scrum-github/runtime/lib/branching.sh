@@ -73,3 +73,28 @@ branch_contents() {
   jqlib branch-contents -n --arg step result --argjson checks "$checks" \
     | jq -c --arg ref "$ref" --argjson c "$cand" '{ref: $ref} + . + {truncated: $c.truncated, total: $c.total, limit: $c.limit}'
 }
+
+# open_prs REPO HEAD BASE  The open pull requests from HEAD (a branch of REPO) into BASE, as JSON
+# [{number, title, html_url, head, base}] (empty list when none). HEAD or BASE may be "" for any.
+open_prs() {
+  local q="state=open&per_page=100" owner="${1%%/*}"
+  [ -z "$2" ] || q="$q&head=$(branch_uri "$owner:$2")"
+  [ -z "$3" ] || q="$q&base=$(branch_uri "$3")"
+  gh_get_all "repos/$1/pulls?$q" | jq -c '[.[] | {number, title, html_url, head: .head.ref, base: .base.ref, body: (.body // "")}]'
+}
+
+# open_prs_matching REPO HEAD_PREFIX BASE  Like open_prs, for every head branch starting with
+# HEAD_PREFIX (release/, hotfix/).
+open_prs_matching() {
+  open_prs "$1" "" "$3" | jq -c --arg p "$2" '[.[] | select(.head | startswith($p))]'
+}
+
+# branch_rules REPO BRANCH  The rules that apply to BRANCH (from rulesets), as JSON; [] when none.
+# Returns 1 when GitHub could not be read.
+branch_rules() { gh_get_all "repos/$1/rules/branches/$(branch_uri "$2")"; }
+
+# branch_exists REPO BRANCH  True when the branch exists on GitHub.
+branch_exists() { gh_get "repos/$1/branches/$(branch_uri "$2")" >/dev/null 2>&1; }
+
+# branch_sha REPO BRANCH  The head commit of BRANCH on GitHub.
+branch_sha() { gh_get "repos/$1/git/ref/heads/$(branch_uri "$2")" | jq -r '.object.sha // empty'; }
