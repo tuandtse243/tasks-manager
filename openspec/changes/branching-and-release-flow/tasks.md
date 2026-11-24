@@ -56,21 +56,21 @@ Paths are relative to `plugins/scrum-github/`. Groups 2 to 5 run in parallel in 
 
 ## 6. Deployment templates (after merging groups 2 to 5)
 
-- [ ] 6.1 Check the current Wrangler and Vercel docs for the flags and setting names the templates use, and note the versions checked in a comment at the top of each template
-- [ ] 6.2 Add `templates/deploy/docker/deploy.yml` (image per source tree, registry, SSH deploy, manual rollback) and `templates/deploy/cloudflare/deploy.yml`; verify with a new `tests/test_deploy.sh` that the rendered workflow maps branches to environments for the three presets and names no secret value
-- [ ] 6.3 Install the template of `deploy.platform` from `cmd_init.sh` without overwriting a project's own workflow, write the Vercel section into `CONTRIBUTING.md`, and list the secret names; verify in `tests/test_deploy.sh` every scenario of "Platform selection", "Vercel uses its Git integration" and "Secrets are named, never written"
-- [ ] 6.4 Add the production-reviewer warning to `doctor`; verify the "No reviewer" scenario in `tests/test_doctor.sh`
+- [x] 6.1 Check the current Wrangler and Vercel docs for the flags and setting names the templates use, and note the versions checked in a comment at the top of each template
+- [x] 6.2 Add `templates/deploy/docker/deploy.yml` (image per source tree, registry, SSH deploy, manual rollback) and `templates/deploy/cloudflare/deploy.yml`; verify with a new `tests/test_deploy.sh` that the rendered workflow maps branches to environments for the three presets and names no secret value
+- [x] 6.3 Install the template of `deploy.platform` from `cmd_init.sh` without overwriting a project's own workflow, write the Vercel section into `CONTRIBUTING.md`, and list the secret names; verify in `tests/test_deploy.sh` every scenario of "Platform selection", "Vercel uses its Git integration" and "Secrets are named, never written"
+- [x] 6.4 Add the production-reviewer warning to `doctor`; verify the "No reviewer" scenario in `tests/test_doctor.sh`
 
 ## 7. Documentation and version
 
-- [ ] 7.1 Update the repository-root `docs/adoption-guide.md` with choosing a preset, protecting the repository, the path of a task through the branches, releasing, hotfix and deployment; verify every command shown exists in `scrum help`
-- [ ] 7.2 Update the repository-root `docs/cheat-sheet-dev.md`, `docs/cheat-sheet-sm.md`, `docs/cheat-sheet-po.md` and the root `README.md` table for the new flow; verify `tests/test_docs.sh` passes
-- [ ] 7.3 Set version 0.13.0 in `.claude-plugin/plugin.json`, the root `README.md` and `CHANGELOG.md` (with the breaking note on Done for presets with a working branch) and update the version assertion in `tests/test_init.sh`; verify `tests/test_manifest.sh` passes
+- [x] 7.1 Update the repository-root `docs/adoption-guide.md` with choosing a preset, protecting the repository, the path of a task through the branches, releasing, hotfix and deployment; verify every command shown exists in `scrum help`
+- [x] 7.2 Update the repository-root `docs/cheat-sheet-dev.md`, `docs/cheat-sheet-sm.md`, `docs/cheat-sheet-po.md` and the root `README.md` table for the new flow; verify `tests/test_docs.sh` passes
+- [x] 7.3 Set version 0.13.0 in `.claude-plugin/plugin.json`, the root `README.md` and `CHANGELOG.md` (with the breaking note on Done for presets with a working branch) and update the version assertion in `tests/test_init.sh`; verify `tests/test_manifest.sh` passes
 
 ## 8. Integration checks
 
-- [ ] 8.1 Run `bash plugins/scrum-github/tests/run.sh`, the shellcheck command from the root `README.md`, and `claude plugin validate plugins/scrum-github`; all must pass
-- [ ] 8.2 Run `openspec validate branching-and-release-flow --strict`; it must pass
+- [x] 8.1 Run `bash plugins/scrum-github/tests/run.sh`, the shellcheck command from the root `README.md`, and `claude plugin validate plugins/scrum-github`; all must pass
+- [x] 8.2 Run `openspec validate branching-and-release-flow --strict`; it must pass
 - [ ] 8.3 Have a read-only review agent compare the merged diff with every spec delta of this change and fix what it finds; verify by re-running 8.1
 - [ ] 8.4 Walk one task through a scratch repository with preset `standard` (start, pull request into `develop`, release pull request, merge, tag, back-merge) following `docs/e2e-testing.md`, and record the result in the pull request description; if no scratch repository is available, say so in the description instead of claiming it
 
