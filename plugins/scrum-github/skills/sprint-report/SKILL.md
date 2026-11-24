@@ -16,7 +16,9 @@ Run it from the root of the target repository. It only reads from GitHub and wri
    (default file: `scrum-reports/<sprint>.html` in the current directory).
 2. Give the user the full path of the file. It works offline and can be attached or shared as is.
 3. Summarize what the burndown shows: on track, behind or ahead of the ideal line, and the trend
-   of velocity if earlier sprints exist.
+   of velocity if earlier sprints exist. With a working branch (`standard` or `environments`)
+   the report also lists where each task In review is (in code review, or on a branch waiting for
+   the release); points of tasks on a branch are not done until they are released.
 
 Limits to mention when relevant: points come from each task's current label, and tasks added
 during the sprint are counted from the first day.

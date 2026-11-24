@@ -15,6 +15,11 @@ Run it from the root of the target repository.
 1. **Plan.** Run `scrum sprint close [SPRINT]`
    (no sprint name = the current sprint). This changes nothing. Show the user the velocity,
    the done tasks, the tasks that will be carried over and the next sprint.
+   With a working branch (`standard` or `environments`) the plan also lists "Merged but not
+   released": tasks In review on a branch such as `develop`. They are not in the velocity because
+   their code has not reached the release branch. Say so and suggest `/scrum-github:release` before
+   closing; if the user closes anyway, they move to the next sprint like other unfinished tasks and
+   keep their status and branch label.
 2. **Confirm.** Ask the user to confirm. If the next sprint does not exist yet, say that it will be
    created with the dates shown and ask for that too.
 3. **Apply.** Only after a yes, run `scrum sprint close [SPRINT] --yes`, adding `--create-next`
