@@ -736,7 +736,8 @@ When things go wrong:
 
 `--pr-per-wave` opens one PR per wave; the PR of a later wave is based on the branch of the previous
 wave's PR and says that one must be merged first, and that its base must then be changed to the
-default branch before merging (`Closes #N` only closes tasks when merged into the default branch).
+working branch before merging (the status rules for `Closes #N` apply only when it is merged into
+the working branch).
 
 The command runs exactly the tasks you confirmed: if the list changed (a task was closed or got
 blocked), it stops and changes nothing. An agent's text never goes on a command line: the skill

@@ -343,8 +343,8 @@ What it does, in order:
    uncommitted changes, or when the integration branch exists locally or holds other work on
    origin. It creates
    the **integration branch** `run.branch_pattern` (`run/{sprint}-{login}`, for example
-   `run/sprint-5-tuandt`) from the latest default branch, with no upstream (never the default
-   branch itself), saves the run in
+   `run/sprint-5-tuandt`) from the latest working branch on origin (`develop`, or the default
+   branch in `trunk`), with no upstream (never the working branch itself), saves the run in
    `.scrum/run/<id>.json` (the id is `YYYYMMDD-HHMM-<login>`, UTC; `.scrum/` is added to
    `.git/info/exclude`, so `.gitignore` is not touched), assigns you the tasks nobody has, and
    sets every task In progress.
@@ -358,7 +358,7 @@ What it does, in order:
    **actual time** (the agent's own `started_at` and `ended_at` when it reports them, else from
    `--started` to the record), posted on the issue as an `actual` block next to the estimate. The
    skill writes what an agent says to a file and passes the path; agent text never goes on a
-   command line. `--done` refuses the integration and default branches and a branch that does not
+   command line. `--done` refuses the integration and working branches and a branch that does not
    grow from the run's start. Records and merges of one run wait for each other (a lock next to
    the state file), so none is lost:
 
@@ -376,7 +376,7 @@ What it does, in order:
    repository's tests it finds) on the integration branch before the next wave.
 5. **Finish.** `scrum run finish` pushes the integration branch only (never over commits on
    origin it does not have, and it warns when a task branch is on origin) and opens one pull request
-   into the default branch, the **review pack**: for each merged task its acceptance criteria as
+   into the working branch, the **review pack**: for each merged task its acceptance criteria as
    checkboxes (from the issue), the estimate against the actual time, how to test it by hand and
    what to look at closely (from the agent), and `Closes #N`; then the tasks that failed or were
    left out, with their reasons. The status workflow moves the tasks when it opens and when it is
@@ -401,8 +401,8 @@ When things go wrong:
 `--pr-per-wave` opens one pull request per wave instead, right after the wave is merged and
 tested: `scrum run finish --wave W` pushes the integration branch at that point as
 `<branch>-wave-W`, based on the branch of the previous wave's pull request, and says that one
-must be merged first and that the base must then be changed to the default branch (`Closes #N`
-only closes tasks there). Each wave gets one pull request, in order: `finish` without `--wave`
+must be merged first and that the base must then be changed to the working branch (the status
+rules for `Closes #N` apply only there). Each wave gets one pull request, in order: `finish` without `--wave`
 refuses on such a run, `finish --wave W` refuses a wave already closed or one after a wave still
 open, and `scrum run status` names the wave whose pull request is due before the next wave starts.
 
