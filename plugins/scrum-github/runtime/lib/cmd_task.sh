@@ -93,7 +93,7 @@ cmd_task_start() {
 
   require_tools
   load_config
-  local repo issue branch login default dir
+  local repo issue branch login work from dir
   repo="$(repo_slug)"
   issue="$(gh_get "repos/$repo/issues/$n")" || die "cannot read issue #$n"
   if [ "$(printf '%s' "$issue" | jq 'has("pull_request")')" = "true" ]; then die "#$n is a pull request, not a task"; fi
@@ -108,15 +108,23 @@ cmd_task_start() {
     git -C "$dir" checkout -q "$branch" || die "cannot check out $branch"
     info "Checked out existing branch $branch."
   else
-    default="$(ghx repo view "$repo" --json defaultBranchRef -q .defaultBranchRef.name 2>/dev/null || true)"
-    [ -n "$default" ] || default="main"
-    git -C "$dir" fetch -q origin "$default" 2>/dev/null || true
-    if git -C "$dir" rev-parse --verify -q "origin/$default" >/dev/null; then
-      git -C "$dir" checkout -q -b "$branch" "origin/$default" || die "cannot create $branch"
+    # From the remote state of the working branch (spec branching-presets "Commands use the
+    # working branch"); offline, from the local copy, with a warning that it may be stale.
+    work="$(work_base_branch "$repo")"
+    if git -C "$dir" fetch -q origin "$work" 2>/dev/null \
+       && git -C "$dir" rev-parse --verify -q "refs/remotes/origin/$work" >/dev/null; then
+      from="origin/$work"
+    elif git -C "$dir" rev-parse --verify -q "refs/heads/$work" >/dev/null; then
+      from="$work"
+      warn "cannot fetch $work from origin; $branch starts from your local $work, which may be stale"
+    elif git -C "$dir" rev-parse --verify -q "refs/remotes/origin/$work" >/dev/null; then
+      from="origin/$work"
+      warn "cannot fetch $work from origin; $branch starts from origin/$work as last fetched, which may be stale"
     else
-      git -C "$dir" checkout -q -b "$branch" "$default" || die "cannot create $branch from $default"
+      die "cannot find the branch $work (locally or on origin) to start $branch from"
     fi
-    info "Created branch $branch from $default."
+    git -C "$dir" checkout -q --no-track -b "$branch" "$from" || die "cannot create $branch from $from"
+    info "Created branch $branch from $from."
   fi
 
   local assigned

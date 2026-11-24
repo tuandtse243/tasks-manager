@@ -157,3 +157,21 @@ same options"
   [ "$(grep -n "Wait for the user's answer" "$f" | cut -d: -f1)" -lt "$(grep -n '\*\*Publish exactly what was previewed.\*\*' "$f" | cut -d: -f1)" ] \
     || _fail "the skill publishes before the user confirms"
 }
+
+# branching-and-release-flow: the new commands are in the help, and unknown subcommands fail.
+test_new_branch_commands_are_listed() {
+  run_scrum help
+  local c
+  for c in "protect " "promote " "hotfix NUMBER" "hotfix prepare" "sync " "branches " "cleanup " "release finish"; do
+    assert_contains "$OUT" "  $c"
+  done
+}
+
+test_unknown_subcommands_still_fail() {
+  run_scrum task frobnicate
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "unknown task command"
+  run_scrum hotfix
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "usage: scrum hotfix NUMBER"
+}

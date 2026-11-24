@@ -763,6 +763,33 @@ test_cmd_run_start_from_the_latest_default_branch() {
   assert_eq "$latest" "$(git -C "$SCRUM_REPO_DIR" rev-parse "$INT")"
 }
 
+# spec branching-presets "Commands use the working branch: Run in standard": the integration
+# branch starts from origin/develop (ahead of the local copy) and its pull request targets develop.
+test_cmd_run_in_standard_uses_origin_develop() {
+  git_env
+  printf 'version: 1\nbranching: {preset: standard}\nstatuses: {in_review: In review}\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  git -C "$SCRUM_REPO_DIR" commit -q -am "standard preset"
+  git -C "$SCRUM_REPO_DIR" branch develop
+  git -C "$SCRUM_REPO_DIR" push -q origin main develop 2>/dev/null
+  git clone -q -b develop "$T/remote.git" "$T/other" 2>/dev/null
+  git -C "$T/other" -c user.email=o@example.com -c user.name=o -c commit.gpgsign=false commit -q --allow-empty -m "on develop"
+  git -C "$T/other" push -q origin develop 2>/dev/null
+  route_json 'pr create*' 'https://github.com/acme/blog/pull/200'
+  run_scrum run start 102,107
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "$(git --git-dir="$T/remote.git" rev-parse develop)" "$(git -C "$SCRUM_REPO_DIR" rev-parse "$INT")"
+  assert_eq "$INT develop" "$(jq -r '"\(.branch) \(.base)"' "$(state_file)")"
+  assert_contains "$OUT" "Created the integration branch $INT from origin/develop."
+  agent_work 102 a.txt "from 102"
+  run_scrum run record 102 --done --branch agent-102
+  run_scrum run merge 102
+  run_scrum run record 107 --failed --reason "no time"
+  run_scrum run finish
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$(gh_calls)" "pr create --repo acme/blog --base develop --head $INT"
+  assert_eq "$(git -C "$SCRUM_REPO_DIR" rev-parse main)" "$(git --git-dir="$T/remote.git" rev-parse main)" "main on origin unchanged"
+}
+
 # The state file is valid JSON after every step, and .scrum/ is excluded once (not in .gitignore).
 test_cmd_run_state_file_valid_after_each_step() {
   finish_env

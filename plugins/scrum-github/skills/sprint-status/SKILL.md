@@ -20,6 +20,11 @@ Run it from the root of the target repository. It only reads from GitHub.
    "Review left" (minutes of the tasks not done), and a line with the tasks not done that have no
    time estimate. When AI does the work, review time is usually the bottleneck: say who has the
    most review left. Without any time estimate the table has no time columns.
+   When the project has a working branch (`branching.preset` `standard` or `environments`), a list
+   of the tasks In review follows the table, each "in code review" (its pull request is open) or
+   "on <branch>" (merged into that branch, waiting for the release). Tasks on a branch are not Done
+   until a release reaches the release branch; "Needs attention" names those that have waited on a
+   branch longer than `attention.promote_days` working days: suggest `/scrum-github:release`.
 3. Answer the user's actual question (for example "what is David doing?") from the table.
 
 For a chart, use `/scrum-github:sprint-report`.

@@ -77,7 +77,8 @@ test_init_creates_config_labels_and_files() {
   assert_status 0 "$STATUS" "$ERR"
   [ -f "$SCRUM_REPO_DIR/.github/scrum.yml" ] || _fail "config not created"
   assert_eq "$(cat "$PLUGIN_DIR/templates/scrum.yml")" "$(cat "$SCRUM_REPO_DIR/.github/scrum.yml")"
-  assert_eq "12" "$(gh_writes | grep -c 'POST repos/acme/blog/labels')" "12 labels created"
+  # 12 labels, plus "status: In review" and "on: develop" of preset standard (the template's)
+  assert_eq "14" "$(gh_writes | grep -c 'POST repos/acme/blog/labels')" "14 labels created"
   for f in ISSUE_TEMPLATE/task.yml pull_request_template.md workflows/scrum-status-sync.yml workflows/scrum-pr-link-check.yml workflows/scrum-daily-digest.yml scrum/bin/scrum scrum/lib/jq/scrum.jq scrum/share/defaults.json scrum/GENERATED.md; do
     [ -f "$SCRUM_REPO_DIR/.github/$f" ] || _fail "missing .github/$f"
   done
@@ -111,7 +112,7 @@ test_init_second_run_makes_no_writes() {
   init_env
   run_scrum init
   assert_status 0 "$STATUS" "$ERR"
-  cp "$FIXTURES/labels-after-init.json" "$FAKE_GH_DIR/labels.json"
+  cp "$FIXTURES/labels-after-init-standard.json" "$FAKE_GH_DIR/labels.json"
   : > "$FAKE_GH_LOG"
   run_scrum init
   assert_status 0 "$STATUS" "$ERR"
@@ -164,6 +165,8 @@ test_workflows_never_check_out_pr_code() {
     perms="$(yq -o=json '.permissions' "$wf" | jq -c -S .)"
     case "$(basename "$wf")" in
       scrum-project-sync.yml) assert_eq '{"contents":"read","issues":"write"}' "$perms" "$(basename "$wf") permissions" ;;
+      # Tag, GitHub Release, back-merge pull requests (spec release-pr "Publishing on merge").
+      scrum-release.yml) assert_eq '{"contents":"write","issues":"write","pull-requests":"write"}' "$perms" "$(basename "$wf") permissions" ;;
       *) assert_eq '{"contents":"read","issues":"write","pull-requests":"read"}' "$perms" "$(basename "$wf") permissions" ;;
     esac
   done
@@ -254,7 +257,7 @@ test_pr_template_has_four_sections() {
 
 test_version_matches_plugin_json() {
   run_scrum --version
-  assert_eq "0.12.0" "$OUT"
+  assert_eq "0.13.0" "$OUT"
   assert_eq "$(jq -r .version "$PLUGIN_DIR/.claude-plugin/plugin.json")" "$OUT"
 }
 
@@ -270,7 +273,8 @@ test_init_records_generated_files() {
   [ -f "$rec" ] || _fail "no files.json"
   assert_eq "$(git hash-object "$SCRUM_REPO_DIR/.github/pull_request_template.md")" \
     "$(jq -r '.files[".github/pull_request_template.md"]' "$rec")"
-  assert_eq "5" "$(jq '.files | length' "$rec")"
+  # 5 templates plus scrum-release.yml, installed with preset standard (the template's)
+  assert_eq "6" "$(jq '.files | length' "$rec")"
 }
 
 test_init_updates_issue_form_after_scale_change() {
@@ -385,4 +389,173 @@ test_label_plan_creates_ai_ready() {
   assert_eq '["ai-ready"]' "$(printf '%s' "$plan" | jq -c '[.create[].name]')"
   plan="$(label_plan "$(defaults | jq '.labels.ai_ready = "agent: ready"')" "[]")"
   assert_contains "$(printf '%s' "$plan" | jq -c '[.create[].name]')" '"agent: ready"'
+}
+
+# spec branching-presets: one location label per long-lived branch below the release branch.
+test_label_plan_location_labels_by_preset() {
+  local cfg
+  cfg="$(defaults | jq '.statuses.in_review = "In review" | .branching.preset = "standard"')"
+  assert_json_eq '[{"name":"on: develop","color":"c5def5","description":"Task merged into develop, not released yet"}]' \
+    "$(label_plan "$cfg" "[]" | jq -c '[.create[] | select(.name | startswith("on: "))]')"
+  cfg="$(defaults | jq '.statuses.in_review = "In review" | .branching.preset = "environments"')"
+  assert_json_eq '["on: develop","on: staging"]' "$(label_plan "$cfg" "[]" | jq -c '[.create[].name | select(startswith("on: "))]')"
+  assert_json_eq '[]' "$(label_plan "$(defaults)" "[]" | jq -c '[.create[].name | select(startswith("on: "))]')" "trunk has no location label"
+}
+
+test_label_plan_reports_obsolete_location_label() {
+  local cfg
+  cfg="$(defaults | jq '.statuses.in_review = "In review" | .branching.preset = "standard" | .branching.develop = "dev"')"
+  assert_json_eq '["on: develop"]' "$(label_plan "$cfg" '[{"name":"on: develop","color":"c5def5","description":""}]' | jq -c .obsolete)"
+}
+
+test_init_new_setup_writes_preset_standard() {
+  init_env
+  run_scrum init
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "standard" "$(yq '.branching.preset' "$SCRUM_REPO_DIR/.github/scrum.yml")"
+  assert_contains "$(gh_calls)" '"name":"on: develop"'
+}
+
+# ---------- governance files (delta repo-governance "Governance files") ----------
+
+test_init_fresh_project_gets_governance_files() {
+  init_env
+  run_scrum init
+  assert_status 0 "$STATUS" "$ERR"
+  local g="$SCRUM_REPO_DIR/.github" f
+  for f in CODEOWNERS CONTRIBUTING.md SECURITY.md dependabot.yml; do
+    [ -f "$g/$f" ] || _fail "missing .github/$f"
+    assert_not_contains "$(cat "$g/$f")" "{{" ".github/$f has an unfilled placeholder"
+    assert_contains "$OUT" "created       .github/$f"
+  done
+  assert_eq "github-actions" "$(yq '.updates[0].package-ecosystem' "$g/dependabot.yml")"
+  assert_eq "weekly" "$(yq '.updates[0].schedule.interval' "$g/dependabot.yml")"
+  assert_eq '["*"]' "$(yq -o=json '.updates[0].groups[].patterns' "$g/dependabot.yml" | jq -c .)"
+  assert_eq "1" "$(yq '.updates[0].groups | length' "$g/dependabot.yml")" "one grouped pull request"
+  assert_eq "develop" "$(yq '.updates[0].target-branch' "$g/dependabot.yml")"
+  local c; c="$(cat "$g/CONTRIBUTING.md")"
+  assert_contains "$c" "task branch → \`develop\` → \`main\`"
+  assert_contains "$c" "Conventional Commits"
+  assert_contains "$c" "feat(auth): log in with email"
+  assert_contains "$c" "/scrum-github:release"
+  assert_contains "$c" "\`on: develop\`"
+  # Governance files belong to the project: not recorded, so uninstall and updates leave them.
+  assert_eq "6" "$(jq '.files | length' "$g/scrum/files.json")"
+}
+
+test_init_existing_contributing_is_skipped() {
+  init_env
+  printf 'Our rules\n' > "$SCRUM_REPO_DIR/CONTRIBUTING.md"
+  printf 'Our own policy\n' > "$SCRUM_REPO_DIR/.github/SECURITY.md"
+  run_scrum init
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "Our rules" "$(cat "$SCRUM_REPO_DIR/CONTRIBUTING.md")"
+  assert_eq "Our own policy" "$(cat "$SCRUM_REPO_DIR/.github/SECURITY.md")"
+  [ ! -e "$SCRUM_REPO_DIR/.github/CONTRIBUTING.md" ] || _fail "a second CONTRIBUTING.md was written"
+  assert_contains "$OUT" "skipped       .github/CONTRIBUTING.md (the project has CONTRIBUTING.md; left unchanged)"
+  assert_contains "$OUT" "skipped       .github/SECURITY.md (the project has .github/SECURITY.md; left unchanged)"
+  assert_contains "$OUT" "created       .github/CODEOWNERS"
+}
+
+test_init_governance_files_are_never_overwritten() {
+  init_env
+  run_scrum init
+  printf '* @someone\n' > "$SCRUM_REPO_DIR/.github/CODEOWNERS"
+  printf 'branching:\n  preset: trunk\ngovernance:\n  codeowners: ["@acme/web"]\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  run_scrum init --force
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "* @someone" "$(cat "$SCRUM_REPO_DIR/.github/CODEOWNERS")"
+  assert_contains "$OUT" "skipped       .github/CODEOWNERS"
+}
+
+test_init_governance_dry_run_writes_nothing() {
+  init_env
+  run_scrum init --dry-run
+  assert_contains "$OUT" "would create  .github/CONTRIBUTING.md"
+  [ ! -e "$SCRUM_REPO_DIR/.github/CONTRIBUTING.md" ] || _fail "written in a dry run"
+}
+
+test_init_codeowners_from_config() {
+  init_env
+  printf 'branching:\n  preset: trunk\ngovernance:\n  codeowners: ["@acme/web", "tuandt"]\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  run_scrum init
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "* @acme/web @tuandt" "$(grep -v '^#' "$SCRUM_REPO_DIR/.github/CODEOWNERS")"
+}
+
+test_init_contributing_by_preset() {
+  init_env
+  printf 'branching:\n  preset: environments\nstatuses:\n  in_review: In review\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  run_scrum init
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$(cat "$SCRUM_REPO_DIR/.github/CONTRIBUTING.md")" "task branch → \`develop\` → \`staging\` → \`main\`"
+  rm "$SCRUM_REPO_DIR/.github/CONTRIBUTING.md" "$SCRUM_REPO_DIR/.github/dependabot.yml"
+  printf 'branching:\n  preset: trunk\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  run_scrum init
+  assert_contains "$(cat "$SCRUM_REPO_DIR/.github/CONTRIBUTING.md")" "preset trunk"
+  assert_not_contains "$(cat "$SCRUM_REPO_DIR/.github/CONTRIBUTING.md")" "develop"
+  assert_eq "main" "$(yq '.updates[0].target-branch' "$SCRUM_REPO_DIR/.github/dependabot.yml")"
+}
+
+# ---------- background jobs read the working branch (delta branching-presets) ----------
+
+checkout_ref() { yq '.jobs[].steps[] | select(.uses != null) | .with.ref' "$SCRUM_REPO_DIR/.github/workflows/$1"; }
+
+test_init_daily_digest_in_standard() {
+  init_env
+  run_scrum init
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "develop" "$(checkout_ref scrum-daily-digest.yml)"
+  assert_eq "\${{ github.event_name == 'issues' && 'develop' || '' }}" "$(checkout_ref scrum-status-sync.yml)"
+}
+
+test_init_daily_digest_in_trunk() {
+  init_env
+  printf 'branching:\n  preset: trunk\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  run_scrum init
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "main" "$(checkout_ref scrum-daily-digest.yml)"
+}
+
+test_init_daily_digest_without_branching_block() {
+  init_env
+  printf 'version: 1\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  run_scrum init
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "" "$(checkout_ref scrum-daily-digest.yml)" "the default branch, as before"
+}
+
+test_init_project_sync_reads_working_branch() {
+  init_env
+  printf 'branching:\n  preset: standard\n  develop: dev\nstatuses:\n  in_review: In review\nproject:\n  enabled: true\n  owner: acme\n  number: 2\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  run_scrum init
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "dev" "$(checkout_ref scrum-project-sync.yml)"
+}
+
+# The release workflow (stream D's template) is installed only with a working branch.
+test_init_release_workflow_only_with_working_branch() {
+  init_env
+  run_scrum init
+  assert_status 0 "$STATUS" "$ERR"
+  if [ -f "$PLUGIN_DIR/templates/github/workflows/scrum-release.yml" ]; then
+    [ -f "$SCRUM_REPO_DIR/.github/workflows/scrum-release.yml" ] || _fail "release workflow not installed in standard"
+  fi
+  rm -rf "$T/repo"; init_env
+  printf 'branching:\n  preset: trunk\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  run_scrum init
+  assert_status 0 "$STATUS" "$ERR"
+  [ ! -e "$SCRUM_REPO_DIR/.github/workflows/scrum-release.yml" ] || _fail "release workflow installed in trunk"
+}
+
+test_init_template_vars_have_branches() {
+  init_env
+  setup_repo 'branching:
+  preset: environments
+statuses:
+  in_review: In review'
+  local vars
+  vars="$(SCRUM_ROOT="$PLUGIN_DIR/runtime" bash -c '. "$SCRUM_ROOT/lib/common.sh"; . "$SCRUM_ROOT/lib/cmd_init.sh"; load_config "$SCRUM_REPO_DIR/.github/scrum.yml"; template_vars')"
+  assert_eq '{"WORKING_BRANCH":"develop","RELEASE_BRANCH":"main","STAGING_BRANCH":"staging","CHECKOUT_REF":"develop"}' \
+    "$(printf '%s' "$vars" | jq -c '{WORKING_BRANCH, RELEASE_BRANCH, STAGING_BRANCH, CHECKOUT_REF}')"
 }

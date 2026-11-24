@@ -355,3 +355,31 @@ test_cmd_mine_points_to_run() {
   assert_status 0 "$STATUS" "$ERR"
   assert_contains "$OUT" "AI agents can work one of them (labelled ai-ready): #45. Run them: /scrum-github:run"
 }
+
+# change branching-and-release-flow: where a task In review is (delta sprint-reporting
+# "Location of tasks in review")
+test_mine_review_location_mixed() {
+  local issues cfg out
+  cfg="$(defaults | jq -c '.branching.preset = "standard" | .statuses.in_review = "In review"')"
+  issues="$(jq -s . <(mi 12 'In review' 3 5) <(mi 13 'In review' 2 5 'on: develop') <(mi 14 'In progress' 1 5))"
+  out="$(mine_jq "$issues" '{}' "$S5" '[]' "$cfg")"
+  assert_eq '[{"number":12,"location":"code_review"},{"number":13,"location":"develop"}]' \
+    "$(printf '%s' "$out" | jq -c '[.groups[].tasks[] | select(.location) | {number, location}]')"
+}
+
+test_mine_review_location_trunk() {
+  local issues cfg
+  cfg="$(defaults | jq -c '.statuses.in_review = "In review"')"
+  issues="$(jq -s . <(mi 12 'In review' 3 5) <(mi 13 'In review' 2 5 'on: develop'))"
+  assert_eq '[]' "$(mine_jq "$issues" '{}' "$S5" '[]' "$cfg" | jq -c '[.groups[].tasks[] | select(has("location"))]')"
+}
+
+test_cmd_mine_review_location() {
+  mine_env
+  printf 'version: 1\nbranching:\n  preset: standard\nstatuses:\n  in_review: In review\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  jq -s . <(mi 12 'In review' 3 5) <(mi 13 'In review' 2 5 'on: develop') > "$FAKE_GH_DIR/mine.json"
+  run_scrum mine
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "  #12  3 pt  Sprint 5  Task 12  (in code review)"
+  assert_contains "$OUT" "  #13  2 pt  Sprint 5  Task 13  (on develop)"
+}

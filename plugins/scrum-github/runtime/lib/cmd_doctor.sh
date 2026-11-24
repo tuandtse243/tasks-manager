@@ -6,7 +6,7 @@
 # shellcheck source=cmd_init.sh
 . "$SCRUM_ROOT/lib/cmd_init.sh"
 
-# check GROUP ID STATUS MESSAGE [FIX]   STATUS: ok | warn | error | skip
+# check GROUP ID STATUS MESSAGE [FIX]   STATUS: ok | warn | error | skip | info (counted as neither)
 check() {
   jq -nc --arg g "$1" --arg i "$2" --arg s "$3" --arg m "$4" --arg f "${5:-}" \
     '{group: $g, id: $i, status: $s, message: $m} + (if $f == "" then {} else {fix: $f} end)' >> "$CHECKS"
@@ -143,6 +143,7 @@ doctor_install() {
   VARS="$(template_vars)"
   record_load
   while IFS="$(printf '\t')" read -r src rel; do
+    deploy_is_foreign "$rel" && continue   # the project's own deployment workflow
     if [ ! -f "$DIR/$rel" ]; then absent="$absent $rel"
     elif ! render_template "$src" "$VARS" | cmp -s - "$DIR/$rel"; then
       if is_pristine_by_record "$rel"; then stale="$stale $rel"; else edited="$edited $rel"; fi
@@ -175,7 +176,7 @@ EOF
   while IFS="$(printf '\t')" read -r src rel; do
     case "$rel" in
       .github/workflows/scrum-project-sync.yml) continue ;;   # checked with the board
-      .github/workflows/*) ;;
+      .github/workflows/*) deploy_is_foreign "$rel" && continue ;;
       *) continue ;;
     esac
     name="${rel##*/}"
@@ -237,6 +238,122 @@ doctor_board() {
   fi
 }
 
+# Branches, rules and governance files (spec repo-governance "Diagnostics for governance").
+doctor_governance() {
+  local src rel others absent="" json defb rel_branch name missing="" norules="" unread="" rules lower ahead n
+  if [ "$CFG_OK" != 1 ]; then
+    check governance governance skip "needs a valid configuration"; return 0
+  fi
+
+  while IFS="$(printf '\t')" read -r src rel others; do
+    [ -n "$rel" ] || continue
+    governance_existing "$rel" "$others" >/dev/null || absent="$absent $rel"
+  done <<EOF
+$(governance_files)
+EOF
+  if [ -n "$absent" ]; then
+    check governance governance-files warn "missing governance files:$absent" "/scrum-github:init (or: scrum init) installs them without touching files you have, then commit and push .github/"
+  else
+    check governance governance-files ok "CODEOWNERS, CONTRIBUTING.md, SECURITY.md and dependabot.yml exist"
+  fi
+
+  if [ "$(config_get '.branching.preset // ""')" = "" ]; then
+    check governance preset info "no branching block in .github/scrum.yml, so the repository works as preset trunk (one long-lived branch)" \
+      "To work with develop and main: add \"branching: {preset: standard}\" and \"statuses: {in_review: In review}\" to .github/scrum.yml, run /scrum-github:init, then /scrum-github:protect"
+    return 0
+  fi
+  if [ "$GH_OK" != 1 ] || [ -z "$REPO" ]; then
+    check governance branches skip "needs a gh login and a GitHub remote"; return 0
+  fi
+
+  rel_branch="$(branch_role release)"
+  if ! json="$(gh_get "repos/$REPO" 2>/dev/null)" || ! defb="$(printf '%s' "$json" | jq -er '.default_branch | strings' 2>/dev/null)"; then
+    check governance default-branch warn "cannot read the default branch of $REPO" "Check that gh can read the repository: gh repo view $REPO"
+  elif [ "$defb" != "$rel_branch" ]; then
+    check governance default-branch error "the default branch of $REPO is $defb, not the release branch $rel_branch of preset $(branch_role preset)" \
+      "Set the default branch to $rel_branch: Settings → General → Default branch (https://github.com/$REPO/settings), or: gh repo edit $REPO --default-branch $rel_branch"
+  else
+    check governance default-branch ok "the default branch is $rel_branch"
+  fi
+
+  for name in $(branch_role chain); do
+    if ! branch_exists "$REPO" "$name"; then missing="$missing $name"; continue; fi
+    if ! rules="$(branch_rules "$REPO" "$name" 2>/dev/null)"; then unread="$unread $name"
+    elif [ "$(printf '%s' "$rules" | jq 'length' 2>/dev/null)" = 0 ]; then norules="$norules $name"; fi
+  done
+  if [ -n "$missing" ]; then
+    check governance branches error "long-lived branches of preset $(branch_role preset) missing on GitHub:$missing" \
+      "/scrum-github:protect (or: scrum protect, then --yes) creates them from the head of $rel_branch"
+  else
+    check governance branches ok "the long-lived branches exist: $(branch_role chain | tr '\n' ' ' | sed 's/ $//')"
+  fi
+  if [ -n "$norules" ]; then
+    check governance rules warn "no rule protects these branches:$norules (anyone with write access can push or force-push to them)" \
+      "/scrum-github:protect (or: scrum protect, then --yes)"
+  fi
+  if [ -n "$unread" ]; then
+    check governance rules warn "cannot read the rules of:$unread" "Check that gh can read the repository: gh repo view $REPO"
+  fi
+  if [ -z "$norules$unread" ] && [ -z "$missing" ]; then
+    check governance rules ok "every long-lived branch has a rule"
+  fi
+
+  has_working_branch || return 0
+  # The release workflow opens the back-merge pull requests with GITHUB_TOKEN: GitHub refuses
+  # that unless Actions may create pull requests (off by default).
+  local can
+  if can="$(gh_get "repos/$REPO/actions/permissions/workflow" 2>/dev/null | jq -r '.can_approve_pull_request_reviews | if type == "boolean" then tostring else error("unread") end' 2>/dev/null)" && [ -n "$can" ]; then
+    if [ "$can" = true ]; then
+      check governance actions-prs ok "GitHub Actions may open pull requests (the release workflow opens the back-merges)"
+    else
+      check governance actions-prs warn "GitHub Actions may not create pull requests, so the release workflow cannot open the back-merge pull requests" \
+        "/scrum-github:protect (or: scrum protect --yes), or turn on \"Allow GitHub Actions to create and approve pull requests\" in https://github.com/$REPO/settings/actions"
+    fi
+  fi
+  case " $missing " in *" $rel_branch "*) return 0 ;; esac
+  for lower in $(branch_role lower); do
+    case " $missing " in *" $lower "*) continue ;; esac
+    if ! ahead="$(gh_get "repos/$REPO/compare/$(branch_uri "$lower")...$(branch_uri "$rel_branch")" 2>/dev/null | jq -er '.ahead_by | numbers' 2>/dev/null)"; then
+      check governance back-merge warn "cannot compare $lower with $rel_branch" "Check that gh can read the repository: gh repo view $REPO"
+    elif [ "$ahead" -gt 0 ]; then
+      n="commit"; [ "$ahead" = 1 ] || n="commits"
+      check governance back-merge warn "$rel_branch has $ahead $n that $lower does not contain (a release or hotfix not merged back)" \
+        "Merge the back-merge pull request $rel_branch → $lower with a merge commit; if none is open: gh pr create --repo $REPO --base $lower --head $rel_branch --title \"Back-merge $rel_branch into $lower\""
+    else
+      check governance back-merge ok "$lower contains everything on $rel_branch"
+    fi
+  done
+}
+
+# Production needs approval (spec deploy-templates "Production needs approval"): with a deployment
+# platform, the GitHub environment production must have a required reviewer.
+doctor_deploy() {
+  local platform out rc=0 page
+  [ "$CFG_OK" = 1 ] || return 0
+  platform="$(deploy_platform)"
+  [ "$platform" != none ] || return 0
+  if [ "$GH_OK" != 1 ] || [ -z "$REPO" ]; then
+    check governance production-reviewers skip "needs a gh login and a GitHub remote"; return 0
+  fi
+  page="https://github.com/$REPO/settings/environments"
+  out="$(gh_get "repos/$REPO/environments/production" 2>&1)" || rc=$?
+  if [ "$rc" != 0 ]; then
+    case "$out" in
+      *"HTTP 404"*|*"Not Found"*)
+        check governance production-reviewers warn "deploy.platform is $platform, but the GitHub environment production does not exist, so nothing asks for approval before a production deployment" \
+          "Create the environment production and add required reviewers: $page" ;;
+      *)
+        check governance production-reviewers warn "cannot read the GitHub environment production of $REPO" \
+          "Check it yourself: $page" ;;
+    esac
+  elif printf '%s' "$out" | jq -e '[.protection_rules[]? | select(.type == "required_reviewers") | .reviewers[]?] | length > 0' >/dev/null 2>&1; then
+    check governance production-reviewers ok "the environment production has required reviewers"
+  else
+    check governance production-reviewers warn "deploy.platform is $platform, but the GitHub environment production has no required reviewers, so a production deployment needs no approval" \
+      "Add required reviewers to the environment production: $page"
+  fi
+}
+
 cmd_doctor() {
   local json=0
   while [ $# -gt 0 ]; do
@@ -269,6 +386,8 @@ cmd_doctor() {
   doctor_tools
   doctor_repo
   doctor_install
+  doctor_governance
+  doctor_deploy
   doctor_board
 
   local report

@@ -5,6 +5,8 @@
 include "scrum";
 def pts: trn($strings; "pts"; .; {});
 def who: if (._who | length) == 0 then tr($strings; "digest_unassigned") else (._who | map("@" + .) | join(", ")) end;
+# With a working branch, where a task In review is (", in code review" or ", on develop"); "" in trunk.
+def where: review_location($cfg) as $l | if $l == null then "" else ", " + location_text($strings; $l) end;
 ($sprint | sprint_info) as $s
 | progress($cfg; $sprint; $issues; $today) as $p
 | ($issues | report_tasks($cfg)) as $t
@@ -35,7 +37,7 @@ def who: if (._who | length) == 0 then tr($strings; "digest_unassigned") else (.
       (if review_on($cfg) then
          "### " + tr($strings; "digest_in_review"),
          (if ($reviewing | length) == 0 then "- " + tr($strings; "digest_nothing_in_review")
-          else ($reviewing | sort_by(._who[0] // "~")[] | "- \(who): #\(.number) \(.title) (\(._pts // 0 | pts))") end),
+          else ($reviewing | sort_by(._who[0] // "~")[] | "- \(who): #\(.number) \(.title) (\(._pts // 0 | pts))\(where)") end),
          ""
        else empty end),
       "### " + tr($strings; "digest_not_started"),

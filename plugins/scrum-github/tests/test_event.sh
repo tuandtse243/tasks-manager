@@ -224,3 +224,302 @@ test_cmd_event_off_converted_to_draft_writes_nothing() {
   assert_status 0 "$STATUS" "$ERR"
   assert_eq "" "$(gh_writes)"
 }
+
+# ---- Stream A: pr-check title and source branch ----
+# delta repo-governance "Pull request title check", delta branching-presets "Allowed source branches"
+
+# gov_check PRESET TITLE HEAD BASE [BODY]  A pull request event in a repository with PRESET.
+gov_check() {
+  local yaml="branching:
+  preset: $1"
+  [ "$1" = trunk ] || yaml="$yaml
+statuses:
+  in_review: In review"
+  event_env pull_request_target "$(jq -nc --arg t "$2" --arg h "$3" --arg b "$4" --arg body "${5:-Closes #1}" \
+    '{action: "opened", pull_request: {number: 20, title: $t, body: $body, labels: [], head: {ref: $h}, base: {ref: $b}}}')"
+  printf '%s\n' "$yaml" > "$SCRUM_REPO_DIR/.github/scrum.yml"
+}
+
+test_pr_check_valid_title() {
+  gov_check standard 'feat(auth): log in with email' feat/12-login develop
+  run_scrum pr-check --title
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" 'OK: the title "feat(auth): log in with email" is a Conventional Commit.'
+}
+
+test_pr_check_title_types_scope_and_bang() {
+  local t
+  for t in 'fix: crash on save' 'docs: readme' 'chore(deps): bump' 'refactor!: drop v1 API' 'test(api)!: x' \
+           'ci: pin actions' 'perf: faster list' 'build: node 22' 'revert: feat(auth): log in'; do
+    gov_check standard "$t" feat/12-login develop
+    run_scrum pr-check --title
+    assert_status 0 "$STATUS" "title: $t"
+  done
+}
+
+test_pr_check_invalid_title() {
+  gov_check standard 'Login page' feat/12-login develop
+  run_scrum pr-check --title
+  assert_status 1 "$STATUS"
+  assert_contains "$OUT" '::error title=Pull request title::'
+  assert_contains "$ERR" 'Example: feat(auth): log in with email'
+  local t
+  for t in 'feature: x' 'feat:x' 'Feat: x' 'feat(auth) x' 'feat(): x'; do
+    gov_check standard "$t" feat/12-login develop
+    run_scrum pr-check --title
+    assert_status 1 "$STATUS" "title: $t"
+  done
+}
+
+test_pr_check_release_pull_request_is_exempt() {
+  gov_check standard 'Release v1.4.0' release/v1.4.0 main 'Release notes, no task'
+  run_scrum pr-check
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "OK: a release pull request (release/v1.4.0 into main)"
+  run_scrum pr-check --title
+  assert_status 0 "$STATUS" "$ERR"
+  run_scrum pr-check --link
+  assert_status 0 "$STATUS" "$ERR"
+}
+
+test_pr_check_back_merge_and_promotion_are_exempt() {
+  gov_check standard 'Back-merge main into develop' main develop 'No task'
+  run_scrum pr-check
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "back-merge pull request"
+  gov_check environments 'Promote develop to staging' develop staging 'No task'
+  run_scrum pr-check
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "promotion pull request"
+}
+
+test_pr_check_hotfix_is_checked() {
+  gov_check standard 'Hotfix for login' hotfix/40-login main 'No task'
+  run_scrum pr-check
+  assert_status 1 "$STATUS"
+  assert_contains "$OUT" '::error title=Pull request title::'
+  assert_contains "$OUT" '::error title=No linked task::'
+  assert_not_contains "$OUT" '::error title=Source branch::'
+}
+
+test_pr_check_task_branch_into_main() {
+  gov_check standard 'feat: login' feat/12-login main
+  run_scrum pr-check --source
+  assert_status 1 "$STATUS"
+  assert_contains "$OUT" '::error title=Source branch::'
+  assert_contains "$ERR" "must target develop"
+  assert_contains "$ERR" "release/*, hotfix/*"
+}
+
+test_pr_check_release_branch_into_main_passes_source() {
+  gov_check standard 'Release v1.4.0' release/v1.4.0 main
+  run_scrum pr-check --source
+  assert_status 0 "$STATUS" "$ERR"
+}
+
+test_pr_check_back_merge_into_develop_passes_source() {
+  gov_check standard 'chore: sync' main develop
+  run_scrum pr-check --source
+  assert_status 0 "$STATUS" "$ERR"
+}
+
+test_pr_check_task_branch_into_develop_passes() {
+  gov_check standard 'feat: login' feat/12-login develop
+  run_scrum pr-check
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "OK: feat/12-login may target develop."
+  assert_contains "$OUT" "OK: closes #1."
+}
+
+test_pr_check_task_branch_into_staging_fails() {
+  gov_check environments 'feat: login' feat/12-login staging
+  run_scrum pr-check --source
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "must target develop"
+}
+
+test_pr_check_trunk_source_always_passes() {
+  gov_check trunk 'feat: login' feat/12-login main
+  run_scrum pr-check
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "OK: feat/12-login may target main."
+}
+
+test_pr_check_runs_every_check_and_reports_each() {
+  gov_check standard 'Login page' feat/12-login main 'Adds login'
+  run_scrum pr-check
+  assert_status 1 "$STATUS"
+  assert_contains "$OUT" '::error title=Pull request title::'
+  assert_contains "$OUT" '::error title=Source branch::'
+  assert_contains "$OUT" '::error title=No linked task::'
+}
+
+test_pr_check_no_task_label_does_not_skip_title() {
+  gov_check standard 'Bump deps' feat/12-login develop 'Bump'
+  jq '.pull_request.labels = [{"name":"no-task"}]' "$GITHUB_EVENT_PATH" > "$T/ev.json" && mv "$T/ev.json" "$GITHUB_EVENT_PATH"
+  run_scrum pr-check
+  assert_status 1 "$STATUS"
+  assert_contains "$OUT" 'OK: the pull request has the "no-task" label.'
+  assert_contains "$OUT" '::error title=Pull request title::'
+}
+
+test_pr_check_unknown_option() {
+  gov_check standard 'feat: x' feat/1-x develop
+  run_scrum pr-check --all
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "unknown option for pr-check"
+}
+
+test_pr_check_workflow_runs_each_check_as_a_step() {
+  local wf="$PLUGIN_DIR/templates/github/workflows/scrum-pr-link-check.yml"
+  assert_eq '["pr-check"]' "$(yq -o=json '.jobs | keys' "$wf" | jq -c .)"
+  assert_eq '[".github/scrum/bin/scrum pr-check --title",".github/scrum/bin/scrum pr-check --source",".github/scrum/bin/scrum pr-check --link"]' \
+    "$(yq -o=json '[.jobs["pr-check"].steps[] | select(.run != null) | .run]' "$wf" | jq -c .)"
+  assert_eq '["Pull request title","Source branch","Linked task"]' \
+    "$(yq -o=json '[.jobs["pr-check"].steps[] | select(.run != null) | .name]' "$wf" | jq -c .)"
+}
+
+# ---------- branching presets (delta pr-task-linking: "Vòng đời PR khi bật In review",
+# "Task location after merge", "Done only on the release branch"; design 4) ----------
+
+preset_cfg() { defaults | jq -c --arg p "$1" '.branching.preset = $p | .statuses.in_review = "In review"'; }
+bdecide() { # bdecide PRESET KIND ISSUE BASE HEAD
+  jqt event-decide -n --argjson cfg "$(preset_cfg "$1")" --arg kind "$2" --argjson issue "$3" --argjson draft false \
+    --arg base "$4" --arg head "$5" | jq -c '{skip, labels: (.labels | if . then sort else . end), close}'
+}
+liss() { # liss STATUS [LABEL...]  An open task with that status and those extra labels.
+  local s="$1"; shift
+  jq -nc --arg s "$s" '{number: 1, state: "open", labels: ([{name: "status: \($s)"}] + ($ARGS.positional | map({name: .})))}' --args "$@"
+}
+
+test_branching_merge_into_develop_keeps_task_in_review() {
+  assert_eq '{"skip":null,"labels":["on: develop","status: In review"],"close":false}' \
+    "$(bdecide standard pr_merged "$(liss 'In review')" develop feat/1-login)"
+}
+test_branching_merge_into_develop_from_in_progress() {
+  assert_eq '{"skip":null,"labels":["on: develop","points: 3","status: In review"],"close":false}' \
+    "$(bdecide standard pr_merged "$(liss 'In progress' 'points: 3')" develop feat/1-login)"
+  assert_eq '["on: develop","status: In review"]' "$(bdecide standard pr_merged "$(liss New)" develop feat/1-login | jq -c .labels)"
+}
+test_branching_merge_into_develop_twice_changes_nothing() {
+  assert_eq '"already in_review"' "$(bdecide standard pr_merged "$(liss 'In review' 'on: develop')" develop feat/1-x | jq -c .skip)"
+}
+test_branching_merge_into_renamed_working_branch() {
+  local cfg
+  cfg="$(preset_cfg standard | jq -c '.branching.develop = "dev"')"
+  assert_eq '["on: dev","status: In review"]' "$(jqt event-decide -n --argjson cfg "$cfg" --arg kind pr_merged \
+    --argjson issue "$(liss 'In review')" --arg base dev --arg head feat/1-x | jq -c '.labels | sort')"
+}
+test_branching_merge_into_task_branch_changes_nothing() {
+  assert_eq '{"skip":"merged into feat/2-other, not the working branch","labels":null,"close":false}' \
+    "$(bdecide standard pr_merged "$(liss 'In review')" feat/2-other feat/1-x)"
+}
+test_branching_hotfix_into_main_sets_done_and_closes() {
+  assert_eq '{"skip":null,"labels":["status: Done"],"close":true}' \
+    "$(bdecide standard pr_merged "$(liss 'In review' 'on: develop')" main hotfix/31-payment-fails)"
+  assert_eq 'true' "$(bdecide environments pr_merged "$(liss 'In progress')" main hotfix/31-payment-fails | jq -c .close)"
+}
+test_branching_release_merge_left_to_release_finish() {
+  assert_eq '"released by scrum release finish"' \
+    "$(bdecide standard pr_merged "$(liss 'In review' 'on: develop')" main release/v1.4.0 | jq -c .skip)"
+}
+test_branching_back_merge_and_promotion_change_nothing() {
+  assert_eq '"back-merge"' "$(bdecide standard pr_merged "$(liss 'In review' 'on: develop')" develop main | jq -c .skip)"
+  assert_eq '"promotion: handled for the tasks it contains"' \
+    "$(bdecide environments pr_merged "$(liss 'In review' 'on: develop')" staging develop | jq -c .skip)"
+}
+test_branching_never_moves_done_back() {
+  assert_eq '"already done"' "$(bdecide standard pr_merged "$(liss Done)" develop feat/1-x | jq -c .skip)"
+  assert_eq '"already done"' "$(bdecide standard pr_merged '{"number":1,"state":"closed","state_reason":"completed","labels":[{"name":"status: Done"}]}' main hotfix/1-x | jq -c .skip)"
+}
+test_branching_trunk_merge_anywhere_is_done() {
+  assert_eq '{"skip":null,"labels":["status: Done"],"close":true}' \
+    "$(bdecide trunk pr_merged "$(liss 'In review')" feat/2-other feat/1-x)"
+}
+test_branching_issue_closed_drops_location() {
+  assert_eq '["status: Done"]' "$(bdecide standard issue_closed '{"number":1,"state":"closed","state_reason":"completed","labels":[{"name":"status: In review"},{"name":"on: develop"}]}' '' '' | jq -c .labels)"
+}
+test_branching_location_task_does_not_move_back() {
+  assert_eq '"already on develop"' "$(bdecide standard pr_closed "$(liss 'In review' 'on: develop')" '' '' | jq -c .skip)"
+}
+test_branching_promoted_swaps_label() {
+  assert_eq '["on: staging","status: In review"]' \
+    "$(bdecide environments pr_promoted "$(liss 'In review' 'on: develop')" staging develop | jq -c .labels)"
+  assert_eq '"not on a branch"' "$(bdecide environments pr_promoted "$(liss 'In review')" staging develop | jq -c .skip)"
+}
+
+branch_event_env() { # branch_event_env PRESET EVENT_JSON
+  event_env pull_request_target "$2"
+  printf 'version: 1\nbranching:\n  preset: %s\nstatuses:\n  in_review: In review\n' "$1" > "$SCRUM_REPO_DIR/.github/scrum.yml"
+}
+
+test_cmd_event_standard_merge_into_develop() {
+  branch_event_env standard '{"action":"closed","pull_request":{"number":20,"body":"Closes #1","merged":true,"base":{"ref":"develop"},"head":{"ref":"feat/1-login"}}}'
+  route_json 'api repos/acme/blog/issues/1' '{"number":1,"state":"open","labels":[{"name":"status: In review"}]}'
+  run_scrum event
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$(gh_calls)" 'STDIN {"labels":["status: In review","on: develop"]}'
+  assert_not_contains "$(gh_calls)" '"state":"closed"'
+}
+
+test_cmd_event_standard_merge_into_task_branch() {
+  branch_event_env standard '{"action":"closed","pull_request":{"number":20,"body":"Closes #1","merged":true,"base":{"ref":"feat/2-other"},"head":{"ref":"feat/1-login"}}}'
+  route_json 'api repos/acme/blog/issues/1' '{"number":1,"state":"open","labels":[{"name":"status: In review"}]}'
+  run_scrum event
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "" "$(gh_writes)"
+}
+
+test_cmd_event_hotfix_merged_into_main() {
+  branch_event_env standard '{"action":"closed","pull_request":{"number":21,"body":"Closes #31","merged":true,"base":{"ref":"main"},"head":{"ref":"hotfix/31-payment-fails"}}}'
+  route_json 'api repos/acme/blog/issues/31' '{"number":31,"state":"open","labels":[{"name":"status: In review"}]}'
+  run_scrum event
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$(gh_calls)" 'STDIN {"labels":["status: Done"]}'
+  assert_contains "$(gh_calls)" 'STDIN {"state":"closed","state_reason":"completed"}'
+}
+
+test_cmd_event_release_merge_writes_nothing() {
+  branch_event_env standard '{"action":"closed","pull_request":{"number":22,"body":"Closes #1","merged":true,"base":{"ref":"main"},"head":{"ref":"release/v1.4.0"}}}'
+  run_scrum event
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "" "$(gh_writes)"
+  assert_contains "$OUT" "scrum release finish"
+}
+
+test_cmd_event_back_merge_writes_nothing() {
+  branch_event_env standard '{"action":"closed","pull_request":{"number":23,"body":"Back-merge","merged":true,"base":{"ref":"develop"},"head":{"ref":"main"}}}'
+  run_scrum event
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "" "$(gh_writes)"
+}
+
+promotion_env() {
+  branch_event_env environments '{"action":"closed","pull_request":{"number":30,"body":"Promote develop to staging","merged":true,"merge_commit_sha":"ppp999","base":{"ref":"staging"},"head":{"ref":"develop"}}}'
+  route_json 'api --paginate repos/acme/blog/issues?labels=on%3A%20develop&state=open&per_page=100' \
+    '[{"number":1,"state":"open","title":"Login","labels":[{"name":"status: In review"},{"name":"on: develop"},{"name":"points: 3"}]},
+      {"number":2,"state":"open","title":"Signup","labels":[{"name":"status: In review"},{"name":"on: develop"}]}]'
+  route_json 'api --paginate repos/acme/blog/issues/1/timeline*' '[{"event":"cross-referenced","source":{"issue":{"number":40,"body":"Closes #1","pull_request":{"merged_at":"2026-11-20T10:00:00Z"},"repository":{"full_name":"acme/blog"}}}}]'
+  route_json 'api --paginate repos/acme/blog/issues/2/timeline*' '[{"event":"cross-referenced","source":{"issue":{"number":41,"body":"Closes #2","pull_request":{"merged_at":"2026-11-23T10:00:00Z"},"repository":{"full_name":"acme/blog"}}}}]'
+  route_json 'api repos/acme/blog/pulls/40' '{"number":40,"merge_commit_sha":"aaa111"}'
+  route_json 'api repos/acme/blog/pulls/41' '{"number":41,"merge_commit_sha":"bbb222"}'
+  route_json 'api repos/acme/blog/compare/aaa111...ppp999' '{"status":"ahead"}'
+  route_json 'api repos/acme/blog/compare/bbb222...ppp999' '{"status":"diverged"}'
+}
+
+test_cmd_event_promoted_to_staging() {
+  promotion_env
+  run_scrum event
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$(gh_calls)" 'api -X PUT repos/acme/blog/issues/1/labels --input -'
+  assert_contains "$(gh_calls)" 'STDIN {"labels":["points: 3","status: In review","on: staging"]}'
+  assert_not_contains "$(gh_calls)" '"state":"closed"'
+}
+
+test_cmd_event_not_in_the_promotion() {
+  promotion_env
+  run_scrum event
+  assert_status 0 "$STATUS" "$ERR"
+  assert_not_contains "$(gh_calls)" 'issues/2/labels' "#2 merged into develop after the promoted commit keeps on: develop"
+  assert_contains "$OUT" "#2: no change (not in the promotion)"
+}

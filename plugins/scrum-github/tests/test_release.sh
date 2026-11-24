@@ -808,3 +808,406 @@ test_cmd_release_pr_from_the_closing_commit() {
   assert_status 0 "$STATUS" "$ERR"
   assert_eq "[50]" "$(printf '%s' "$OUT" | jq -c '.tasks[] | select(.number == 14) | .prs')"
 }
+
+# ---------- presets with a working branch (spec release-pr) ----------
+
+# open_issue NUMBER LABELS_CSV  An open task with these labels.
+open_issue() {
+  jq -nc --argjson n "$1" --arg l "${2:-}" '{number: $n, title: "Task \($n)", state: "open", state_reason: null, body: "",
+    labels: ($l | split(",") | map(select(. != "")) | map({name: .})), assignees: []}'
+}
+
+# pr_env [PRESET]  Preset standard (or environments): v1.3.0 on main; #12 (PR #40, merge aaa111)
+# and #13 (PR #41, merge bbb222) In review on develop, both contained in the head of develop
+# (dev999); PR #42 "chore: bump actions" without a task, merged in v1.3.0...dev999.
+pr_env() {
+  setup_fake_gh
+  setup_repo "$(printf 'version: 1\nbranching:\n  preset: %s\nstatuses:\n  in_review: In review\n' "${1:-standard}")"
+  export SCRUM_TODAY=2026-11-24
+  route 'auth status*' "auth.txt"
+  cp "$FIXTURES/gh-auth-status.txt" "$FAKE_GH_DIR/auth.txt"
+  route_json 'api --paginate repos/acme/blog/tags*' '[{"name":"v1.3.0"}]'
+  route_json 'api repos/acme/blog/compare/v1.3.0...main' '{"status":"ahead","base_commit":{"commit":{"committer":{"date":"2026-11-01T08:00:00Z"}}}}'
+  route 'api repos/acme/blog/git/ref/tags/*' '!404'
+  route_json 'api --paginate repos/acme/blog/releases*' '[]'
+  route_json 'api --paginate repos/acme/blog/pulls?state=open*' '[]'
+  route_json 'api repos/acme/blog/git/ref/heads/develop' '{"object":{"sha":"dev999"}}'
+  route_json 'api repos/acme/blog/git/ref/heads/staging' '{"object":{"sha":"stg777"}}'
+  route_json 'api --paginate repos/acme/blog/issues?state=open&labels=on%3A%20develop&per_page=100' \
+    "$( { open_issue 12 'status: In review,on: develop'; open_issue 13 'status: In review,on: develop'; } | issues)"
+  route_json 'api --paginate repos/acme/blog/issues?state=open&labels=on%3A%20staging&per_page=100' '[]'
+  route_json 'api --paginate repos/acme/blog/issues/12/timeline*' \
+    '[{"event":"cross-referenced","source":{"issue":{"number":40,"body":"Closes #12","pull_request":{"merged_at":"2026-11-15T09:00:00Z"}}}}]'
+  route_json 'api --paginate repos/acme/blog/issues/13/timeline*' \
+    '[{"event":"cross-referenced","source":{"issue":{"number":41,"body":"Closes #13","pull_request":{"merged_at":"2026-11-16T09:00:00Z"}}}}]'
+  route_json 'api repos/acme/blog/pulls/40' '{"number":40,"merge_commit_sha":"aaa111"}'
+  route_json 'api repos/acme/blog/pulls/41' '{"number":41,"merge_commit_sha":"bbb222"}'
+  route_json 'api repos/acme/blog/compare/aaa111...dev999' '{"status":"ahead"}'
+  route_json 'api repos/acme/blog/compare/bbb222...dev999' '{"status":"ahead"}'
+  route_json 'api repos/acme/blog/compare/v1.3.0...dev999' '{"status":"ahead","commits":[{"sha":"aaa111"},{"sha":"bbb222"},{"sha":"ccc333"}]}'
+  route_json 'api repos/acme/blog/pulls?state=closed&base=develop*' '[
+    {"number":40,"title":"feat: a","body":"Closes #12","merged_at":"x","merge_commit_sha":"aaa111","head":{"ref":"feat/12-a"},"base":{"ref":"develop"}},
+    {"number":42,"title":"chore: bump actions","body":"","merged_at":"x","merge_commit_sha":"ccc333","head":{"ref":"deps"},"base":{"ref":"develop"}},
+    {"number":43,"title":"Back-merge main into develop","body":"","merged_at":"x","merge_commit_sha":"ccc333","head":{"ref":"main"},"base":{"ref":"develop"}},
+    {"number":44,"title":"never merged","body":"","merged_at":null,"merge_commit_sha":"ccc333","head":{"ref":"x"},"base":{"ref":"develop"}},
+    {"number":45,"title":"old","body":"","merged_at":"x","merge_commit_sha":"zzz000","head":{"ref":"y"},"base":{"ref":"develop"}}]'
+  route 'api repos/acme/blog/branches/*' '!404'
+  route_json 'api -X POST repos/acme/blog/git/refs *' '{"ref":"refs/heads/release/v1.4.0"}'
+  route_json 'api repos/acme/blog/git/commits/*' '{"sha":"dev999","tree":{"sha":"tree0"}}'
+  route_json 'api -X POST repos/acme/blog/git/trees *' '{"sha":"tree1"}'
+  route_json 'api -X POST repos/acme/blog/git/commits *' '{"sha":"c0ffee1"}'
+  route_json 'api -X PATCH repos/acme/blog/git/refs/heads/* *' '{}'
+  route_json 'api -X POST repos/acme/blog/pulls *' '{"number":50,"html_url":"https://github.com/acme/blog/pull/50"}'
+}
+write_paths() { gh_writes | sed 's/.*-X \([A-Z]*\) \([^ ]*\).*/\1 \2/' | paste -sd '|' -; }
+stdin_of() { grep "^STDIN $1" "$FAKE_GH_LOG" | sed 's/^STDIN //'; }
+
+# spec "Tasks of a release", "Pull requests without a task" (Dependency update): preview only.
+test_release_pr_preview_lists_contained_tasks_and_other() {
+  pr_env
+  run_scrum release
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "New version: v1.4.0: minor, new in #12, #13 (not bugs)"
+  assert_contains "$OUT" "Release pull request: release/v1.4.0 from develop (dev999) into main"
+  assert_contains "$OUT" "#12  feature  Task 12  PR #40"
+  assert_contains "$OUT" $'## Other\n\n- chore: bump actions (#42)'
+  assert_not_contains "$OUT" "Back-merge main"
+  assert_not_contains "$OUT" "never merged"
+  assert_not_contains "$OUT" "(#45)"
+  assert_eq "" "$(gh_writes)" "the preview writes nothing"
+  assert_not_contains "$(gh_calls)" "api repos/acme/blog --"
+}
+
+test_release_pr_json() {
+  pr_env
+  run_scrum release --json
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq 'v1.4.0 minor [12,13] [42] pull_request release/v1.4.0 dev999' \
+    "$(printf '%s' "$OUT" | jq -r '"\(.tag) \(.bump) \([.tasks[].number] | tojson) \([.other[].number] | tojson) \(.mode) \(.release_branch) \(.start.sha)"')"
+}
+
+# spec "Release pull request" (Standard): branch at the head of develop, pull request, no tag.
+test_release_pr_standard_opens_the_pull_request_and_no_tag() {
+  pr_env
+  run_scrum release 1.4.0 --yes
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "POST repos/acme/blog/git/refs|POST repos/acme/blog/pulls" "$(write_paths)"
+  assert_eq '{"ref":"refs/heads/release/v1.4.0","sha":"dev999"}' "$(stdin_of '{"ref"')"
+  assert_eq "Release v1.4.0 release/v1.4.0 main" "$(stdin_of '{"title"' | jq -r '"\(.title) \(.head) \(.base)"')"
+  local body
+  body="$(stdin_of '{"title"' | jq -r .body)"
+  assert_contains "$body" $'<!-- scrum-release-notes -->\n## Features'
+  assert_contains "$body" $'- chore: bump actions (#42)\n\n**Full changelog**: https://github.com/acme/blog/compare/v1.3.0...v1.4.0\n<!-- /scrum-release-notes -->'
+  assert_not_contains "$(gh_writes)" "git/tags"
+  assert_not_contains "$(gh_writes)" "releases"
+  assert_contains "$OUT" "Opened the release pull request #50: https://github.com/acme/blog/pull/50"
+}
+
+# spec "Release pull request" (Environments) and "Environments, task not promoted".
+test_release_pr_environments_starts_at_staging() {
+  pr_env environments
+  route_first 'api --paginate repos/acme/blog/issues?state=open&labels=on%3A%20staging&per_page=100' 'staging.json'
+  route_first 'api --paginate repos/acme/blog/issues?state=open&labels=on%3A%20develop&per_page=100' 'develop.json'
+  open_issue 12 'status: In review,on: staging' | issues > "$FAKE_GH_DIR/staging.json"
+  open_issue 13 'status: In review,on: develop' | issues > "$FAKE_GH_DIR/develop.json"
+  route_json 'api repos/acme/blog/compare/aaa111...stg777' '{"status":"ahead"}'
+  route_json 'api repos/acme/blog/compare/bbb222...stg777' '{"status":"behind"}'
+  route_json 'api repos/acme/blog/compare/v1.3.0...stg777' '{"status":"ahead","commits":[{"sha":"aaa111"}]}'
+  run_scrum release 1.4.0 --yes
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq '{"ref":"refs/heads/release/v1.4.0","sha":"stg777"}' "$(stdin_of '{"ref"')"
+  assert_contains "$OUT" "#12  feature  Task 12"
+  assert_not_contains "$OUT" "Task 13"
+}
+
+# spec "Release up to a commit" and "Task merged after the release point".
+test_release_pr_from_a_commit() {
+  pr_env
+  route_json 'api repos/acme/blog/commits/abc123' '{"sha":"abc123full"}'
+  route_json 'api repos/acme/blog/compare/aaa111...abc123full' '{"status":"ahead"}'
+  route_json 'api repos/acme/blog/compare/bbb222...abc123full' '{"status":"behind"}'
+  route_json 'api repos/acme/blog/compare/v1.3.0...abc123full' '{"status":"ahead","commits":[{"sha":"aaa111"}]}'
+  run_scrum release 1.4.0 --from abc123
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "from abc123 (abc123f)"
+  assert_contains "$OUT" "#12  feature"
+  assert_not_contains "$OUT" "Task 13"
+  run_scrum release 1.4.0 --from abc123 --yes
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$(gh_calls)" '"sha":"abc123full"'
+}
+
+# spec "Nothing to release" (release-pr).
+test_release_pr_nothing_to_release_creates_nothing() {
+  pr_env
+  route_first 'api repos/acme/blog/compare/aaa111...dev999' 'behind.json'
+  route_first 'api repos/acme/blog/compare/bbb222...dev999' 'behind.json'
+  route_first 'api repos/acme/blog/compare/v1.3.0...dev999' 'empty.json'
+  printf '{"status":"behind"}' > "$FAKE_GH_DIR/behind.json"
+  printf '{"status":"identical","commits":[]}' > "$FAKE_GH_DIR/empty.json"
+  run_scrum release 1.4.0 --yes
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "Nothing to release"
+  assert_eq "" "$(gh_writes)"
+}
+
+# spec "Release already open".
+test_release_pr_already_open_stops_and_names_it() {
+  pr_env
+  route_first 'api --paginate repos/acme/blog/pulls?state=open*' 'open.json'
+  printf '[{"number":49,"title":"Release v1.3.1","html_url":"https://github.com/acme/blog/pull/49","head":{"ref":"release/v1.3.1"},"base":{"ref":"main"}}]' > "$FAKE_GH_DIR/open.json"
+  run_scrum release 1.4.0 --yes
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "#49 Release v1.3.1"
+  assert_contains "$ERR" "https://github.com/acme/blog/pull/49"
+  assert_eq "" "$(gh_writes)"
+}
+
+# spec "Version file": one commit with the new version, on the release branch, before the pull request.
+test_release_pr_version_file_and_changelog_in_one_commit() {
+  pr_env
+  printf 'version: 1\nbranching:\n  preset: standard\nstatuses:\n  in_review: In review\nrelease:\n  version_files:\n    - path: package.json\n    - path: pyproject.toml\n      pattern: '"'"'version = "{version}"'"'"'\n  changelog: CHANGELOG.md\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  route_json 'api repos/acme/blog/contents/package.json?ref=dev999' \
+    "$(jq -nc --arg c "$(printf '{\n  "name": "blog",\n  "version": "1.3.0"\n}\n' | base64)" '{content: $c}')"
+  route_json 'api repos/acme/blog/contents/pyproject.toml?ref=dev999' \
+    "$(jq -nc --arg c "$(printf '[project]\nversion = "1.3.0"\n' | base64)" '{content: $c}')"
+  route 'api repos/acme/blog/contents/CHANGELOG.md*' '!404'
+  run_scrum release 1.4.0 --yes
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "POST repos/acme/blog/git/refs|POST repos/acme/blog/git/trees|POST repos/acme/blog/git/commits|PATCH repos/acme/blog/git/refs/heads/release%2Fv1.4.0|POST repos/acme/blog/pulls" "$(write_paths)"
+  local tree
+  tree="$(stdin_of '{"base_tree"')"
+  assert_eq "tree0" "$(printf '%s' "$tree" | jq -r .base_tree)"
+  assert_eq "1.4.0" "$(printf '%s' "$tree" | jq -r '.tree[] | select(.path == "package.json") | .content | fromjson | .version')"
+  assert_contains "$(printf '%s' "$tree" | jq -r '.tree[] | select(.path == "pyproject.toml") | .content')" 'version = "1.4.0"'
+  assert_contains "$(printf '%s' "$tree" | jq -r '.tree[] | select(.path == "CHANGELOG.md") | .content')" $'## v1.4.0 (2026-11-24)\n\n### Features'
+  assert_eq '{"message":"Release v1.4.0","tree":"tree1","parents":["dev999"]}' "$(stdin_of '{"message"')"
+  assert_eq '{"sha":"c0ffee1","force":false}' "$(stdin_of '{"sha":"c0ffee1"')"
+}
+
+# Neither version_files nor changelog: no extra commit.
+test_release_pr_no_files_no_commit() {
+  pr_env
+  run_scrum release 1.4.0 --yes
+  assert_status 0 "$STATUS" "$ERR"
+  assert_not_contains "$(gh_writes)" "git/trees"
+  assert_not_contains "$(gh_writes)" "git/commits"
+}
+
+# spec "File without a version": stops before the branch is created, naming the file.
+test_release_pr_file_without_a_version_stops_before_the_branch() {
+  pr_env
+  printf 'version: 1\nbranching:\n  preset: standard\nstatuses:\n  in_review: In review\nrelease:\n  version_files:\n    - path: pyproject.toml\n      pattern: '"'"'version = "{version}"'"'"'\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  route_json 'api repos/acme/blog/contents/pyproject.toml?ref=dev999' \
+    "$(jq -nc --arg c "$(printf '[project]\nname = "x"\n' | base64)" '{content: $c}')"
+  run_scrum release 1.4.0 --yes
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "pyproject.toml has no version to replace"
+  assert_eq "" "$(gh_writes)"
+}
+
+# Only untasked pull requests: a patch (spec "Pull requests without a task").
+test_release_plan_only_untasked_prs_is_a_patch() {
+  PLAN="$(jqt release-plan -n --argjson cfg "$(defaults)" --argjson prev "$PREV" --argjson issues '[]' --argjson since null \
+    --argjson until null --arg version "" --argjson contained '[]' --argjson other '[{"number":40,"title":"chore: bump"}]')"
+  assert_eq "false patch v1.4.3 [40]" "$(pv '"\(.nothing) \(.bump) \(.tag) \([.other[].number] | tojson)"')"
+}
+
+# spec "Dependency update": a feature and an untasked pull request: minor, Other in the notes.
+test_release_plan_feature_and_untasked_is_minor() {
+  PLAN="$(jqt release-plan -n --argjson cfg "$(defaults)" --argjson prev "$PREV" \
+    --argjson issues "$(open_issue 12 'status: In review' | issues)" --argjson since null --argjson until null --arg version "" \
+    --argjson contained '[12]' --argjson other '[{"number":40,"title":"chore: bump actions"}]')"
+  assert_eq "minor v1.5.0" "$(pv '"\(.bump) \(.tag)"')"
+  assert_contains "$(notes_of "$PLAN")" $'## Other\n\n- chore: bump actions (#40)'
+  assert_contains "$(notes_of "$PLAN" '{}' '{}' vi)" "## Khác"
+}
+
+# spec "Trunk releases as before": tag and release, no pull request, no branch.
+test_release_trunk_opens_no_pull_request() {
+  release_env
+  run_scrum release 1.5.0 --yes
+  assert_status 0 "$STATUS" "$ERR"
+  assert_not_contains "$(gh_writes)" "pulls"
+  assert_not_contains "$(gh_calls)" "refs/heads/release"
+  assert_contains "$(gh_writes)" "git/tags"
+  assert_contains "$(gh_writes)" "releases"
+}
+
+test_release_trunk_refuses_from() {
+  release_env
+  run_scrum release --from abc123
+  assert_status 1 "$STATUS"
+  assert_contains "$ERR" "--from is for presets with a working branch"
+}
+
+# ---------- version files (design 7) ----------
+
+vf() { jqt version-files -n "$@"; }
+
+test_version_file_pattern_first_match_of_the_previous_version() {
+  local out
+  out="$(vf --arg step pattern --arg content $'a = "1.3.0"\nversion = "1.3.0"\nversion = "1.3.0"\n' --arg pattern 'version = "{version}"' --arg prev 1.3.0 --arg version 1.4.0)"
+  assert_eq '"a = \"1.3.0\"\nversion = \"1.4.0\"\nversion = \"1.3.0\"\n"' "$(printf '%s' "$out" | jq -c .content)"
+  out="$(vf --arg step pattern --arg content $'version = "1.2.0"\n' --arg pattern 'version = "{version}"' --arg prev 1.3.0 --arg version 1.4.0)"
+  assert_eq missing "$(printf '%s' "$out" | jq -r .status)"
+  out="$(vf --arg step pattern --arg content $'version = "1.4.0"\n' --arg pattern 'version = "{version}"' --arg prev 1.3.0 --arg version 1.4.0)"
+  assert_eq current "$(printf '%s' "$out" | jq -r .status)" "a file that already holds the new version is left alone"
+}
+
+test_version_file_json_top_level_version() {
+  assert_eq '"changed" "1.4.0" "1.0.0"' "$(vf --arg step json --arg content '{"version":"1.3.0","dep":{"version":"1.0.0"}}' --arg version 1.4.0 \
+    | jq -r '"\(.status | tojson) \(.object.version | tojson) \(.object.dep.version | tojson)"')"
+  assert_eq missing "$(vf --arg step json --arg content '{"name":"x"}' --arg version 1.4.0 | jq -r .status)"
+}
+
+test_changelog_after_the_title() {
+  local out
+  out="$(vf --arg step changelog --arg content $'# Changelog\n\n## v1.3.0 (2026-01-01)\n\nold\n' --arg tag v1.4.0 --arg date 2026-11-24 --arg notes $'## Features\n\n- A (#1)')"
+  assert_eq '"# Changelog\n\n## v1.4.0 (2026-11-24)\n\n### Features\n\n- A (#1)\n\n## v1.3.0 (2026-01-01)\n\nold\n"' "$(printf '%s' "$out" | jq -c .content)"
+  out="$(vf --arg step changelog --arg content "$(printf '%s' "$out" | jq -j .content)" --arg tag v1.4.0 --arg date 2026-11-24 --arg notes x)"
+  assert_eq current "$(printf '%s' "$out" | jq -r .status)"
+}
+
+# ---------- scrum release finish (spec "Publishing on merge", "Back-merge ...") ----------
+
+# finish_env [PRESET] [HEAD] [BODY]  "Release v1.4.0" (#50, merge m111) merged into main; #12 In
+# review on develop, contained in m111; main (m111) is not in develop yet.
+finish_env() {
+  pr_env "${1:-standard}"
+  local body="${3:-$'Merging this pull request publishes v1.4.0.\n\n<!-- scrum-release-notes -->\n## Features\n\n- Task 12 (#12, PR #40)\n<!-- /scrum-release-notes -->'}"
+  jq -nc --arg h "${2:-release/v1.4.0}" --arg b "$body" \
+    '{action: "closed", pull_request: {number: 50, merged: true, merge_commit_sha: "m111", head: {ref: $h}, base: {ref: "main"}, body: $b}}' > "$T/event.json"
+  export GITHUB_EVENT_PATH="$T/event.json"
+  route_first 'api --paginate repos/acme/blog/issues?state=open&labels=on%3A%20develop&per_page=100' 'dev-issues.json'
+  open_issue 12 'status: In review,on: develop,bug' | issues > "$FAKE_GH_DIR/dev-issues.json"
+  route_json 'api repos/acme/blog/compare/aaa111...m111' '{"status":"ahead"}'
+  route_json 'api repos/acme/blog/compare/v1.3.0...m111' '{"status":"ahead","commits":[]}'
+  route_json 'api repos/acme/blog/issues/12' "$(open_issue 12 'status: In review,on: develop,bug')"
+  route_json 'api -X POST repos/acme/blog/git/tags *' '{"sha":"tagobj1"}'
+  route_json 'api -X POST repos/acme/blog/releases *' '{"html_url":"https://github.com/acme/blog/releases/tag/v1.4.0"}'
+  route_json 'api -X PUT repos/acme/blog/issues/*/labels *' '[]'
+  route_json 'api -X PATCH repos/acme/blog/issues/* *' '{}'
+  route_json 'api repos/acme/blog/git/ref/heads/main' '{"object":{"sha":"m111"}}'
+  route_json 'api repos/acme/blog/compare/m111...develop' '{"status":"behind"}'
+  route_json 'api repos/acme/blog/compare/m111...staging' '{"status":"diverged"}'
+  route_first 'api -X POST repos/acme/blog/pulls *' 'bm.json'
+  printf '{"number":51,"html_url":"https://github.com/acme/blog/pull/51"}' > "$FAKE_GH_DIR/bm.json"
+}
+
+# spec "Release merged" and "After a release in standard".
+test_release_finish_publishes_sets_done_and_back_merges() {
+  finish_env
+  run_scrum release finish
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "POST repos/acme/blog/git/tags|POST repos/acme/blog/git/refs|POST repos/acme/blog/releases|PUT repos/acme/blog/issues/12/labels|PATCH repos/acme/blog/issues/12|POST repos/acme/blog/pulls" "$(write_paths)"
+  assert_eq '{"tag":"v1.4.0","message":"Release v1.4.0","object":"m111","type":"commit"}' "$(stdin_of '{"tag":"v1.4.0"')"
+  assert_eq '{"ref":"refs/tags/v1.4.0","sha":"tagobj1"}' "$(stdin_of '{"ref":"refs/tags')"
+  assert_eq $'## Features\n\n- Task 12 (#12, PR #40)' "$(stdin_of '{"tag_name"' | jq -r .body)"
+  assert_eq '["bug","status: Done"]' "$(stdin_of '{"labels"' | jq -c '.labels | sort')"
+  assert_eq '{"state":"closed","state_reason":"completed"}' "$(stdin_of '{"state"')"
+  assert_eq "Back-merge main into develop main develop" "$(stdin_of '{"title":"Back-merge' | jq -r '"\(.title) \(.head) \(.base)"')"
+  assert_contains "$(stdin_of '{"title":"Back-merge' | jq -r .body)" "merge commit"
+}
+
+# spec "Workflow runs twice": already published, nothing changes.
+test_release_finish_twice_changes_nothing() {
+  finish_env
+  route_first 'api repos/acme/blog/git/ref/tags/v1.4.0' 'tagref.json'
+  printf '{"object":{"type":"tag","sha":"tagobj1"}}' > "$FAKE_GH_DIR/tagref.json"
+  route_first 'api --paginate repos/acme/blog/releases*' 'rels.json'
+  printf '[{"tag_name":"v1.4.0","draft":false}]' > "$FAKE_GH_DIR/rels.json"
+  printf '[]' > "$FAKE_GH_DIR/dev-issues.json"
+  # #12 was set Done and closed by the first run.
+  route_first 'api repos/acme/blog/issues/12' 'done12.json'
+  printf '{"number":12,"state":"closed","state_reason":"completed","labels":[{"name":"status: Done"}]}' > "$FAKE_GH_DIR/done12.json"
+  route_first 'api --paginate repos/acme/blog/pulls?state=open&per_page=100&head=acme%3Amain&base=develop' 'bmopen.json'
+  printf '[{"number":51,"title":"Back-merge main into develop","html_url":"https://github.com/acme/blog/pull/51","head":{"ref":"main"},"base":{"ref":"develop"}}]' > "$FAKE_GH_DIR/bmopen.json"
+  run_scrum release finish
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "v1.4.0 is already published"
+  assert_contains "$OUT" "already open: #51"
+  assert_eq "" "$(gh_writes)"
+}
+
+# spec "Release pull request closed without merging".
+test_release_finish_closed_without_merging_does_nothing() {
+  finish_env
+  jq -c '.pull_request.merged = false' "$T/event.json" > "$T/e2.json"
+  export GITHUB_EVENT_PATH="$T/e2.json"
+  run_scrum release finish
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "closed without merging"
+  assert_eq "" "$(gh_writes)"
+}
+
+# A pull request that is neither a release nor a hotfix: nothing.
+test_release_finish_ignores_other_pull_requests() {
+  finish_env standard feat/12-a
+  run_scrum release finish
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "not a release or hotfix pull request"
+  assert_eq "" "$(gh_writes)"
+}
+
+# The notes markers were removed by hand: the notes are regenerated from the contained tasks.
+test_release_finish_regenerates_notes_without_markers() {
+  finish_env standard release/v1.4.0 "Edited by hand"
+  run_scrum release finish
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$(stdin_of '{"tag_name"' | jq -r .body)" "- Task 12 (#12, PR #40)"
+  assert_contains "$(stdin_of '{"tag_name"' | jq -r .body)" "## Bug fixes"
+}
+
+# spec "Hotfix merged" and back-merge "Environments": main into staging and into develop.
+test_release_finish_hotfix_in_environments() {
+  finish_env environments hotfix/31-payment-fails $'Fix the payment.\n\nCloses #31\n\n<!-- scrum-release-tag: v1.3.1 -->'
+  route_json 'api repos/acme/blog/issues/31' "$(open_issue 31 'status: In review,bug')"
+  printf '[]' > "$FAKE_GH_DIR/dev-issues.json"
+  run_scrum release finish
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq '{"tag":"v1.3.1","message":"Release v1.3.1","object":"m111","type":"commit"}' "$(stdin_of '{"tag":"v1.3.1"')"
+  assert_contains "$(stdin_of '{"tag_name"' | jq -r .body)" "Task 31 (#31)"
+  assert_contains "$(write_paths)" "PATCH repos/acme/blog/issues/31"
+  assert_eq "main staging|main develop" "$(stdin_of '{"title":"Back-merge' | jq -r '"\(.head) \(.base)"' | paste -sd '|' -)"
+}
+
+# spec "Already open" (back-merge).
+test_release_finish_back_merge_already_open() {
+  finish_env
+  route_first 'api --paginate repos/acme/blog/pulls?state=open&per_page=100&head=acme%3Amain&base=develop' 'bmopen.json'
+  printf '[{"number":51,"title":"Back-merge main into develop","html_url":"https://github.com/acme/blog/pull/51","head":{"ref":"main"},"base":{"ref":"develop"}}]' > "$FAKE_GH_DIR/bmopen.json"
+  run_scrum release finish
+  assert_status 0 "$STATUS" "$ERR"
+  assert_not_contains "$(write_paths)" "POST repos/acme/blog/pulls"
+}
+
+test_release_workflow_template() {
+  local f="$PLUGIN_DIR/templates/github/workflows/scrum-release.yml" s
+  s="$(cat "$f")"
+  assert_eq "# Generated by scrum-github." "$(head -1 "$f" | cut -c1-28)"
+  assert_contains "$s" "pull_request_target:"
+  assert_contains "$s" "types: [closed]"
+  assert_contains "$s" "branches: ['{{RELEASE_BRANCH}}']"
+  assert_contains "$s" "github.event.pull_request.merged == true"
+  assert_contains "$s" "startsWith(github.head_ref, 'release/')"
+  assert_contains "$s" "startsWith(github.head_ref, 'hotfix/')"
+  assert_contains "$s" "contents: write"
+  assert_contains "$s" "pull-requests: write"
+  assert_contains "$s" "issues: write"
+  assert_contains "$s" "actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0"
+  assert_contains "$s" "sparse-checkout: .github"
+  assert_contains "$s" ".github/scrum/bin/scrum release finish"
+  assert_not_contains "$s" "github.event.pull_request.head" "never the code of the pull request"
+}
+
+# Review fix: a release pull request merged with squash contains none of develop's merge commits;
+# finish takes the tasks its notes list that still wait on a branch, and warns.
+test_release_finish_squashed_release_uses_the_notes() {
+  finish_env
+  printf '[]' > "$FAKE_GH_DIR/dev-issues.json"
+  run_scrum release finish
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$ERR" "squashed"
+  assert_contains "$(write_paths)" "PUT repos/acme/blog/issues/12/labels"
+}

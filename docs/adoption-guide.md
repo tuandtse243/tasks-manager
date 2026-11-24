@@ -18,6 +18,10 @@ The full reference of commands and configuration is the
    - [Flow E: Track progress](#flow-e-track-progress)
    - [Flow F: Close the sprint](#flow-f-close-the-sprint)
    - [Flow G: Let AI agents work tasks](#flow-g-let-ai-agents-work-tasks)
+   - [Flow H: Release a version](#flow-h-release-a-version)
+   - [Flow I: Hotfix production](#flow-i-hotfix-production)
+   - [Flow J: Promote to staging](#flow-j-promote-to-staging)
+   - [Flow K: Deploy](#flow-k-deploy)
 6. [Team conventions](#6-team-conventions)
 7. [Kanban board (optional)](#7-kanban-board-optional)
 8. [Troubleshooting](#8-troubleshooting)
@@ -61,6 +65,11 @@ stateDiagram-v2
     InProgress: In progress
 ```
 
+That is the `trunk` preset (one long-lived branch). With a working branch (presets `standard` and
+`environments`, what a new `init` writes), a merged pull request does not make a task Done: the
+task waits In review with a label such as `on: develop` until a release brings its code into
+`main`. See [Flow C](#flow-c-a-developer-works-a-task) and [Flow H](#flow-h-release-a-version).
+
 ---
 
 ## 2. Commands
@@ -93,9 +102,15 @@ skills call it by its full path instead. Once set up, the project repository als
 | `sprint-status` | Whole team, daily | `scrum status [SPRINT]` | `/scrum-github:sprint-status who has the most work left?` |
 | `sprint-report` | SM, for the review or for stakeholders | `scrum report [SPRINT] [--out FILE]` | `/scrum-github:sprint-report` |
 | `sprint-close` | SM, end of the sprint | `scrum sprint close [SPRINT] [--yes] [--create-next]` | `/scrum-github:sprint-close` |
-| `release` | SM or tech lead, after closing a sprint: publish a version (tag and GitHub Release) | `scrum release [VERSION] [--sprint S] [--since TAG] [--draft] [--notes-file FILE] [--yes]` | `/scrum-github:release --sprint "Sprint 5"` |
+| `release` | SM or tech lead, after closing a sprint: publish a version (`trunk`: tag and GitHub Release; with a working branch: the release pull request into `main`) | `scrum release [VERSION] [--sprint S] [--since TAG] [--from REF] [--draft] [--notes-file FILE] [--yes]`; `scrum release finish [--pr N]` runs in the release workflow | `/scrum-github:release --sprint "Sprint 5"` |
 | `project-setup` | SM, once: turn on the kanban board (optional) | `bash wizards/project-board.sh`, `scrum project init` | `/scrum-github:project-setup` |
 | (none) | SM, when the repo stops using the plugin | `scrum uninstall [--dry-run] [--yes]` | `scrum uninstall`, check, then add `--yes` |
+| `protect` | Tech lead with admin rights, once after `init` and again after changing the preset: create `develop` (and `staging`), branch and tag rules, merge settings | `scrum protect [--json] [--yes]` | `/scrum-github:protect` |
+| `sync` | Dev: bring the latest working branch into your task branch; conflicts are listed, never resolved | `scrum sync` | `/scrum-github:sync` |
+| `branches` | Tech lead, SM: what waits on `develop`, drift from `main`, stale branches | `scrum branches [--json]` | `/scrum-github:branches what is not released yet?` |
+| `cleanup` | Dev, tech lead: delete merged branches locally and on origin, after confirming | `scrum cleanup [--json] [--yes]` | `/scrum-github:cleanup` |
+| `promote` | Tech lead, preset `environments`: move what is on `develop` to `staging` for testing | `scrum promote [--json] [--yes]` | `/scrum-github:promote` |
+| `hotfix` | Dev, presets `standard` and `environments`: fix production from `main` without waiting for the next release | `scrum hotfix N`, `scrum hotfix prepare [--json] [--yes]` | `/scrum-github:hotfix 31` |
 
 Every command that writes to GitHub shows you what it will do and asks first.
 
@@ -148,14 +163,38 @@ It shows a preview before writing anything. It creates:
 | Labels for status, points, `type: feature`, `type: epic`, `scrum: meta`, `no-task`, `ai-ready` | Existing labels are never deleted |
 | `.github/ISSUE_TEMPLATE/task.yml` | A form to create a task on GitHub, with a Points field |
 | `.github/pull_request_template.md` | Already has a `Closes #` line and the Evidence and Merge Danger sections |
-| Workflows `scrum-status-sync`, `scrum-pr-link-check`, `scrum-daily-digest` | Change statuses, check that a PR links a task, post the digest |
+| Workflows `scrum-status-sync`, `scrum-pr-link-check`, `scrum-daily-digest` | Change statuses, check every PR (title, source branch, linked task), post the digest |
+| Workflow `scrum-release` (presets with a working branch) | Publishes a version when its release or hotfix pull request is merged |
+| Workflow `deploy` (only with `deploy.platform: docker` or `cloudflare`) | Deploys each long-lived branch to its environment; see [Flow K](#flow-k-deploy) |
+| `.github/CODEOWNERS`, `CONTRIBUTING.md`, `SECURITY.md`, `dependabot.yml` | Only when the project has none; never overwritten afterwards. `CONTRIBUTING.md` explains the branches of your preset |
 | `.github/scrum/` | The runtime the workflows call, and `files.json`, the record of the files `init` wrote. Do not edit by hand |
 
-**Step 2. Edit the configuration** in `.github/scrum.yml`. Keys you leave out take their default.
-A suggested configuration for a team in Vietnam:
+**Step 2. Choose a preset.** `branching.preset` decides the long-lived branches and the path of a
+task. A new `.github/scrum.yml` has `preset: standard`; a configuration without a `branching`
+block works as `trunk`, as in versions before 0.13.0.
+
+| Preset | Long-lived branches | A task is Done when | Pick it when |
+|---|---|---|---|
+| `trunk` | `main` | its pull request is merged into `main` | Small team, every merge can go to production |
+| `standard` | `develop` → `main` | a release brings it into `main` | You test on a staging site before releasing (most teams) |
+| `environments` | `develop` → `staging` → `main` | a release brings it into `main` | A separate test environment between development and production |
+
+The branch names can be changed (`branching.develop: dev`). `standard` and `environments` need
+`statuses.in_review` (the template sets it): a merged task waits In review until it is released.
+
+**Step 3. Edit the rest of the configuration** in `.github/scrum.yml`. Keys you leave out take
+their default. A suggested configuration for a team in Vietnam:
 
 ```yaml
 version: 1
+branching:
+  preset: standard                # trunk, standard or environments
+statuses:
+  in_review: In review            # needed by standard and environments
+governance:
+  approvals: 1                    # approvals a pull request needs (0 for a solo project)
+deploy:
+  platform: none                  # none, vercel, cloudflare or docker (Flow K)
 timezone: Asia/Ho_Chi_Minh        # "today", the burndown and the digest follow Vietnam time
 language: vi                      # status table, digest, HTML report and sprint summary in Vietnamese (en is the default)
 sprint:
@@ -191,19 +230,36 @@ Check the configuration without any network call: `scrum config`. When you are d
 configuration (the Issue Form when `points.scale` changes, the digest workflow when `digest.cron`
 changes). Then commit and push.
 
-**Step 3. Commit and push `.github/` to the default branch.** The workflows do not run until it is
-pushed.
+**Step 4. Commit and push `.github/` to the default branch** (`main`). The workflows do not run
+until it is pushed.
 
 ```bash
 git add .github && git commit -m "Set up scrum-github" && git push
 ```
 
-**Step 4. Turn on branch protection** for the main branch and require the `scrum-pr-link-check`
-check to pass. Then nobody can merge a PR that links no task. Leave *Settings → Actions →
-Workflow permissions* at its default.
+**Step 5. Protect the repository** (someone with admin rights):
 
-**Step 5. Check everything** with `/scrum-github:doctor`: tools, login, configuration, labels, and
-whether the workflows are on the default branch. Each problem comes with its fix. Then
+```
+/scrum-github:protect
+```
+
+It reads the repository and shows what it would change; `scrum protect --yes` applies it (or
+answer yes in Claude Code). It creates the missing long-lived branches (`develop`, `staging`) at
+the head of `main`, one rule per long-lived branch (pull request required with
+`governance.approvals` approvals, the `pr-check` check plus `governance.required_checks`, no force
+push, no deletion, the merge methods of the preset), a rule that keeps version tags from being
+moved or deleted, and deletes head branches after merge. It never moves or deletes a branch and is
+safe to run again; run it again after changing the preset. A private repository on a free plan
+has no rules: the command reports that item and applies the rest. With `standard` or
+`environments` it also turns on *Settings → Actions → General → Workflow permissions → Allow
+GitHub Actions to create and approve pull requests* (off by default): the release workflow needs
+it to open the back-merge pull requests. Leave the default token permission itself (read) as it
+is. The default branch of the repository must stay `main`.
+
+**Step 6. Check everything** with `/scrum-github:doctor`: tools, login, configuration, labels,
+whether the workflows are on the default branch, the default branch, the long-lived branches and
+their rules, a release not merged back, missing governance files and, with a deployment platform,
+reviewers on the `production` environment. Each problem comes with its fix. Then
 `/scrum-github:next` tells you what to do next.
 
 Running `init` again is always safe: a file that did not change reports `unchanged`; a file you
@@ -227,7 +283,8 @@ statuses:
 then run `/scrum-github:init` again (it creates the label `status: In review` and updates the
 workflows), commit and push. From then on, a draft PR keeps its task In progress, a PR ready for
 review moves the task to In review, a PR turned back into a draft or closed without merging moves
-the task back to In progress, and a merge makes it Done. The status table, digest and report get an
+the task back to In progress, and a merge makes it Done (in `trunk`; with a working branch the
+task stays In review until it is released, see Flow C). The status table, digest and report get an
 In review column; "Needs attention" lists tasks waiting for review for more than
 `attention.review_days` working days. Turned on mid-sprint, existing tasks only change at their next
 PR event. With the board, add an `In Review` column (a new option of the Status field, between In
@@ -259,6 +316,9 @@ GitHub (labels, milestones, issues).
 | End of the sprint | SM | [F. Close the sprint](#flow-f-close-the-sprint) |
 | When you have `ai-ready` tasks | Dev | [G. Let AI agents work tasks](#flow-g-let-ai-agents-work-tasks) |
 | After closing a sprint, or whenever you ship | SM, tech lead | [H. Release a version](#flow-h-release-a-version) |
+| A bug in production that cannot wait | Dev, tech lead | [I. Hotfix production](#flow-i-hotfix-production) |
+| Before testing, preset `environments` | Tech lead | [J. Promote to staging](#flow-j-promote-to-staging) |
+| Once, for a web project | Tech lead | [K. Deploy](#flow-k-deploy) |
 
 ### Flow A: Open a new sprint
 
@@ -459,7 +519,7 @@ sequenceDiagram
     Note over Dev,GH: review
     Dev->>GH: merge the PR
     GH->>WF: PR merged
-    WF->>GH: task Done, issue closed (completed)
+    WF->>GH: trunk: task Done, issue closed. develop: In review, on: develop
 ```
 
 **Step 1. Pick up the task.** Not sure which? `/scrum-github:my-tasks` lists all your open tasks
@@ -471,14 +531,19 @@ and the task to do next.
 ```
 
 The command assigns the task to you (if nobody has it), sets it to In progress and creates the
-branch `feat/12-<slug>` from the default branch. With uncommitted changes, git refuses to switch
-branches, and nothing changes on GitHub.
+branch `feat/12-<slug>` from the latest working branch on origin (`origin/develop`; `origin/main`
+in `trunk`). With uncommitted changes, git refuses to switch branches, and nothing changes on
+GitHub.
 
 **Step 2. Code, commit, push.** Push the branch before opening the PR:
 
 ```bash
 git push -u origin feat/12-<slug>
 ```
+
+To bring in what others merged meanwhile: `/scrum-github:sync` (`scrum sync`) merges the latest
+working branch into your task branch. On a conflict it lists each file with the last commit that
+changed it and leaves the merge for you to finish; it never resolves a conflict.
 
 **Step 3. Open the PR.**
 
@@ -493,6 +558,12 @@ git push -u origin feat/12-<slug>
   section with the line `Closes #12`.
 - You approve or ask for changes; only after you approve does it run `gh pr create`. When the PR is
   already open, it replaces the description with `gh pr edit`.
+- The PR targets the working branch (`develop`; `main` in `trunk` and from a `hotfix/*` branch),
+  with a [Conventional Commits](https://www.conventionalcommits.org) title such as
+  `feat: log in with email`. The `pr-check` check fails a wrong title, a task branch aimed at
+  `main`, or a PR without a task. It runs in the `scrum-pr-link-check.yml` workflow on the PR's
+  event (one step each: `scrum pr-check --title`, `--source`, `--link`); `/scrum-github:task-pr`
+  proposes a title and base branch that pass it.
 
 Writing the PR by hand is fine too, as long as the description has **`Closes #12`** (the PR template
 already has that line).
@@ -501,11 +572,34 @@ already has that line).
 
 | You do | Task |
 |---|---|
-| Open a PR with `Closes #12` | New → In progress (other statuses stay) |
-| Merge the PR | Done, the issue closes. Whatever branch you merge into |
-| Close the PR without merging | Unchanged |
+| Open a PR with `Closes #12` | New → In progress (other statuses stay); ready for review: In review |
+| Merge the PR, `trunk` | Done, the issue closes. Whatever branch you merge into |
+| Merge the PR into `develop`, `standard` or `environments` | Stays open, In review, label `on: develop`: merged but not released |
+| Close the PR without merging | Unchanged (In review → In progress) |
 | One PR for several tasks | One line per task: `Closes #12`, `Closes #13` |
 | A PR with no task (CI fix, dependency bump) | Add the `no-task` label, or the `scrum-pr-link-check` check fails |
+
+**The path of a task through the branches** (presets with a working branch):
+
+```mermaid
+flowchart LR
+    T["feat/12-slug<br/>In progress"] -- "PR merged (squash)" --> D["develop<br/>In review, on: develop"]
+    D -- "promote (environments)" --> S["staging<br/>In review, on: staging"]
+    D -- "release PR (standard)" --> M["main<br/>Done, closed"]
+    S -- "release PR" --> M
+    M -- "back-merge PR" --> D
+    H["hotfix/31-slug"] -- "PR merged" --> M
+```
+
+The status table, digest and report show each such task as "on `develop`" (or `staging`);
+"Needs attention" lists a task that waited on a branch longer than `attention.promote_days`
+working days. Closing the sprint carries these tasks over as "merged but not released": release
+first to count their points in the velocity.
+
+**Step 5. Tidy up.** `/scrum-github:branches` (`scrum branches`) shows what waits on `develop`
+and is not released, how far the branches drifted from `main`, open release and back-merge PRs,
+and stale task branches. `/scrum-github:cleanup` (`scrum cleanup`, then `--yes`) deletes the
+local and remote branches whose PR was merged, never a long-lived branch or one with an open PR.
 
 ### Flow D: Add a single task or a bug
 
@@ -618,7 +712,7 @@ waves. It writes nothing. To pick exactly a few tasks: `/scrum-github:run 102,10
 
 **Step 2. Run.** `/scrum-github:run` asks you to confirm, then:
 - creates the integration branch `run/sprint-5-<login>` (`run.branch_pattern`) from the latest
-  default branch, saves the state in `.scrum/run/<id>.json` (ignored by git), and sets the tasks
+  working branch on origin (`develop`, or `main` in `trunk`), saves the state in `.scrum/run/<id>.json` (ignored by git), and sets the tasks
   In progress;
 - for each wave: checks out the integration branch, runs at most `--max-parallel` (default
   `run.max_parallel` = 3) `implementer` agents, one worktree each; then merges each task (`--no-ff`,
@@ -650,9 +744,18 @@ writes it to a file and passes the path.
 
 ### Flow H: Release a version
 
-A release is a git tag (`v1.5.0`) on the head of the default branch and a GitHub Release whose
-notes list what was done. The plugin builds both from the Done tasks; you only decide the version
-and agree.
+A release is a git tag (`v1.5.0`) on `main` and a GitHub Release whose notes list what was done.
+The plugin builds both from the tasks; you only decide the version and agree. How it gets there
+depends on the preset:
+
+| Preset | `/scrum-github:release` after you agree | Tasks become Done |
+|---|---|---|
+| `trunk` | creates the tag on the head of `main` and the GitHub Release | when their PR is merged (before the release) |
+| `standard` | opens the release PR `release/<tag>` → `main` from the head of `develop` | when the release PR is merged |
+| `environments` | the same, from the head of `staging` | when the release PR is merged |
+
+Steps 1 and 2 are the same in every preset; step 3 as written is `trunk`, and the working-branch
+version follows it.
 
 **Step 1. Preview.**
 
@@ -683,8 +786,92 @@ With the CLI: `scrum release` to see the version and notes, then publish that ve
 `--notes-file notes.md` for your own notes). `scrum next` also suggests releasing when the
 last closed sprint has Done tasks that are in no version yet.
 
-The plugin does not edit version files (`package.json`, `VERSION`) or `CHANGELOG.md` in the
-repository, does not deploy and does not publish packages.
+**With a working branch** (`standard`, `environments`), step 3 opens a pull request instead:
+
+- The release holds the tasks In review `on: develop` (`on: staging` in `environments`) whose code
+  is in the start point, plus merged PRs without a task under "Other". `--from REF` releases up to
+  an earlier commit and leaves out what came after it.
+- `scrum release 1.5.0 --yes` creates `release/v1.5.0` at the start point, commits the version
+  files and the changelog to it when `release.version_files` and `release.changelog` are set (for
+  example `package.json` and `CHANGELOG.md`), and opens the PR "Release v1.5.0" into `main` with the
+  notes in its description. No tag yet.
+
+**Step 4. Merge the release PR** with a merge commit, after review. The `scrum-release` workflow
+then runs `scrum release finish`, which:
+1. creates the tag on the merge commit and the GitHub Release with the notes of the PR description
+   (edit them there before merging);
+2. sets the released tasks Done, removes their `on: …` label and closes them;
+3. opens a back-merge PR "Back-merge main into develop" (and into `staging` in `environments`).
+
+**Step 5. Merge the back-merge PR with a merge commit**, never squash: a squash breaks the history
+and the next release conflicts. A PR opened by the workflow's own token does not start other
+workflows, so its required checks never run: **close the back-merge PR and reopen it** to start
+them (or let an admin merge it). `/scrum-github:next` and `/scrum-github:doctor` remind you while
+`main` has commits that `develop` lacks.
+
+If the workflow failed or did not run, `scrum release finish --pr <number>` does the same by hand;
+each step checks first, so running it again is safe. The plugin does not deploy and does not
+publish packages; deploying is [Flow K](#flow-k-deploy).
+
+### Flow I: Hotfix production
+
+Presets `standard` and `environments`, for a bug in production that cannot wait for the next
+release (in `trunk`, a normal task already starts from `main`).
+
+```
+/scrum-github:hotfix 31
+```
+
+1. `scrum hotfix 31` creates `hotfix/31-<slug>` from `origin/main` and sets the task In progress.
+2. Fix it, then `scrum hotfix prepare` shows the patch version (for example `v1.5.1`); with `--yes`
+   it writes the version files and the changelog and commits them locally.
+3. `/scrum-github:task-pr` opens the PR into `main` with the marker line of the version.
+4. Merging it publishes the version (tag, GitHub Release), sets the task Done and opens the
+   back-merge PRs, as in step 4 of Flow H. Merge those as in step 5.
+
+### Flow J: Promote to staging
+
+Preset `environments` only: testers see `staging`, so the work on `develop` must be promoted.
+
+```
+/scrum-github:promote
+```
+
+`scrum promote` lists the tasks `on: develop` that `staging` does not have yet; `--yes` opens the
+PR "Promote develop to staging". Merge it with a merge commit: the tasks it contains move to
+`on: staging`, and the next release starts from `staging`.
+
+### Flow K: Deploy
+
+Optional, for a web project. Set `deploy.platform` in `.github/scrum.yml` and run
+`/scrum-github:init` again:
+
+| Platform | What you get |
+|---|---|
+| `none` (default) | Nothing |
+| `docker` | `.github/workflows/deploy.yml`: an image per source tree in `ghcr.io/<owner>/<repo>`, deployed over SSH with `docker compose pull && docker compose up -d` |
+| `cloudflare` | `.github/workflows/deploy.yml`: `wrangler deploy --env <environment>` |
+| `vercel` | No workflow: Vercel's Git integration deploys. `CONTRIBUTING.md` gets the Vercel settings: production branch `main`, a domain for each other long-lived branch |
+
+Each long-lived branch deploys to one GitHub environment: `trunk` `main` → `production`;
+`standard` `develop` → `staging`, `main` → `production`; `environments` `develop` →
+`development`, `staging` → `staging`, `main` → `production`.
+
+1. `init` prints the secret names each environment needs (Docker: `DEPLOY_HOST`, `DEPLOY_USER`,
+   `DEPLOY_SSH_KEY`, `DEPLOY_KNOWN_HOSTS`; Cloudflare: `CLOUDFLARE_API_TOKEN`,
+   `CLOUDFLARE_ACCOUNT_ID`) and the page to create them on: *Settings → Environments*. It never
+   asks for a value; you type the values on that page yourself.
+2. On that page, add **required reviewers** to the environment `production`: every production
+   deployment then waits for one of them. `/scrum-github:doctor` warns until you do.
+3. Commit and push `.github/workflows/deploy.yml`. A merge into a long-lived branch deploys it; a
+   job without its secrets fails and names the missing ones.
+4. **Rollback:** *Actions → deploy → Run workflow*, choose the environment and type a released
+   version (`v1.4.0`); after approval it deploys that tag again.
+
+With Docker, the image is tagged with the source tree: when the code merged into `main` is the
+same tree already built for `develop` or `staging` (a release PR that adds no version-file
+commit), production gets that image without a new build, so it runs exactly what was tested. A
+`deploy.yml` the project already had is never replaced: `init` says it was skipped.
 
 ---
 
@@ -784,6 +971,10 @@ says how to fix each problem. The table below covers what `doctor` cannot see.
 | Symptom | Cause | Fix |
 |---|---|---|
 | A PR was merged but the task did not close | The PR says `Solve #n` instead of `Closes #n` | Change the PR description to `Closes #n` |
+| A PR merged into `develop` left the task open, In review, `on: develop` | Expected with a working branch: the task is not released yet | Release it ([Flow H](#flow-h-release-a-version)) |
+| `pr-check` fails with "must target develop" | A task branch aimed at `main` | Change the PR's base to `develop`; only `release/*` and `hotfix/*` go into `main` |
+| The checks of a back-merge PR never start | It was opened by the workflow's token, which starts no workflows | Close the PR and reopen it, or let an admin merge it |
+| `doctor` warns that `main` has commits `develop` lacks | A back-merge PR was not merged | Merge it with a merge commit |
 | A PR merged into another branch did not close the task | The target branch has no `.github/` (workflows run from the files on the PR's target branch) | Bring `.github/` into that branch, or close the task by hand as completed |
 | The `scrum-pr-link-check` check fails | The PR description has no `Closes #n` | Add that line, or add the `no-task` label |
 | `task-pr` says the branch must be pushed | The branch is not on the remote | `git push -u origin <branch>`, then run it again |
@@ -830,9 +1021,11 @@ says how to fix each problem. The table below covers what `doctor` cannot see.
 
 **Repository setup**
 - [ ] Run `/scrum-github:init` and read the preview carefully
+- [ ] Choose the preset (`branching.preset`), and `deploy.platform` for a web project
 - [ ] Edit `.github/scrum.yml`: timezone, `length_days`, point scale, digest time, `team`
-- [ ] Commit and push `.github/` to the default branch
-- [ ] Turn on branch protection and require the `scrum-pr-link-check` check
+- [ ] Commit and push `.github/` to the default branch (`main`)
+- [ ] Run `/scrum-github:protect` (admin) and apply it
+- [ ] With a deployment platform: create the environment secrets and add required reviewers to `production`
 - [ ] `/scrum-github:doctor` reports no problems
 - [ ] (Optional) `project-setup` to turn on the board
 

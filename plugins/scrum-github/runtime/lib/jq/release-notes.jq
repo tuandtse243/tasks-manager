@@ -4,7 +4,8 @@
 #    --argjson parents {"N": "title"}                     titles of the parent features
 #    --argjson strings STRINGS_OF_THE_LANGUAGE --arg repo OWNER/NAME
 # Groups in order: breaking changes, features (tasks without a parent first, then one heading per
-# parent feature), bug fixes; an empty group is left out. Each line: "- Title (#12, PR #40)".
+# parent feature), bug fixes, other (merged pull requests that link no task, plan.other: "- Title
+# (#40)"); an empty group is left out. Each line: "- Title (#12, PR #40)".
 # Text from issues is inserted as it is: GitHub renders the Markdown.
 include "scrum";
 # "@name" (or "@org/team") in a title would notify that person when the release is published:
@@ -30,6 +31,8 @@ $plan.tasks as $t
             | "### \($parents[$k] // "#\($k)" | quiet)\n\n" + lines) ] | join("\n\n"))
      else empty end),
     (if ($bugs | length) > 0 then group("release_fixes"; $bugs | lines) else empty end),
+    (($plan.other // []) as $o
+     | if ($o | length) > 0 then group("release_other"; $o | map("- \(.title | quiet) (#\(.number))") | join("\n")) else empty end),
     (if $plan.previous != null
      then "**\(tr($strings; "release_full_changelog"))**: https://github.com/\($repo)/compare/\($plan.previous.tag)...\($plan.tag)"
      else empty end)

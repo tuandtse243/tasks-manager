@@ -20,6 +20,8 @@ Setup
   doctor [--json]                                 Check tools, login, configuration and what is installed; read-only
   next [--json]                                   The one thing to do next, with its command; read-only
   team [--json]                                   Team members, areas, capacity and load in the open sprint; read-only
+  protect [--json] [--yes]                        Long-lived branches, branch and tag rules, merge settings of the
+                                                  preset (branching.preset); preview, writes with --yes
 
 Backlog and sprints
   backlog [--json]                                Open tasks without a sprint, with points, parent and blockers
@@ -43,6 +45,20 @@ Tasks
                                                   and/or change the time estimate (work, review, who works)
   task assign N LOGIN... [--unassign]             Add or remove assignees
   task drop N [--reason TEXT]                     Close as not planned: counts nowhere
+
+Branches (branching.preset: trunk, standard or environments)
+  sync                                            Merge the working branch into the current task branch
+                                                  (the release branch into a hotfix branch); conflicts are listed
+  branches [--json]                               What each long-lived branch holds that the next one lacks,
+                                                  drift, open promotion/release/back-merge pull requests,
+                                                  stale task branches; read-only
+  cleanup [--json] [--yes]                        Local and remote branches already merged; deletes with --yes
+  promote [--json] [--yes]                        environments: the tasks on the working branch that staging
+                                                  lacks; with --yes open the promotion pull request
+  hotfix NUMBER                                   Start a hotfix: hotfix/N-<slug> from the release branch,
+                                                  task In progress
+  hotfix prepare [--json] [--yes]                 On a hotfix branch: the version it publishes; with --yes
+                                                  commit the version files and changelog on it
 
 Running tasks with AI agents (driven by /scrum-github:run; state in .scrum/run/<id>.json)
   run plan [N,N...] [--json]                      Tasks and waves of a run, what is left out and why, time
@@ -86,6 +102,13 @@ Releases
                                                   Version, tasks and release notes from the Done tasks
                                                   since the last version tag (or of the sprints); with
                                                   VERSION --yes create the tag and the GitHub Release
+                                                  (trunk), or open the release pull request from
+                                                  release/<tag> (presets with a working branch)
+          [--from REF]                            Release up to REF instead of the head of the working
+                                                  (or staging) branch
+  release finish [--pr N]                         After a release or hotfix pull request is merged: tag,
+                                                  GitHub Release, tasks Done, back-merge pull requests
+                                                  (used by the release workflow; idempotent)
 
 Project board (GitHub Projects, optional: project.enabled in .github/scrum.yml)
   project init [--dry-run] [--allow-builtin-workflows]
@@ -94,7 +117,9 @@ Project board (GitHub Projects, optional: project.enabled in .github/scrum.yml)
 
 Automation (GitHub Actions)
   event                                           Apply status rules for $GITHUB_EVENT_PATH
-  pr-check                                        Fail when a pull request links no task
+  pr-check [--title | --source | --link]          Fail when a pull request links no task, has a title that
+                                                  is not a Conventional Commit, or targets a branch its
+                                                  source branch may not target (one check with an option)
 
 Environment
   SCRUM_REPO      owner/name of the target repo (default: GITHUB_REPOSITORY or the current git remote)
@@ -216,7 +241,31 @@ case "$cmd" in
     esac
     ;;
   release)
-    . "$SCRUM_ROOT/lib/cmd_release.sh"; cmd_release "$@"
+    . "$SCRUM_ROOT/lib/cmd_release.sh"
+    if [ "${1:-}" = finish ]; then shift; cmd_release_finish "$@"; else cmd_release "$@"; fi
+    ;;
+  protect)
+    . "$SCRUM_ROOT/lib/cmd_protect.sh"; cmd_protect "$@"
+    ;;
+  promote)
+    . "$SCRUM_ROOT/lib/cmd_promote.sh"; cmd_promote "$@"
+    ;;
+  hotfix)
+    . "$SCRUM_ROOT/lib/cmd_promote.sh"
+    case "${1:-}" in
+      prepare) shift; cmd_hotfix_prepare "$@" ;;
+      ""|-h|--help) die "usage: scrum hotfix NUMBER | scrum hotfix prepare [--json] [--yes]" ;;
+      *) cmd_hotfix "$@" ;;
+    esac
+    ;;
+  sync)
+    . "$SCRUM_ROOT/lib/cmd_branch.sh"; cmd_sync "$@"
+    ;;
+  branches)
+    . "$SCRUM_ROOT/lib/cmd_branch.sh"; cmd_branches "$@"
+    ;;
+  cleanup)
+    . "$SCRUM_ROOT/lib/cmd_branch.sh"; cmd_cleanup "$@"
     ;;
   status)
     . "$SCRUM_ROOT/lib/cmd_report.sh"; cmd_status "$@"

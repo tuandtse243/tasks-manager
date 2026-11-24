@@ -61,9 +61,17 @@ The default capacity is the average velocity of up to the last three closed spri
 The digest is posted every morning on the issue `Sprint N digest` (and in a chat channel if the
 repository has the secret `SCRUM_DIGEST_WEBHOOK`).
 
+When the repository has a `develop` branch (presets `standard` and `environments`), a task whose
+pull request is merged is **not Done yet**: it stays In review, shown as "on `develop`" (or "on
+`staging`"), until a release brings it into `main`. Then it is Done and closed. To see what is
+merged but not released: `/scrum-github:branches`. A version is published by the Scrum Master or
+tech lead with `/scrum-github:release`.
+
 ## End of the sprint
 
 The Sprint Review uses the summary the Scrum Master posts when closing the sprint (a comment on
-the issue `Sprint N digest`): velocity, tasks done, tasks carried over, scope changes.
+the issue `Sprint N digest`): velocity, tasks done, tasks carried over, scope changes. With a
+`develop` branch, only released tasks count in the velocity; the summary lists the others as
+"merged but not released".
 
 Not sure what to do next: `/scrum-github:next`. A command fails: `/scrum-github:doctor`.

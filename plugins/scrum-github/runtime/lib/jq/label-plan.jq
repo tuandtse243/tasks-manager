@@ -14,7 +14,9 @@ def col: ltrimstr("#") | ascii_downcase;
   {name: $cfg.labels.epic, color: "5319e7", description: "Large requirement split into features"},
   {name: $cfg.labels.meta, color: "ededed", description: "Scrum bookkeeping issue, not a task"},
   {name: $cfg.labels.no_task, color: "cfd3d7", description: "Pull request with no linked task"},
-  {name: $cfg.labels.ai_ready, color: "8250df", description: "Task ready for an AI agent (/scrum-github:run)"}
+  {name: $cfg.labels.ai_ready, color: "8250df", description: "Task ready for an AI agent (/scrum-github:run)"},
+  # One location label per long-lived branch below the release branch (design 3); none in trunk.
+  (branching($cfg).lower[] | {name: location_label($cfg; .), color: "c5def5", description: "Task merged into \(.), not released yet"})
 ]
 | map(.override = ($cfg.colors[.name] != null) | .color = (($cfg.colors[.name] // .color) | col)) as $want
 | ($existing | map({key: (.name | norm), value: .}) | from_entries) as $have
@@ -30,5 +32,6 @@ def col: ltrimstr("#") | ascii_downcase;
     unchanged: [$ops[] | select(.op == "unchanged") | .name],
     obsolete: [ $existing[] | .name as $n
                 | select(($n | startswith($cfg.points.label_prefix))
-                         or ($cfg.statuses.label_prefix != "" and ($n | startswith($cfg.statuses.label_prefix))))
+                         or ($cfg.statuses.label_prefix != "" and ($n | startswith($cfg.statuses.label_prefix)))
+                         or (has_working_branch($cfg) and ($n | startswith(location_prefix($cfg)))))
                 | select(any($want[]; (.name | norm) == ($n | norm)) | not) | $n ] }

@@ -1,6 +1,6 @@
 ---
 name: doctor
-description: Check that Scrum on GitHub can work in this repository - jq, yq (mikefarah), gh login and scopes, .github/scrum.yml, labels, workflows pushed to the default branch, runtime version, generated files, and the project board secret - and say how to fix each problem. Read-only. Use when a scrum-github command fails, after installing the plugin, or when the user asks whether their setup is right.
+description: Check that Scrum on GitHub can work in this repository - jq, yq (mikefarah), gh login and scopes, .github/scrum.yml, labels, workflows pushed to the default branch, runtime version, generated files, the long-lived branches of the preset, the default branch, branch rules, a missing back-merge, the governance files, and the project board secret - and say how to fix each problem. Read-only. Use when a scrum-github command fails, after installing the plugin, or when the user asks whether their setup is right.
 ---
 
 # Check the setup
@@ -19,6 +19,15 @@ GitHub outside the sandbox from the start (the user approves it) instead of fail
    `/scrum-github:init`). Run one only when the user agrees. Steps only a person can do (adding a
    repository secret, approving a command outside the sandbox) stay with the user.
 4. After fixing, run `scrum doctor` again and confirm what is left.
+
+The "Branches and governance" group checks that the default branch is the release branch
+(`main`), that every long-lived branch of the preset exists and has a rule (fix:
+`/scrum-github:protect`), that `main` holds nothing the lower branches lack (otherwise a
+back-merge is missing), and that `CODEOWNERS`, `CONTRIBUTING.md`, `SECURITY.md` and
+`dependabot.yml` exist. With `deploy.platform` set, it warns when the GitHub environment
+`production` is missing or has no required reviewers, with the settings page to open (adding
+reviewers is for the user). An `info` line (no `branching` block) needs no action; it says how to
+adopt a preset.
 
 `skip` lines were not checked because something before them failed; they need no action of
 their own. `scrum doctor --json` gives the same checks as JSON.

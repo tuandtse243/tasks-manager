@@ -200,7 +200,7 @@
     "run_pr_tasks": "{n} tasks",
     "run_pr_tasks_one": "1 task",
     "run_pr_intro": "Tasks worked by AI agents in run `{run}`, each in its own worktree, merged into `{branch}` one merge commit per task, with the tests run after each wave. Review each task below, test it by hand, then tick its acceptance criteria.",
-    "run_pr_after": "**Merge #{pr} first.** This pull request is based on its branch (wave {wave}). Once #{pr} is merged, change the base of this pull request to `{base}` (GitHub does it on its own when the branch of #{pr} is deleted) before merging it: `Closes #N` only closes tasks when it is merged into `{base}`.",
+    "run_pr_after": "**Merge #{pr} first.** This pull request is based on its branch (wave {wave}). Once #{pr} is merged, change the base of this pull request to `{base}` (GitHub does it on its own when the branch of #{pr} is deleted) before merging it: the status rules for `Closes #N` apply only when it is merged into `{base}`.",
     "run_pr_acceptance": "Acceptance criteria",
     "run_pr_no_acceptance": "The issue has no acceptance criteria (checkboxes); compare with its description.",
     "run_pr_time": "Time",
@@ -218,7 +218,14 @@
     "release_breaking": "Breaking changes",
     "release_features": "Features",
     "release_fixes": "Bug fixes",
-    "release_full_changelog": "Full changelog"
+    "release_full_changelog": "Full changelog",
+    "loc_code_review": "in code review",
+    "loc_on_branch": "on {branch}",
+    "attention_waiting_release": "{ref} is waiting on {branch} for {n} working days.",
+    "attention_waiting_release_one": "{ref} is waiting on {branch} for {n} working day.",
+    "close_unreleased_title": "Merged but not released",
+    "close_unreleased_note": "Not counted in the velocity: their code is not on {branch} yet. Release first: /scrum-github:release",
+    "release_other": "Other"
   },
   "vi": {
     "assignee": "Người nhận",
@@ -406,7 +413,7 @@
     "run_pr_title_wave": "{sprint}, đợt {wave}: {tasks} do AI làm ({numbers})",
     "run_pr_tasks": "{n} task",
     "run_pr_intro": "Các task do agent AI làm trong lần chạy `{run}`, mỗi task trong một worktree riêng, được merge vào `{branch}` mỗi task một commit merge, test được chạy sau mỗi đợt. Hãy review từng task bên dưới, test tay, rồi tích các tiêu chí nghiệm thu.",
-    "run_pr_after": "**Merge #{pr} trước.** Pull request này dựa trên nhánh của nó (đợt {wave}). Khi #{pr} đã merge, đổi base của pull request này về `{base}` (GitHub tự đổi khi nhánh của #{pr} bị xoá) rồi mới merge: `Closes #N` chỉ đóng task khi merge vào `{base}`.",
+    "run_pr_after": "**Merge #{pr} trước.** Pull request này dựa trên nhánh của nó (đợt {wave}). Khi #{pr} đã merge, đổi base của pull request này về `{base}` (GitHub tự đổi khi nhánh của #{pr} bị xoá) rồi mới merge: quy tắc trạng thái theo `Closes #N` chỉ áp dụng khi merge vào `{base}`.",
     "run_pr_acceptance": "Tiêu chí nghiệm thu",
     "run_pr_no_acceptance": "Issue không có tiêu chí nghiệm thu (checkbox); hãy so với mô tả của nó.",
     "run_pr_time": "Thời gian",
@@ -424,6 +431,12 @@
     "release_breaking": "Thay đổi không tương thích",
     "release_features": "Tính năng",
     "release_fixes": "Sửa lỗi",
-    "release_full_changelog": "Toàn bộ thay đổi"
+    "release_full_changelog": "Toàn bộ thay đổi",
+    "loc_code_review": "đang review code",
+    "loc_on_branch": "trên {branch}",
+    "attention_waiting_release": "{ref} đang chờ trên {branch} {n} ngày làm việc.",
+    "close_unreleased_title": "Đã merge nhưng chưa phát hành",
+    "close_unreleased_note": "Không tính vào velocity: code của chúng chưa có trên {branch}. Hãy phát hành trước: /scrum-github:release",
+    "release_other": "Khác"
   }
 }

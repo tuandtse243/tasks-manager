@@ -13,9 +13,20 @@ doctor_env() {
   cp "$FIXTURES/labels-github-default.json" "$FAKE_GH_DIR/labels.json"
   cp "$FIXTURES/remote-workflows.json" "$FAKE_GH_DIR/workflows.json"
   cp "$FIXTURES/actions-secrets.json" "$FAKE_GH_DIR/secrets.json"
+  # Governance (preset standard): main is the default branch, every long-lived branch exists and
+  # has a rule, develop contains main.
+  printf '{"full_name":"acme/blog","default_branch":"main"}' > "$FAKE_GH_DIR/repo.json"
+  route 'api repos/acme/blog' "repo.json"
+  printf '[{"type":"deletion","ruleset_source":"acme/blog","ruleset_id":1}]' > "$FAKE_GH_DIR/rules.json"
+  route 'api --paginate repos/acme/blog/rules/branches/*' "rules.json"
+  printf '{"status":"behind","ahead_by":0,"behind_by":3}' > "$FAKE_GH_DIR/compare.json"
+  route 'api repos/acme/blog/compare/*' "compare.json"
+  route_json 'api repos/acme/blog/branches/main' '{"name":"main","commit":{"sha":"aaa000"}}'
+  route_json 'api repos/acme/blog/branches/develop' '{"name":"develop","commit":{"sha":"ddd000"}}'
   run_scrum init
   assert_status 0 "$STATUS" "$ERR"
-  cp "$FIXTURES/labels-after-init.json" "$FAKE_GH_DIR/labels.json"
+  # init writes preset standard (statuses.in_review and the "on: develop" label).
+  cp "$FIXTURES/labels-after-init-standard.json" "$FAKE_GH_DIR/labels.json"
   : > "$FAKE_GH_LOG"
 }
 
@@ -151,7 +162,7 @@ test_doctor_invalid_config() {
 
 test_doctor_missing_label() {
   doctor_env
-  jq 'map(select(.name != "type: epic"))' "$FIXTURES/labels-after-init.json" > "$FAKE_GH_DIR/labels.json"
+  jq 'map(select(.name != "type: epic"))' "$FIXTURES/labels-after-init-standard.json" > "$FAKE_GH_DIR/labels.json"
   doctor_json
   assert_eq "warn" "$(status_of labels)"
   assert_contains "$(check_of labels)" "missing labels: type: epic"
@@ -235,4 +246,163 @@ test_doctor_workflows_not_readable() {
   doctor_json
   assert_eq "warn" "$(status_of workflows)"
   assert_contains "$(check_of workflows)" "cannot read"
+}
+
+# ---------- governance (delta repo-governance "Diagnostics for governance") ----------
+
+test_doctor_governance_all_ok() {
+  doctor_env
+  doctor_json
+  assert_status 0 "$STATUS" "$OUT"
+  assert_eq "ok" "$(status_of default-branch)"
+  assert_eq "ok" "$(status_of branches)"
+  assert_eq "ok" "$(status_of rules)"
+  assert_eq "ok" "$(status_of back-merge)"
+  assert_eq "ok" "$(status_of governance-files)"
+  assert_contains "$(gh_calls)" "repos/acme/blog/rules/branches/develop"
+  assert_contains "$(gh_calls)" "repos/acme/blog/compare/develop...main"
+}
+
+test_doctor_default_branch_is_develop() {
+  doctor_env
+  printf '{"full_name":"acme/blog","default_branch":"develop"}' > "$FAKE_GH_DIR/repo.json"
+  doctor_json
+  assert_status 1 "$STATUS"
+  assert_eq "error" "$(status_of default-branch)"
+  assert_contains "$(check_of default-branch)" "the default branch of acme/blog is develop"
+  assert_contains "$(check_of default-branch)" "--default-branch main"
+}
+
+test_doctor_main_ahead_of_develop() {
+  doctor_env
+  printf '{"status":"diverged","ahead_by":2,"behind_by":5}' > "$FAKE_GH_DIR/compare.json"
+  doctor_json
+  assert_status 0 "$STATUS" "$OUT"
+  assert_eq "warn" "$(status_of back-merge)"
+  assert_contains "$(check_of back-merge)" "main has 2 commits that develop does not contain"
+  assert_contains "$(check_of back-merge)" "Back-merge main into develop"
+}
+
+test_doctor_unprotected_main() {
+  doctor_env
+  printf '[]' > "$FAKE_GH_DIR/norules.json"
+  route_first 'api --paginate repos/acme/blog/rules/branches/main' "norules.json"
+  doctor_json
+  assert_eq "warn" "$(status_of rules)"
+  assert_contains "$(check_of rules)" "no rule protects these branches: main"
+  assert_not_contains "$(check_of rules)" "develop"
+  assert_contains "$(check_of rules)" "/scrum-github:protect"
+}
+
+test_doctor_missing_develop() {
+  doctor_env
+  route_first 'api repos/acme/blog/branches/develop' '!404'
+  doctor_json
+  assert_status 1 "$STATUS"
+  assert_eq "error" "$(status_of branches)"
+  assert_contains "$(check_of branches)" "missing on GitHub: develop"
+  assert_contains "$(check_of branches)" "/scrum-github:protect"
+  assert_eq "" "$(status_of back-merge)" "no compare against a branch that does not exist"
+}
+
+test_doctor_missing_governance_file() {
+  doctor_env
+  rm "$SCRUM_REPO_DIR/.github/SECURITY.md"
+  doctor_json
+  assert_eq "warn" "$(status_of governance-files)"
+  assert_contains "$(check_of governance-files)" ".github/SECURITY.md"
+  assert_contains "$(check_of governance-files)" "/scrum-github:init"
+}
+
+test_doctor_governance_file_elsewhere_is_fine() {
+  doctor_env
+  mv "$SCRUM_REPO_DIR/.github/CONTRIBUTING.md" "$SCRUM_REPO_DIR/CONTRIBUTING.md"
+  doctor_json
+  assert_eq "ok" "$(status_of governance-files)"
+}
+
+test_doctor_no_branching_block_is_informational() {
+  doctor_env
+  board_on   # writes a configuration without a branching block
+  doctor_json
+  assert_status 0 "$STATUS" "$OUT"
+  assert_eq "info" "$(status_of preset)"
+  assert_contains "$(check_of preset)" "preset: standard"
+  assert_eq "" "$(status_of default-branch)" "no branch checks without a preset"
+  assert_eq "0" "$(printf '%s' "$OUT" | jq .warnings)"
+  run_scrum doctor
+  assert_contains "$OUT" "info   no branching block"
+  assert_contains "$OUT" "Everything looks fine."
+}
+
+# ---------- deployment (delta deploy-templates "Production needs approval") ----------
+
+deploy_on() { # deploy_on PLATFORM  Adds deploy.platform to the configuration and reinstalls.
+  printf 'deploy:\n  platform: %s\n' "$1" >> "$SCRUM_REPO_DIR/.github/scrum.yml"
+  run_scrum init
+  assert_status 0 "$STATUS" "$ERR"
+  jq '. + [{"name":"deploy.yml"}]' "$FIXTURES/remote-workflows.json" > "$FAKE_GH_DIR/workflows.json"
+  : > "$FAKE_GH_LOG"
+}
+REVIEWED='{"name":"production","protection_rules":[{"id":2,"type":"required_reviewers","reviewers":[{"type":"User","reviewer":{"login":"tuandt"}}]}]}'
+
+# Scenario: No reviewer
+test_doctor_production_without_reviewers_warns() {
+  doctor_env
+  deploy_on docker
+  route_json 'api repos/acme/blog/environments/production' \
+    '{"name":"production","protection_rules":[{"id":1,"type":"wait_timer","wait_timer":5}]}'
+  doctor_json
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "warn" "$(status_of production-reviewers)"
+  assert_contains "$(check_of production-reviewers)" "no required reviewers"
+  assert_contains "$(check_of production-reviewers)" "https://github.com/acme/blog/settings/environments"
+  assert_eq "" "$(gh_writes)" "doctor writes nothing"
+}
+
+test_doctor_production_environment_missing_warns() {
+  doctor_env
+  deploy_on cloudflare
+  route 'api repos/acme/blog/environments/production' '!404'
+  doctor_json
+  assert_eq "warn" "$(status_of production-reviewers)"
+  assert_contains "$(check_of production-reviewers)" "does not exist"
+  assert_contains "$(check_of production-reviewers)" "https://github.com/acme/blog/settings/environments"
+}
+
+test_doctor_production_with_reviewers_is_ok() {
+  doctor_env
+  deploy_on docker
+  route_json 'api repos/acme/blog/environments/production' "$REVIEWED"
+  run_scrum doctor
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "Everything looks fine."
+}
+
+test_doctor_no_platform_skips_reviewer_check() {
+  doctor_env
+  doctor_json
+  assert_eq "" "$(status_of production-reviewers)"
+  assert_not_contains "$(gh_calls)" "environments"
+}
+
+test_doctor_ignores_projects_own_deploy_workflow() {
+  doctor_env
+  mkdir -p "$SCRUM_REPO_DIR/.github/workflows"
+  printf 'name: our deploy\n' > "$SCRUM_REPO_DIR/.github/workflows/deploy.yml"
+  deploy_on docker
+  route_json 'api repos/acme/blog/environments/production' "$REVIEWED"
+  doctor_json
+  assert_eq "ok" "$(status_of files)"
+  assert_eq "ok" "$(status_of workflows)"
+}
+
+# Review fix: the release workflow needs Actions to be allowed to open pull requests.
+test_doctor_warns_when_actions_cannot_open_pull_requests() {
+  doctor_env
+  printf '{"default_workflow_permissions":"read","can_approve_pull_request_reviews":false}' > "$FAKE_GH_DIR/actions.json"
+  route_first 'api repos/acme/blog/actions/permissions/workflow' actions.json
+  doctor_json
+  assert_eq "warn" "$(status_of actions-prs)"
+  assert_contains "$(check_of actions-prs)" "/scrum-github:protect"
 }

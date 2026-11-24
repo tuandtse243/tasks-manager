@@ -71,8 +71,67 @@ def nonempty_string: type == "string" and length > 0;
        (if ($c.release.breaking_label | nonempty_string) then empty
         else "release.breaking_label: must be a non-empty label name (got \($c.release.breaking_label | tojson))" end),
        (if ($c.release.first_version | type) == "string" and ($c.release.first_version | test("^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$")) then empty
-        else "release.first_version: must be a version X.Y.Z, such as \"0.1.0\" (got \($c.release.first_version | tojson))" end)
+        else "release.first_version: must be a version X.Y.Z, such as \"0.1.0\" (got \($c.release.first_version | tojson))" end),
+       # spec scrum-config "Release files"
+       (if ($c.release.version_files // [] | type) != "array"
+          then "release.version_files: must be a list of files, each with a path and an optional pattern containing {version}"
+        else
+          ($c.release.version_files // [] | to_entries[] | .key as $i | .value as $f
+           | if ($f | type) != "object" or ($f.path | nonempty_string | not)
+               then "release.version_files[\($i)].path: is required (the file whose version the release updates)"
+             elif ($f.path | startswith("/")) or ($f.path | split("/") | any(.[]; . == ".."))
+               then "release.version_files[\($i)].path: must be a path inside the repo, relative to its root (got \($f.path | tojson))"
+             elif $f.pattern != null and (($f.pattern | type) != "string" or ($f.pattern | contains("{version}") | not))
+               then "release.version_files[\($i)].pattern: needs {version} where the version goes, for example \"version = \\\"{version}\\\"\" (got \($f.pattern | tojson))"
+             elif $f.pattern == null and ($f.path | endswith(".json") | not)
+               then "release.version_files[\($i)].pattern: is required for a file that is not JSON (\($f.path)); it needs {version}"
+             else empty end)
+        end),
+       (if $c.release.changelog == null then empty
+        elif ($c.release.changelog | nonempty_string) and ($c.release.changelog | startswith("/") | not)
+             and ($c.release.changelog | split("/") | any(.[]; . == "..") | not) then empty
+        else "release.changelog: must be a path inside the repo, such as CHANGELOG.md, or null (got \($c.release.changelog | tojson))" end)
      end),
+
+    # branching (spec branching-presets, scrum-config "Branching block")
+    (if $c.branching == null then empty
+     elif ($c.branching | type) != "object" then "branching: must be a mapping"
+     else
+       ($c.branching) as $b
+       | ($b.preset // "trunk") as $p
+       | (if ["trunk", "standard", "environments"] | index($p) then empty
+          else "branching.preset: must be trunk, standard or environments (got \($b.preset | tojson))" end),
+         (["main", "develop", "staging"][] as $k
+          | if ($b[$k] | nonempty_string) and ($b[$k] | test("^[A-Za-z0-9._][A-Za-z0-9._/-]*$")) then empty
+            else "branching.\($k): must be a branch name (got \($b[$k] | tojson))" end),
+         (if ($b.location_prefix | nonempty_string) then empty
+          else "branching.location_prefix: must be a non-empty text, such as \"on: \" (got \($b.location_prefix | tojson))" end),
+         (if ($b.stale_days | is_int) and $b.stale_days > 0 then empty
+          else "branching.stale_days: must be a whole number greater than 0 (got \($b.stale_days | tojson))" end),
+         ({trunk: ["main"], standard: ["main", "develop"], environments: ["main", "develop", "staging"]}[$p] // []) as $keys
+         | ([$keys[] as $k | {k: $k, v: $b[$k]}] | group_by(.v) | map(select(length > 1))[]
+            | "branching.\(map(.k) | join(" and branching.")): must be different branches (all are \(.[0].v | tojson))"),
+         (if $p != "trunk" and (($c.statuses.in_review | type) != "string" or ($c.statuses.in_review | length) == 0)
+          then "statuses.in_review: must be set with branching.preset \($p), because a task waits In review between its merge and the release (for example in_review: In review)"
+          else empty end)
+     end),
+
+    # governance (spec scrum-config "Governance block")
+    (if $c.governance == null then empty
+     elif ($c.governance | type) != "object" then "governance: must be a mapping"
+     else
+       (if ($c.governance.approvals | is_int) and $c.governance.approvals >= 0 and $c.governance.approvals <= 6 then empty
+        else "governance.approvals: must be a whole number from 0 to 6 (got \($c.governance.approvals | tojson))" end),
+       (["required_checks", "codeowners"][] as $k
+        | if ($c.governance[$k] | type) == "array" and all($c.governance[$k][]; nonempty_string) then empty
+          else "governance.\($k): must be a list of non-empty texts (got \($c.governance[$k] | tojson))" end)
+     end),
+
+    # deploy (spec scrum-config "Deploy block", deploy-templates "Platform selection")
+    (if $c.deploy == null then empty
+     elif ($c.deploy | type) != "object" then "deploy: must be a mapping"
+     elif ["none", "vercel", "cloudflare", "docker"] | index($c.deploy.platform // "none") then empty
+     else "deploy.platform: must be none, vercel, cloudflare or docker (got \($c.deploy.platform | tojson))" end),
 
     # planning
     (if ($c.planning | type) != "object" then "planning: must be a mapping"
@@ -107,6 +166,8 @@ def nonempty_string: type == "string" and length > 0;
     (["stale_days", "behind_percent", "review_days"][] as $k
      | if ($c.attention[$k] | is_int) and $c.attention[$k] >= 0 then empty
        else "attention.\($k): must be a whole number, 0 or more (got \($c.attention[$k] | tojson))" end),
+    (if ($c.attention.promote_days | is_int) and $c.attention.promote_days > 0 then empty
+     else "attention.promote_days: must be a whole number greater than 0 (got \($c.attention.promote_days | tojson))" end),
 
     # sprint.working_days
     (if ($c.sprint.working_days | type) != "array" or ($c.sprint.working_days | length) == 0

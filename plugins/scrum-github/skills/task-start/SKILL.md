@@ -13,11 +13,15 @@ GitHub outside the sandbox from the start (the user approves it) instead of fail
 Run it from the root of the target repository (it creates a local branch there).
 
 1. Get the issue number from the user's request.
-2. Run `scrum task start N`.
-3. Report the branch, the status change and any note (for example the task is assigned to someone
-   else). Say that `/scrum-github:task-pr` writes the pull request description when the work
-   is ready, and that a description written by hand needs `Closes #N`: the PR check fails
-   without it, and merging the PR moves the task to Done.
+2. Run `scrum task start N`. A new branch starts from the latest working branch on origin
+   (`origin/develop` in the `standard` and `environments` presets, the default branch in `trunk`).
+   When origin cannot be reached, it starts from the local copy of that branch and warns that it
+   may be stale: pass the warning on, and suggest `/scrum-github:sync` once the network is back.
+3. Report the branch, the branch it started from, the status change and any note (for example the
+   task is assigned to someone else). Say that `/scrum-github:task-pr` writes the pull request
+   description when the work is ready, and that a description written by hand needs `Closes #N`:
+   the PR check fails without it. In `trunk` merging the PR moves the task to Done; with a working
+   branch the task stays In review on that branch until it is released to the release branch.
 
 If git refuses to switch branches because of uncommitted changes, tell the user; nothing was
 changed on GitHub in that case.

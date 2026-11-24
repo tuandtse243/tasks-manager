@@ -17,7 +17,9 @@ Run it from the root of the target repository. It only reads from GitHub.
 2. Show the groups as printed, in their order: In progress, In review (when that status is on),
    New in the open sprint, other sprints by end date, then the backlog. Each line has the number,
    points, sprint, title, the time estimate when the task has one ("[AI 20m, review 15m]") and the
-   open tasks that block it.
+   open tasks that block it. With a working branch (`standard` or `environments`) a task In review
+   also says where it is: "(in code review)" while its pull request is open, "(on develop)" once
+   merged there and waiting for the release.
    Then give the "Time left in <sprint>" line: about how long the work on their open tasks of the
    open sprint takes, counted by waves like the plan view (tasks that do not block each other run
    in parallel, `planning.merge_minutes` after each wave), and the minutes of review. Name the
