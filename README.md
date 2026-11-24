@@ -4,7 +4,7 @@
 
 Run Scrum on GitHub itself, without Jira or Trello. This repository is a **Claude Code plugin
 marketplace**. It currently holds one plugin, [`scrum-github`](plugins/scrum-github/README.md)
-(version 0.13.0, see the [releases](https://github.com/tuandtse243/tasks-manager/releases)).
+(version 0.13.1, see the [releases](https://github.com/tuandtse243/tasks-manager/releases)).
 
 | Scrum | On GitHub |
 |---|---|
