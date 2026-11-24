@@ -96,6 +96,7 @@ skills call it by its full path instead. Once set up, the project repository als
 | `release` | SM or tech lead, after closing a sprint: publish a version (tag and GitHub Release) | `scrum release [VERSION] [--sprint S] [--since TAG] [--draft] [--notes-file FILE] [--yes]` | `/scrum-github:release --sprint "Sprint 5"` |
 | `project-setup` | SM, once: turn on the kanban board (optional) | `bash wizards/project-board.sh`, `scrum project init` | `/scrum-github:project-setup` |
 | (none) | SM, when the repo stops using the plugin | `scrum uninstall [--dry-run] [--yes]` | `scrum uninstall`, check, then add `--yes` |
+| `protect` | Tech lead with admin rights, once after `init` and again after changing the preset: create `develop` (and `staging`), branch and tag rules, merge settings | `scrum protect [--json] [--yes]` | `/scrum-github:protect` |
 
 Every command that writes to GitHub shows you what it will do and asks first.
 

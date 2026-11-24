@@ -75,12 +75,53 @@ cmd_event() {
   esac
 }
 
-cmd_pr_check() {
-  require_tools nogh
-  load_config
-  local ev repo body links no_task msg solve
-  ev="$(event_file)"
-  repo="$(repo_slug)"
+# ---------- scrum pr-check [--title | --source | --link] (spec repo-governance, branching-presets) ----------
+# Without an option every check runs; the installed workflow runs each one as a named step.
+# Release, promotion and back-merge pull requests are exempt from all three (design 8, 10).
+
+# pr_check_fail TITLE MESSAGE  Reports one failed check (annotation, step summary, stderr).
+pr_check_fail() {
+  printf '::error title=%s::%s\n' "$1" "$2"
+  if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then printf '### %s\n\n%s\n' "$1" "$2" >> "$GITHUB_STEP_SUMMARY"; fi
+  printf '%s\n' "$2" >&2
+}
+
+# pr_check_title EVENT_FILE  Conventional Commits title: type, optional (scope) and !, then ": ".
+pr_check_title() {
+  local title
+  if ! title="$(jq -er '.pull_request.title | strings' "$1")"; then
+    info "Title: not in the event; not checked."; return 0
+  fi
+  if printf '%s' "$title" | grep -Eq '^(feat|fix|docs|chore|refactor|test|ci|perf|build|revert)(\([^()]+\))?!?: [^ ]'; then
+    info "OK: the title \"$title\" is a Conventional Commit."
+    return 0
+  fi
+  pr_check_fail "Pull request title" "The title \"$title\" does not follow Conventional Commits. Start it with a type (feat, fix, docs, chore, refactor, test, ci, perf, build or revert), an optional scope in parentheses and \"!\" for a breaking change, then \": \" and the summary. Example: feat(auth): log in with email"
+  return 1
+}
+
+# pr_check_source EVENT_FILE  The head branch may target the base branch (allowed_source).
+pr_check_source() {
+  local head base res
+  head="$(jq -r '.pull_request.head.ref // ""' "$1")"
+  base="$(jq -r '.pull_request.base.ref // ""' "$1")"
+  if [ -z "$head" ] || [ -z "$base" ]; then
+    info "Source branch: not in the event; not checked."; return 0
+  fi
+  res="$(jq -cn -L "$JQ_LIB" --argjson cfg "$CONFIG_JSON" --arg h "$head" --arg b "$base" \
+    'include "scrum"; allowed_source($cfg; $h; $b)')"
+  if [ "$(printf '%s' "$res" | jq -r .allowed)" = true ]; then
+    info "OK: $head may target $base."
+    return 0
+  fi
+  pr_check_fail "Source branch" "$(printf '%s' "$res" | jq -r --arg h "$head" --arg b "$base" \
+    '"A pull request from \($h) may not target \($b), which accepts \(.accepts | join(", ")). This branch must target \(.target): change the base branch of the pull request to \(.target)."')"
+  return 1
+}
+
+# pr_check_link EVENT_FILE REPO  The description closes a task, or the pull request has the no-task label.
+pr_check_link() {
+  local ev="$1" repo="$2" body links no_task msg solve
   no_task="$(config_get .labels.no_task)"
   if jq -e --arg l "$no_task" 'any(.pull_request.labels[]?; .name == $l)' "$ev" >/dev/null; then
     info "OK: the pull request has the \"$no_task\" label."
@@ -97,8 +138,35 @@ cmd_pr_check() {
   if [ -n "$solve" ]; then
     msg="$msg GitHub does not understand \"Solve\": replace $solve."
   fi
-  printf '::error title=No linked task::%s\n' "$msg"
-  if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then printf '### No linked task\n\n%s\n' "$msg" >> "$GITHUB_STEP_SUMMARY"; fi
-  printf '%s\n' "$msg" >&2
-  exit 1
+  pr_check_fail "No linked task" "$msg"
+  return 1
+}
+
+cmd_pr_check() {
+  local only="" ev repo head base kind failed=0
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --title) only="title" ;;
+      --source) only="source" ;;
+      --link) only="link" ;;
+      *) die "unknown option for pr-check: $1. Use: scrum pr-check [--title | --source | --link]" ;;
+    esac
+    shift
+  done
+  require_tools nogh
+  load_config
+  ev="$(event_file)"
+  repo="$(repo_slug)"
+  head="$(jq -r '.pull_request.head.ref // ""' "$ev")"
+  base="$(jq -r '.pull_request.base.ref // ""' "$ev")"
+  kind="$(jq -rn -L "$JQ_LIB" --argjson cfg "$CONFIG_JSON" --arg h "$head" --arg b "$base" \
+    'include "scrum"; if pr_exempt($cfg; $h; $b) then pr_kind($cfg; $h; $b) else "" end')"
+  if [ -n "$head" ] && [ -n "$base" ] && [ -n "$kind" ]; then
+    info "OK: a $(printf '%s' "$kind" | tr '_' '-') pull request ($head into $base); the title, source-branch and task-link checks do not apply."
+    return 0
+  fi
+  if [ -z "$only" ] || [ "$only" = title ]; then pr_check_title "$ev" || failed=1; fi
+  if [ -z "$only" ] || [ "$only" = source ]; then pr_check_source "$ev" || failed=1; fi
+  if [ -z "$only" ] || [ "$only" = link ]; then pr_check_link "$ev" "$repo" || failed=1; fi
+  [ "$failed" = 0 ] || exit 1
 }

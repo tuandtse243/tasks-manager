@@ -570,6 +570,62 @@ the most recently closed sprint has Done tasks closed after the latest version t
 creating a new sprint when none is open, otherwise after your own task in progress. It reads the
 tags only when no step above it applies, and skips the step when they cannot be read.
 
+## Protecting the repository
+
+`/scrum-github:protect` (`scrum protect`) makes GitHub enforce the preset of `branching.preset`.
+It reads the repository, prints what differs, and writes only with `--yes` (`--json` prints the
+plan as data). It needs admin rights on the repository and is safe to run again.
+
+| Item | What `protect --yes` does |
+|---|---|
+| Long-lived branches | Creates each missing one (`develop`, `staging`) at the head of `main`. Never moves or deletes a branch |
+| Branch rules | One ruleset per long-lived branch, named `scrum: working`, `scrum: staging`, `scrum: release`: pull request required with `governance.approvals` approvals (0: a pull request but no approval), the required checks `pr-check` plus `governance.required_checks`, no force push, no deletion. Merge methods: squash and merge commit on the working branch, merge commit only on staging and `main`; squash only on `main` in `trunk` |
+| Version tags | Ruleset `scrum: tags` on `<release.tag_prefix>*`: tags cannot be moved or deleted (creating them stays allowed, so the release workflow needs no bypass) |
+| Repository settings | Deletes head branches after merge, allows auto-merge, and allows exactly the merge methods the preset uses |
+
+Rulesets are recognised by the name prefix `scrum: `; one with a different content is updated,
+one the preset no longer uses is listed as obsolete and left alone. When GitHub refuses an item
+(rules are not available for a private repository on a free plan, or the token has no admin
+rights), that item is reported with the reason, the others are still applied, and the command
+exits with 1. The merge method per branch uses the ruleset parameter `allowed_merge_methods`.
+
+The `governance` block of `.github/scrum.yml` (all keys optional):
+
+```yaml
+governance:
+  approvals: 1             # 0 to 6
+  required_checks: []      # e.g. [test, lint]; pr-check is always required
+  codeowners: []           # e.g. ["@acme/web", "@tuandt"], written into CODEOWNERS by init
+```
+
+Files `init` installs for the team, only when the project has none of them (at the root, in
+`.github/` or in `docs/`); they are never overwritten afterwards and `uninstall` leaves them:
+
+| File | Content |
+|---|---|
+| `.github/CODEOWNERS` | `* <governance.codeowners>`, or a commented example when the list is empty |
+| `.github/CONTRIBUTING.md` | The branches of the preset, where pull requests go, the title rule, the release path |
+| `.github/SECURITY.md` | Supported versions and private vulnerability reporting |
+| `.github/dependabot.yml` | GitHub Actions updates once a week in one grouped pull request into the working branch, titled `ci: ...`, labelled `labels.no_task` |
+
+Checks on every pull request (`scrum-pr-link-check.yml`, job `pr-check`, one named step each,
+also `scrum pr-check [--title | --source | --link]`):
+
+- **Title**: Conventional Commits: `feat`, `fix`, `docs`, `chore`, `refactor`, `test`, `ci`,
+  `perf`, `build` or `revert`, an optional `(scope)` and `!`, then `: `. Example:
+  `feat(auth): log in with email`.
+- **Source branch** (`standard`, `environments`): `main` accepts `release/*` and `hotfix/*`;
+  staging accepts the working branch and `main`; the working branch accepts any branch but
+  staging. The message names the branch to target. Always passes in `trunk`.
+- **Linked task**: `Closes #N` in the description, or the `labels.no_task` label.
+
+Release, promotion and back-merge pull requests skip all three; hotfix pull requests are checked.
+Every workflow the plugin installs pins its actions to a full commit SHA with the version in a
+comment, and the scheduled and issue-triggered ones check out the working branch to read the
+configuration and the runtime. `/scrum-github:doctor` reports a default branch other than `main`,
+a missing long-lived branch, a branch without a rule, `main` ahead of a lower branch (a missing
+back-merge) and missing governance files.
+
 ## Project board (GitHub Projects)
 
 Optional. A GitHub Projects (v2) board shows the tasks as cards. You can drag the cards, and the

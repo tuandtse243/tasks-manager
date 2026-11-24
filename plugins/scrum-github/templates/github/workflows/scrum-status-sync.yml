@@ -21,8 +21,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # Checks out the base branch only, to get .github/scrum. Code from the pull request is never checked out or run.
-      - uses: actions/checkout@v4
+      # Issue events run the file of the default branch; they read the working branch of the preset.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
+          ref: ${{ github.event_name == 'issues' && '{{CHECKOUT_REF}}' || '' }}
           sparse-checkout: .github
       - name: Update task status
         run: .github/scrum/bin/scrum event
