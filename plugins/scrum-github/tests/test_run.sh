@@ -1127,8 +1127,8 @@ test_cmd_run_record_in_parallel_keeps_every_change() {
   assert_eq "running running running" "$(task_state 102) $(task_state 107) $(task_state 103)" \
     "a parallel record was lost; exit $s102 $s107 $s103; stdout: $(cat "$T/o102" "$T/o107" "$T/o103"); stderr: $(cat "$T/e102" "$T/e107" "$T/e103"); state: $(jq -c '.tasks | map_values(.state)' "$(state_file)")"
   assert_eq "0 0 0" "$s102 $s107 $s103" "a parallel record failed"
-  [ ! -d "$(state_file).lock" ] || _fail "lock left behind"
-  mkdir "$(state_file).lock"
+  [ ! -e "$(state_file).lock" ] || _fail "lock left behind"
+  : > "$(state_file).lock"
   SCRUM_RUN_LOCK_TRIES=2 run_scrum run record 102 --started
   assert_status 1 "$STATUS"
   assert_contains "$ERR" "another scrum run command is changing this run"
