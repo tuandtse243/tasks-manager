@@ -122,8 +122,10 @@ This repository uses its own plugin with preset `standard` (`.github/scrum.yml`;
   [CHANGELOG](plugins/scrum-github/CHANGELOG.md), in the same pull request into `develop`.
 - A version is released with `/scrum-github:release`: it opens `release/vX.Y.Z` → `main` and sets
   the version in `plugin.json`, `runtime/VERSION` and this README (`release.version_files`). Then,
-  on that release branch, rename `## [Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD` in one commit
-  (the tests require the newest CHANGELOG version to be the plugin version). Merging the release
+  on that release branch, in one commit: rename `## [Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD`
+  (the tests require the newest CHANGELOG version to be the plugin version), and run
+  `bash plugins/scrum-github/bin/scrum init` so the workflows' copy of the runtime in
+  `.github/scrum` is the released one (`scrum doctor` warns when it is older than the plugin). Merging the release
   pull request (merge commit) tags `main`, publishes the GitHub release and opens the back-merge
   into `develop`: close and reopen it to run its checks, then merge it with a merge commit.
 - An urgent fix of a released version goes through a `hotfix/*` branch from `main`
