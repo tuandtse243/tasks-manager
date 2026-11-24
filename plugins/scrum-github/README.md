@@ -666,9 +666,12 @@ checks out only `.github` of the release branch, never the code of the pull requ
    with a **merge commit**, not squash: a squash breaks the history and the next release
    conflicts. `scrum next` points to an open back-merge.
 
-A release pull request closed without merging changes nothing. Pull requests opened by the
-workflow's own token do not start other workflows, so required checks of the back-merge pull
-request may have to be started by hand (or merged by an admin).
+A release pull request closed without merging changes nothing. The workflow can open the
+back-merge only when *Allow GitHub Actions to create and approve pull requests* is on (`scrum
+protect --yes` turns it on; `doctor` warns when it is off); when it cannot, the run fails after
+the tag, the Release and the tasks are done, so it is seen. Pull requests opened by the
+workflow's own token do not start other workflows: close and reopen the back-merge pull request
+to run its required checks.
 
 ### Hotfix
 
@@ -924,7 +927,7 @@ holds it. A task has at most one location label.
 | Promotion `develop` → `staging` (`environments`) | The tasks the merge commit contains get `on: staging` in place of `on: develop`; tasks merged into `develop` after the promoted commit keep `on: develop` |
 | `release/*` into `main` | Unchanged by this workflow: `scrum release finish` sets the released tasks Done and closes them |
 | `hotfix/*` into `main` | Done, closed as completed, location label removed |
-| Back-merge (`main` → `develop`, `staging` → `develop`) | Unchanged |
+| Back-merge (`main` → `develop`, `main` → `staging`) | Unchanged |
 | Into any other branch (for example another task branch) | Unchanged |
 
 Which tasks a promotion contains is computed from the commits (the merge commit of each task's

@@ -33,12 +33,12 @@ template_vars() {
     # vercel.com/docs/domains/working-with-domains/assign-domain-to-a-git-branch (2026-02-27).
     DEPLOY_SECTION: (if (.deploy.platform // "none") != "vercel" then "" else
       deploy_environments($cfg) as $m
-      | "\n\n## Deployment (Vercel)\n\n"
+      | "\n\n<!-- scrum:deploy -->\n## Deployment (Vercel)\n\n"
         + "Vercel deploys this project through its Git integration; the repository has no deployment\n"
         + "workflow. Set these in the Vercel project:\n\n"
         + "- Production branch: `\($b.release)` (Settings → Environments → Production → Branch Tracking).\n"
         + ([$b.lower[] | "- `\(.)` (\($m[.])): assign it a domain such as `\($m[.]).example.com` (Settings → Domains →\n  edit the domain → Connect to an environment: Preview → Git Branch `\(.)`).\n"] | join(""))
-        + "\nVercel keeps its own tokens: no deployment secret is needed in GitHub."
+        + "\nVercel keeps its own tokens: no deployment secret is needed in GitHub.\n<!-- /scrum:deploy -->"
       end)
   }'
 }
@@ -141,12 +141,32 @@ governance_existing() {
   return 1
 }
 
+# deploy_section_sync PATH  With deploy.platform vercel, writes the deployment section (between
+# <!-- scrum:deploy --> markers) into the project's existing CONTRIBUTING.md at PATH, or updates
+# it there; nothing else in the file changes (spec deploy-templates "Vercel uses its Git
+# integration"). Returns 1, changing nothing, when there is nothing to write or it is current.
+deploy_section_sync() {
+  local file="$DIR/$1" section new
+  section="$(printf '%s' "$VARS" | jq -r '.DEPLOY_SECTION // ""')"
+  [ -n "$section" ] || return 1
+  new="$(jq -Rrs -L "$JQ_LIB" --arg c "$section" 'include "scrum";
+    ($c | capture("<!-- scrum:deploy -->\n(?<x>[\\s\\S]*)\n<!-- /scrum:deploy -->").x) as $inner
+    | rtrimstr("\n") | set_scrum_block("deploy"; $inner)' "$file")"
+  if [ "$new" = "$(cat "$file")" ]; then return 1; fi
+  if [ "$DRY" = 1 ]; then info "  would update  $1 (the Vercel deployment section)"
+  else printf '%s\n' "$new" | write_atomic "$file"; info "  updated       $1 (the Vercel deployment section; the rest is unchanged)"; FILES_CHANGED=1; fi
+  return 0
+}
+
 # install_governance  (uses DIR, DRY, VARS)
 install_governance() {
   local src rel others have
   while IFS="$(printf '\t')" read -r src rel others; do
     [ -n "$src" ] || continue
     if have="$(governance_existing "$rel" "$others")"; then
+      case "$rel" in
+        */CONTRIBUTING.md) if deploy_section_sync "$have"; then continue; fi ;;
+      esac
       info "  skipped       $rel (the project has $have; left unchanged)"
     elif [ "$DRY" = 1 ]; then
       info "  would create  $rel"
@@ -308,6 +328,8 @@ cmd_init() {
     FILES_CHANGED=1
     info "Config: created .github/scrum.yml with defaults"
   fi
+  # Trunk without branching.main: the default branch (CONTRIBUTING.md, the workflows).
+  trunk_follow_default_branch "$REPO"
 
   sync_labels
 

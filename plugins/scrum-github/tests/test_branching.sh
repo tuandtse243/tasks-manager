@@ -186,3 +186,42 @@ test_open_prs_query() {
   assert_eq '[50]
 [51]' "$out"
 }
+
+# ---------- review fixes ----------
+
+test_staging_into_develop_is_not_a_back_merge() {
+  local cfg
+  cfg="$(cfg_of environments)"
+  assert_eq '"task"' "$(jqs "$cfg" 'pr_kind($cfg; "staging"; "develop")')"
+  assert_eq 'false' "$(jqs "$cfg" 'pr_exempt($cfg; "staging"; "develop")')"
+  assert_eq 'false' "$(jqs "$cfg" 'allowed_source($cfg; "staging"; "develop").allowed')"
+}
+
+test_labels_with_location_keeps_other_labels_with_the_prefix() {
+  assert_eq '["on: hold","on: develop"]' "$(jq -nc -L "$LIBJQ" --argjson cfg "$(cfg_of standard)" \
+    'include "scrum"; {labels: [{name: "on: hold"}]} | labels_with_location($cfg; "develop")')"
+}
+
+test_fork_branch_names_are_not_release_branches() {
+  local pr
+  pr='{"head":{"ref":"release/v9.9.9","label":"evil:release/v9.9.9","repo":{"full_name":"evil/blog"}},"base":{"ref":"main","repo":{"full_name":"acme/blog"}}}'
+  assert_eq '"fork:evil:release/v9.9.9"' "$(jq -c -L "$LIBJQ" 'include "scrum"; pr_head_ref' <<<"$pr")"
+  assert_eq '"task"' "$(jq -c -L "$LIBJQ" --argjson cfg "$(cfg_of standard)" 'include "scrum"; pr_kind($cfg; pr_head_ref; .base.ref)' <<<"$pr")"
+  assert_eq '"release/v1"' "$(jq -c -L "$LIBJQ" 'include "scrum"; pr_head_ref' <<<'{"head":{"ref":"release/v1","repo":{"full_name":"Acme/Blog"}},"base":{"repo":{"full_name":"acme/blog"}}}')"
+}
+
+test_trunk_release_branch_follows_the_default_branch() {
+  setup_fake_gh
+  setup_repo 'version: 1'
+  route_json 'repo view acme/blog --json defaultBranchRef*' 'master'
+  local out
+  # shellcheck disable=SC2016  # expanded by the inner shell
+  out="$(SCRUM_ROOT="$PLUGIN_DIR/runtime" "$BASH" -c '. "$SCRUM_ROOT/lib/common.sh"; load_config
+    trunk_follow_default_branch acme/blog; branch_role release')"
+  assert_eq "master" "$out"
+  setup_repo 'branching: {preset: trunk, main: trunk-main}'
+  # shellcheck disable=SC2016
+  out="$(SCRUM_ROOT="$PLUGIN_DIR/runtime" "$BASH" -c '. "$SCRUM_ROOT/lib/common.sh"; load_config
+    trunk_follow_default_branch acme/blog; branch_role release')"
+  assert_eq "trunk-main" "$out" "an explicit branching.main wins"
+}

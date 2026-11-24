@@ -396,3 +396,13 @@ test_doctor_ignores_projects_own_deploy_workflow() {
   assert_eq "ok" "$(status_of files)"
   assert_eq "ok" "$(status_of workflows)"
 }
+
+# Review fix: the release workflow needs Actions to be allowed to open pull requests.
+test_doctor_warns_when_actions_cannot_open_pull_requests() {
+  doctor_env
+  printf '{"default_workflow_permissions":"read","can_approve_pull_request_reviews":false}' > "$FAKE_GH_DIR/actions.json"
+  route_first 'api repos/acme/blog/actions/permissions/workflow' actions.json
+  doctor_json
+  assert_eq "warn" "$(status_of actions-prs)"
+  assert_contains "$(check_of actions-prs)" "/scrum-github:protect"
+}

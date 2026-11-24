@@ -29,14 +29,21 @@ ref_contains() {
 }
 
 # task_merged_prs REPO N  [{number, sha}] of the merged pull requests of REPO that close task N
-# (from its timeline, as release does), each with its merge commit. Returns 1 when unread.
+# (from its timeline, as release does), each with its merge commit. Only pull requests merged
+# into a long-lived branch count: one merged into another task or wave branch never reaches a
+# long-lived branch with its own merge commit. Returns 1 when unread.
 task_merged_prs() {
-  local repo="$1" n="$2" tl nums p sha out='[]'
+  local repo="$1" n="$2" tl nums p pr sha base chain out='[]'
   tl="$(gh_get_all "repos/$repo/issues/$n/timeline?per_page=100" 2>/dev/null)" || return 1
   nums="$(printf '%s' "$tl" | jq -r -L "$JQ_LIB" --arg r "$repo" --argjson n "$n" 'include "scrum"; timeline_prs($r; $n)[]' 2>/dev/null)" || return 1
+  chain="$(jq -nc -L "$JQ_LIB" --argjson cfg "$CONFIG_JSON" 'include "scrum"; branching($cfg).chain')"
   for p in $nums; do
-    sha="$(gh_get "repos/$repo/pulls/$p" 2>/dev/null | jq -r '.merge_commit_sha // empty' 2>/dev/null)" || return 1
+    pr="$(gh_get "repos/$repo/pulls/$p" 2>/dev/null)" || return 1
+    sha="$(printf '%s' "$pr" | jq -r '.merge_commit_sha // empty' 2>/dev/null)"
     [ -n "$sha" ] || return 1
+    base="$(printf '%s' "$pr" | jq -r '.base.ref // empty' 2>/dev/null)"
+    # An unknown base (an older answer without it) still counts.
+    if [ -n "$base" ] && [ "$(printf '%s' "$chain" | jq --arg b "$base" 'index($b) != null')" != true ]; then continue; fi
     out="$(printf '%s' "$out" | jq -c --argjson p "$p" --arg s "$sha" '. + [{number: $p, sha: $s}]')"
   done
   printf '%s' "$out"
@@ -119,4 +126,18 @@ work_base_branch() {
 # staging, working, release_pr, hotfix or task.
 branch_kind_of() {
   jq -rn -L "$JQ_LIB" --argjson cfg "$CONFIG_JSON" --arg n "$1" 'include "scrum"; branch_kind($cfg; $n)'
+}
+
+# trunk_follow_default_branch REPO  In trunk without branching.main in .github/scrum.yml, the
+# release branch is the repository's default branch, as before presets existed (a repository on
+# "master" keeps releasing from it): sets branching.main in CONFIG_JSON to it. Nothing changes
+# with another preset, with branching.main set, or when GitHub does not answer.
+trunk_follow_default_branch() {
+  local set="" b=""
+  has_working_branch && return 0
+  [ -f "$(config_path)" ] && set="$(yq '.branching.main // ""' "$(config_path)" 2>/dev/null || true)"
+  [ -z "$set" ] || return 0
+  b="$(ghx repo view "$1" --json defaultBranchRef -q .defaultBranchRef.name 2>/dev/null || true)"
+  [ -n "$b" ] || return 0
+  CONFIG_JSON="$(printf '%s' "$CONFIG_JSON" | jq -c --arg b "$b" '.branching.main = $b')"
 }

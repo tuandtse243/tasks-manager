@@ -65,10 +65,14 @@ elif $step == "text" then
 elif $step == "cleanup" then
   . as $in
   | ($in.long_lived + (if $in.current == "" then [] else [$in.current] end) + $in.open_heads) as $keep
+  # "contained" never lists a branch with nothing of its own (its tip is a long-lived head: just
+  # created) nor a release/* or hotfix/* branch, which only go once their pull request is merged.
   | def why($name; $sha; $contained):
       ([$contained | to_entries[] | select(.value | index($name)) | .key][0]) as $into
       | ([$in.merged[] | select(.head == $name and .sha == $sha) | .number] | max) as $pr
-      | if $into != null then {reason: "contained", into: $into, pr: null}
+      | ((($in.long_heads // []) | index($sha)) != null
+         or ($name | startswith("release/")) or ($name | startswith("hotfix/"))) as $own_none
+      | if $into != null and ($own_none | not) then {reason: "contained", into: $into, pr: null}
         elif $pr != null then {reason: "merged", into: null, pr: $pr}
         else null end;
     ([$in.locals[] | select(.name as $n | $keep | index($n) | not)

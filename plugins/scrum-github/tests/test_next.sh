@@ -427,10 +427,31 @@ test_cmd_next_flow_unprotected() {
   route_json 'api --paginate repos/acme/blog/rules/branches/main' '[]'
   route_json 'api --paginate repos/acme/blog/pulls?state=open*' '[]'
   route_json 'api --paginate repos/acme/blog/issues?state=open&labels=*' '[]'
+  printf '{"full_name":"acme/blog","permissions":{"admin":true}}' > "$FAKE_GH_DIR/admin.json"
+  route_first 'api repos/acme/blog' admin.json
+  route_json 'api repos/acme/blog/rulesets?per_page=1' '[]'
   run_scrum next --json
   assert_status 0 "$STATUS" "$ERR"
   assert_eq "protect" "$(printf '%s' "$OUT" | jq -r .step)"
   assert_eq "" "$(gh_writes)"
+}
+
+# Review fix: protect is suggested only when it can be done; otherwise the work steps follow.
+test_cmd_next_flow_unprotected_without_admin_or_rulesets() {
+  next_env
+  printf 'version: 1\nbranching:\n  preset: standard\nstatuses:\n  in_review: In review\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  route_json 'api --paginate repos/acme/blog/rules/branches/*' '[]'
+  route_json 'api --paginate repos/acme/blog/pulls?state=open*' '[]'
+  route_json 'api --paginate repos/acme/blog/issues?state=open&labels=*' '[]'
+  printf '{"full_name":"acme/blog","permissions":{"admin":false}}' > "$FAKE_GH_DIR/admin.json"
+  route_first 'api repos/acme/blog' admin.json
+  run_scrum next --json
+  assert_status 0 "$STATUS" "$ERR"
+  assert_not_contains "$(printf '%s' "$OUT" | jq -r .step)" "protect" "not an admin"
+  printf '{"full_name":"acme/blog","permissions":{"admin":true}}' > "$FAKE_GH_DIR/admin.json"
+  route_first 'api repos/acme/blog/rulesets?per_page=1' '!403'
+  run_scrum next --json
+  assert_not_contains "$(printf '%s' "$OUT" | jq -r .step)" "protect" "the plan has no rulesets"
 }
 
 # Through scrum next: standard, everything protected, #12 and #13 waiting on develop.

@@ -531,6 +531,9 @@ test_next_unprotected_suggests_protect() {
   route_first 'api repos/acme/blog/rules/branches/*' none.json
   route_first 'api --paginate repos/acme/blog/rulesets*' none.json
   route_first 'api repos/acme/blog/rulesets*' none.json
+  # The user is an admin, who can protect the repository (next suggests protect only then).
+  printf '{"full_name":"acme/blog","default_branch":"main","permissions":{"admin":true}}' > "$FAKE_GH_DIR/admin.json"
+  route_first 'api repos/acme/blog' admin.json
   run_scrum next
   assert_status 0 "$STATUS" "$ERR"
   assert_contains "$OUT" "/scrum-github:protect"

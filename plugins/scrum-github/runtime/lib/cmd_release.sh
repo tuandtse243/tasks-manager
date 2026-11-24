@@ -152,7 +152,9 @@ cmd_release() {
   local repo branch vtags prefix given existing="" prev since=null until=null rc
   repo="$(repo_slug)"
   prefix="$(config_get '.release.tag_prefix')"
-  # The release branch of the preset (trunk: main), never the default branch (design 1).
+  # The release branch of the preset (design 1); in trunk without branching.main, the default
+  # branch of the repository as before presets existed.
+  trunk_follow_default_branch "$repo"
   branch="$(branch_role release)"
   if has_working_branch; then
     [ "$sprints" = '[]' ] || die "--sprint is for preset trunk: with a working branch the release holds the In review tasks on $(release_start_branch), or up to --from REF"
@@ -405,7 +407,7 @@ release_untasked_prs() {
   printf '%s' "$prs" | jq -c -L "$JQ_LIB" --argjson c "$commits" --argjson cfg "$CONFIG_JSON" --arg r "$repo" 'include "scrum";
     [.[]? | select(.merged_at != null and (.merge_commit_sha as $s | $c | index($s)) != null)
      | select(((.body // "") | closing_refs($r) | length) == 0)
-     | select(pr_kind($cfg; .head.ref; .base.ref) == "task")
+     | select(pr_kind($cfg; pr_head_ref; .base.ref) == "task")
      | {number, title}] | unique_by(.number)'
 }
 
@@ -549,6 +551,12 @@ release_file_source() {
     rm -f "$err"; return 1
   fi
   rm -f "$err"
+  # Over 1 MB the contents API sends no content (encoding "none"): read the blob instead, and
+  # never take a file GitHub did not send for an empty one.
+  if [ "$(printf '%s' "$raw" | jq -r '.encoding // "base64"')" != base64 ]; then
+    raw="$(gh_get "repos/${src%@*}/git/blobs/$(printf '%s' "$raw" | jq -r '.sha // empty')" 2>/dev/null)" || return 1
+    [ "$(printf '%s' "$raw" | jq -r '.encoding // ""')" = base64 ] || return 1
+  fi
   printf '%s' "$raw" | jq -r '.content // ""' | tr -d '\n'
 }
 
@@ -621,6 +629,16 @@ release_open_pr() {
   err="$(mktemp "${TMPDIR:-/tmp}/scrum-release.XXXXXX")"
   if branch_exists "$repo" "$rbranch"; then
     head="$(branch_sha "$repo" "$rbranch")" || head=""
+    # Reused only when it starts where this release starts: at the start commit, or one version
+    # commit on top of it. Otherwise the notes would list tasks the branch does not hold.
+    if [ "$head" != "$sha" ]; then
+      local parent
+      parent="$(gh_get "repos/$repo/git/commits/$head" 2>/dev/null | jq -r '.parents[0].sha // empty' 2>/dev/null)" || parent=""
+      if [ "$parent" != "$sha" ]; then
+        rm -f "$err"
+        die "branch $rbranch already exists at ${head:0:7}, which does not start at ${sha:0:7} ($(printf '%s' "$plan" | jq -r .start.ref)) where this release starts. Delete it on GitHub (gh api -X DELETE repos/$repo/git/refs/heads/$(uri "$rbranch")) and run the same command again."
+      fi
+    fi
     say "Branch $rbranch already exists (${head:0:7}, from an earlier run): kept as it is."
   else
     if ! jq -nc --arg r "refs/heads/$rbranch" --arg s "$sha" '{ref: $r, sha: $s}' | gh_send POST "repos/$repo/git/refs" >/dev/null 2>"$err"; then
@@ -753,7 +771,8 @@ This pull request was opened by the release workflow, and GitHub does not start 
         | gh_send POST "repos/$repo/pulls" 2>/dev/null)"; then
       info "Opened the back-merge #$(printf '%s' "$pr" | jq -r .number) into $b: $(printf '%s' "$pr" | jq -r '.html_url // ""')"
     else
-      warn "could not open the back-merge pull request from $rel into $b: open it by hand and merge it with a merge commit"
+      warn "could not open the back-merge pull request from $rel into $b: open it by hand and merge it with a merge commit (if GitHub refused it with 403, allow GitHub Actions to create pull requests: scrum protect --yes)"
+      BACK_MERGE_FAILED=1
     fi
   done <<BRANCHES
 $(jq -rn -L "$JQ_LIB" --argjson cfg "$CONFIG_JSON" 'include "scrum"; branching($cfg).lower | reverse[]')
@@ -789,7 +808,8 @@ cmd_release_finish() {
     info "Pull request #$num was closed without merging: nothing to publish, task statuses unchanged."
     return 0
   fi
-  head="$(printf '%s' "$pr" | jq -r .head.ref)"
+  # A fork's branch named release/* or hotfix/* is not a release (pr_head_ref).
+  head="$(printf '%s' "$pr" | jq -r -L "$JQ_LIB" 'include "scrum"; pr_head_ref')"
   base="$(printf '%s' "$pr" | jq -r .base.ref)"
   kind="$(jq -rn -L "$JQ_LIB" --argjson cfg "$CONFIG_JSON" --arg h "$head" --arg b "$base" 'include "scrum"; pr_kind($cfg; $h; $b)')"
   case "$kind" in
@@ -820,6 +840,23 @@ cmd_release_finish() {
   # on merge"), and for a hotfix those it closes.
   plan="$(release_contained_plan "$repo" "#$num" "$sha" "$prev" "" "$extra")"
   nums="$(printf '%s' "$plan" | jq -r '.tasks[].number')"
+  # A release pull request merged with squash holds none of the merge commits of develop, so no
+  # task is found contained: take the tasks its notes list ("(#12" in each line), still open.
+  if [ -z "$nums" ] && [ "$kind" = release ]; then
+    local listed
+    listed="$(printf '%s' "$body" | jq -Rrs --arg s "$RELEASE_NOTES_START" --arg e "$RELEASE_NOTES_END" '
+      (split($s) | .[1] // "" | split($e) | .[0]) | [scan("\\(#(?<n>[0-9]+)[,)]") | .[0] | tonumber] | unique | .[]')"
+    local ln li
+    for ln in $listed; do
+      li="$(gh_get "repos/$repo/issues/$ln" 2>/dev/null)" || continue
+      [ "$(printf '%s' "$li" | jq -r -L "$JQ_LIB" --argjson cfg "$CONFIG_JSON" \
+        'include "scrum"; .state == "open" and task_role($cfg) == "in_review" and task_location($cfg) != null')" = true ] || continue
+      nums="$nums $ln"
+    done
+    if [ -n "$nums" ]; then
+      warn "no task of the notes is contained in the merge commit ${sha:0:7} (was the release pull request squashed instead of merged with a merge commit?); using the tasks its notes list that still wait on a branch:$nums"
+    fi
+  fi
 
   # 1. Tag and GitHub Release, with the notes between the markers of the pull request body
   #    (regenerated from the contained tasks when the markers are gone).
@@ -838,5 +875,8 @@ cmd_release_finish() {
   for n in $nums; do release_finish_done "$repo" "$n"; done
   [ -n "$nums" ] || info "No task to set Done."
   # 3. Back-merge pull requests.
+  BACK_MERGE_FAILED=0
   release_back_merge "$repo" "$tag"
+  # Everything else is done; a missing back-merge still fails the workflow run, so it is seen.
+  [ "$BACK_MERGE_FAILED" = 0 ] || exit 1
 }

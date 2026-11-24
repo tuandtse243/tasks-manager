@@ -269,3 +269,27 @@ test_protect_unknown_option() {
   assert_status 1 "$STATUS"
   assert_contains "$ERR" "unknown option for protect"
 }
+
+# Review fix: the release workflow opens the back-merge pull requests with GITHUB_TOKEN, which
+# GitHub refuses unless Actions may create pull requests (off by default).
+test_protect_lets_actions_open_pull_requests() {
+  protect_env standard
+  route_json 'api repos/acme/blog/actions/permissions/workflow' '{"default_workflow_permissions":"read","can_approve_pull_request_reviews":false}'
+  run_scrum protect
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "update  allow GitHub Actions to create pull requests"
+  run_scrum protect --yes
+  assert_eq '{"default_workflow_permissions":"read","can_approve_pull_request_reviews":true}' \
+    "$(sent_after 'PUT repos/acme/blog/actions/permissions/workflow')"
+}
+
+test_protect_actions_already_allowed_or_trunk() {
+  protect_env standard
+  route_json 'api repos/acme/blog/actions/permissions/workflow' '{"default_workflow_permissions":"read","can_approve_pull_request_reviews":true}'
+  run_scrum protect
+  assert_contains "$OUT" "ok      GitHub Actions may open pull requests"
+  protect_env trunk
+  route_json 'api repos/acme/blog/actions/permissions/workflow' '{"default_workflow_permissions":"read","can_approve_pull_request_reviews":false}'
+  run_scrum protect --yes
+  assert_not_contains "$(gh_calls)" "actions/permissions/workflow" "trunk has no back-merge"
+}

@@ -238,3 +238,26 @@ test_contributing_without_vercel_has_no_trailing_placeholder() {
   local f="$SCRUM_REPO_DIR/.github/CONTRIBUTING.md"
   assert_eq "you confirm, it creates the tag on \`main\` and the GitHub Release." "$(grep -v "^$" "$f" | tail -1)"
 }
+
+# Review fix: with vercel set later, the section goes into the project's existing CONTRIBUTING.md
+# (between markers, once), and the rest of the file is kept.
+test_deploy_vercel_section_added_to_existing_contributing() {
+  setup_fake_gh
+  setup_repo 'branching: {preset: standard}
+statuses: {in_review: In review}
+deploy: {platform: vercel}'
+  route 'api --paginate repos/acme/blog/labels*' "labels.json"
+  printf '[]' > "$FAKE_GH_DIR/labels.json"
+  printf '# Contributing\n\nOur own rules.\n' > "$SCRUM_REPO_DIR/CONTRIBUTING.md"
+  run_scrum init
+  assert_status 0 "$STATUS" "$ERR"
+  local c
+  c="$(cat "$SCRUM_REPO_DIR/CONTRIBUTING.md")"
+  assert_contains "$c" "Our own rules."
+  assert_contains "$c" "## Deployment (Vercel)"
+  assert_contains "$c" 'Production branch: `main`'
+  assert_contains "$OUT" "updated       CONTRIBUTING.md (the Vercel deployment section"
+  run_scrum init
+  assert_eq "$c" "$(cat "$SCRUM_REPO_DIR/CONTRIBUTING.md")" "a second run changes nothing"
+  assert_eq "1" "$(grep -c '## Deployment (Vercel)' "$SCRUM_REPO_DIR/CONTRIBUTING.md")"
+}

@@ -352,3 +352,18 @@ test_task_pr_skill_follows_the_preset() {
   assert_contains "$s" '`marker` line of'
   assert_contains "$s" 'gh pr create --base <base>'
 }
+
+# Review fix: a branch just started (its tip is a long-lived head) and release/* or hotfix/*
+# branches without a merged pull request are never listed as contained.
+test_cleanup_keeps_fresh_release_and_hotfix_branches() {
+  cleanup_env
+  local d="$SCRUM_REPO_DIR"
+  git -C "$d" branch feat/15-fresh origin/develop
+  git -C "$d" branch release/v1.5.0 origin/develop
+  git -C "$d" branch hotfix/31-x origin/main
+  git -C "$d" push -q origin feat/15-fresh release/v1.5.0 hotfix/31-x 2>/dev/null
+  git -C "$d" fetch -q origin
+  run_scrum cleanup --json
+  assert_status 0 "$STATUS" "$ERR"
+  assert_json_eq '["feat/6-old","feat/7-signup"]' "$(printf '%s' "$OUT" | jq -c '[.[].branch]')"
+}

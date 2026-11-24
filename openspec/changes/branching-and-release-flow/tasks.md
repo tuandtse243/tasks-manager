@@ -71,7 +71,7 @@ Paths are relative to `plugins/scrum-github/`. Groups 2 to 5 run in parallel in 
 
 - [x] 8.1 Run `bash plugins/scrum-github/tests/run.sh`, the shellcheck command from the root `README.md`, and `claude plugin validate plugins/scrum-github`; all must pass
 - [x] 8.2 Run `openspec validate branching-and-release-flow --strict`; it must pass
-- [ ] 8.3 Have a read-only review agent compare the merged diff with every spec delta of this change and fix what it finds; verify by re-running 8.1
+- [x] 8.3 Have a read-only review agent compare the merged diff with every spec delta of this change and fix what it finds; verify by re-running 8.1
 - [ ] 8.4 Walk one task through a scratch repository with preset `standard` (start, pull request into `develop`, release pull request, merge, tag, back-merge) following `docs/e2e-testing.md`, and record the result in the pull request description; if no scratch repository is available, say so in the description instead of claiming it
 
 ## Workflow follow-up

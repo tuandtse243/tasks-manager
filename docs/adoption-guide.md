@@ -250,8 +250,11 @@ the head of `main`, one rule per long-lived branch (pull request required with
 push, no deletion, the merge methods of the preset), a rule that keeps version tags from being
 moved or deleted, and deletes head branches after merge. It never moves or deletes a branch and is
 safe to run again; run it again after changing the preset. A private repository on a free plan
-has no rules: the command reports that item and applies the rest. Leave *Settings → Actions →
-Workflow permissions* at its default. The default branch of the repository must stay `main`.
+has no rules: the command reports that item and applies the rest. With `standard` or
+`environments` it also turns on *Settings → Actions → General → Workflow permissions → Allow
+GitHub Actions to create and approve pull requests* (off by default): the release workflow needs
+it to open the back-merge pull requests. Leave the default token permission itself (read) as it
+is. The default branch of the repository must stay `main`.
 
 **Step 6. Check everything** with `/scrum-github:doctor`: tools, login, configuration, labels,
 whether the workflows are on the default branch, the default branch, the long-lived branches and
@@ -558,8 +561,9 @@ changed it and leaves the merge for you to finish; it never resolves a conflict.
 - The PR targets the working branch (`develop`; `main` in `trunk` and from a `hotfix/*` branch),
   with a [Conventional Commits](https://www.conventionalcommits.org) title such as
   `feat: log in with email`. The `pr-check` check fails a wrong title, a task branch aimed at
-  `main`, or a PR without a task; `scrum pr-check --title` (or `--source`, `--link`) runs the same
-  checks locally.
+  `main`, or a PR without a task. It runs in the `scrum-pr-link-check.yml` workflow on the PR's
+  event (one step each: `scrum pr-check --title`, `--source`, `--link`); `/scrum-github:task-pr`
+  proposes a title and base branch that pass it.
 
 Writing the PR by hand is fine too, as long as the description has **`Closes #12`** (the PR template
 already has that line).

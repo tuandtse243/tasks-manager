@@ -299,6 +299,17 @@ EOF
   fi
 
   has_working_branch || return 0
+  # The release workflow opens the back-merge pull requests with GITHUB_TOKEN: GitHub refuses
+  # that unless Actions may create pull requests (off by default).
+  local can
+  if can="$(gh_get "repos/$REPO/actions/permissions/workflow" 2>/dev/null | jq -r '.can_approve_pull_request_reviews | if type == "boolean" then tostring else error("unread") end' 2>/dev/null)" && [ -n "$can" ]; then
+    if [ "$can" = true ]; then
+      check governance actions-prs ok "GitHub Actions may open pull requests (the release workflow opens the back-merges)"
+    else
+      check governance actions-prs warn "GitHub Actions may not create pull requests, so the release workflow cannot open the back-merge pull requests" \
+        "/scrum-github:protect (or: scrum protect --yes), or turn on \"Allow GitHub Actions to create and approve pull requests\" in https://github.com/$REPO/settings/actions"
+    fi
+  fi
   case " $missing " in *" $rel_branch "*) return 0 ;; esac
   for lower in $(branch_role lower); do
     case " $missing " in *" $lower "*) continue ;; esac

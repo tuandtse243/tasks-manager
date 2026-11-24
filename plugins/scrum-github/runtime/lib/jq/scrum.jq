@@ -290,7 +290,7 @@ def branch_kind($cfg; $name):
 # The kind of a pull request from $head into $base:
 #   release (release/* into the release branch), hotfix (hotfix/* into the release branch),
 #   promotion (working into staging), back_merge (release branch into a lower long-lived branch,
-#   or staging into the working branch), task (anything else).
+#   design 8), task (anything else; staging into the working branch is not allowed at all).
 # Release, promotion and back-merge pull requests are exempt from the title, source-branch and
 # task-link checks (design 8, 10).
 def pr_kind($cfg; $head; $base):
@@ -300,8 +300,16 @@ def pr_kind($cfg; $head; $base):
     elif $base == $b.release and ($head | startswith("hotfix/")) then "hotfix"
     elif $b.staging != null and $base == $b.staging and $head == $b.working then "promotion"
     elif $head == $b.release and ($b.lower | index($base)) != null then "back_merge"
-    elif $b.staging != null and $head == $b.staging and $base == $b.working then "back_merge"
     else "task" end;
+# Input: a pull request (event or REST). The name its head branch counts under: the branch name
+# when the head is in the same repository, else "fork:<owner>:<name>", so a fork's branch named
+# release/x, hotfix/x or develop is never taken for a release, hotfix, promotion or back-merge.
+# A pull request without head.repo (older answers, tests) counts as the same repository.
+def pr_head_ref:
+  (.head.ref // "") as $h
+  | (.head.repo.full_name // null) as $hr | (.base.repo.full_name // null) as $br
+  | if $h == "" or $hr == null or $br == null or (($hr | ascii_downcase) == ($br | ascii_downcase)) then $h
+    else "fork:\(.head.label // ($hr + ":" + $h))" end;
 def pr_exempt($cfg; $head; $base): ["release", "promotion", "back_merge"] | index(pr_kind($cfg; $head; $base)) != null;
 # Whether a pull request from $head may target $base (spec "Allowed source branches"):
 # {allowed, base_kind, accepts: [patterns the base accepts], target: branch $head should target}.
@@ -340,11 +348,11 @@ def task_location($cfg):
   | [label_names[] | select(is_location_label($cfg; .)) | ltrimstr($p)]
   | if has_working_branch($cfg) then .[0] else null end;
 # Input: an issue. Its label set with every location label removed and, when $branch is not
-# null, the label of $branch added. Any label with the location prefix counts, so a label of a
-# branch renamed since is removed too. A task has at most one location label.
+# null, the label of $branch added. Only the location labels of the preset's branches are
+# removed, so a project's own label that happens to start with the prefix ("on: hold") stays.
+# A task has at most one location label.
 def labels_with_location($cfg; $branch):
-  location_prefix($cfg) as $p
-  | [label_names[] | select(startswith($p) | not)]
+  [label_names[] | select(is_location_label($cfg; .) | not)]
     + (if $branch == null then [] else [location_label($cfg; $branch)] end);
 # Input: an issue. Where a task In review is: "code_review" (no location label: its pull request
 # is open) or {branch} of its location label; null when it is not In review or in trunk.

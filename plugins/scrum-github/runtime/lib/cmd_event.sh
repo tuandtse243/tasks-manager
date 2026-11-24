@@ -80,7 +80,7 @@ cmd_event() {
     pull_request|pull_request_target)
       PR_DRAFT="$(jq -c '.pull_request.draft // false' "$ev")"
       PR_BASE="$(jq -r '.pull_request.base.ref // ""' "$ev")"
-      PR_HEAD="$(jq -r '.pull_request.head.ref // ""' "$ev")"
+      PR_HEAD="$(jq -r -L "$JQ_LIB" 'include "scrum"; .pull_request | pr_head_ref' "$ev")"
       case "$action" in
         opened|reopened|ready_for_review|edited) kind=pr_open ;;
         converted_to_draft) kind=pr_draft ;;
@@ -153,7 +153,7 @@ pr_check_title() {
 # pr_check_source EVENT_FILE  The head branch may target the base branch (allowed_source).
 pr_check_source() {
   local head base res
-  head="$(jq -r '.pull_request.head.ref // ""' "$1")"
+  head="$(jq -r -L "$JQ_LIB" 'include "scrum"; .pull_request | pr_head_ref' "$1")"
   base="$(jq -r '.pull_request.base.ref // ""' "$1")"
   if [ -z "$head" ] || [ -z "$base" ]; then
     info "Source branch: not in the event; not checked."; return 0
@@ -207,7 +207,7 @@ cmd_pr_check() {
   load_config
   ev="$(event_file)"
   repo="$(repo_slug)"
-  head="$(jq -r '.pull_request.head.ref // ""' "$ev")"
+  head="$(jq -r -L "$JQ_LIB" 'include "scrum"; .pull_request | pr_head_ref' "$ev")"
   base="$(jq -r '.pull_request.base.ref // ""' "$ev")"
   kind="$(jq -rn -L "$JQ_LIB" --argjson cfg "$CONFIG_JSON" --arg h "$head" --arg b "$base" \
     'include "scrum"; if pr_exempt($cfg; $h; $b) then pr_kind($cfg; $h; $b) else "" end')"

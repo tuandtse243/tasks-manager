@@ -104,9 +104,20 @@ def plan:
       settings: {action: (if ($setting_changes | length) > 0 then "update" else "none" end),
                  methods: ($all_methods | sort_methods), desired: $want_settings, changes: $setting_changes,
                  readable: ($settings != null)},
+      # The release workflow opens the back-merge pull requests with GITHUB_TOKEN, which GitHub
+      # refuses unless "Allow GitHub Actions to create and approve pull requests" is on (off by
+      # default). Needed only with a working branch. $actions: GET actions/permissions/workflow.
+      actions: (($ARGS.named.actions // null) as $a
+        | if has_working_branch($cfg) | not then {action: "none", needed: false}
+          elif $a == null then {action: "unknown", needed: true}
+          elif $a.can_approve_pull_request_reviews == true then {action: "none", needed: true}
+          else {action: "update", needed: true,
+                desired: {default_workflow_permissions: ($a.default_workflow_permissions // "read"),
+                          can_approve_pull_request_reviews: true}} end),
       changes: (([$branch_items[] | select(.action == "create")] | length)
                 + ([$ruleset_items[] | select(.action != "none")] | length)
-                + (if ($setting_changes | length) > 0 then 1 else 0 end)),
+                + (if ($setting_changes | length) > 0 then 1 else 0 end)
+                + (if has_working_branch($cfg) and (($ARGS.named.actions // null) | . != null and .can_approve_pull_request_reviews != true) then 1 else 0 end)),
       problems: ([$branch_items[] | select(.action == "missing")] | length) };
 
 # ---- text for a person ----
@@ -149,6 +160,12 @@ def text:
           + ($s.changes | map("\(.key): \(if .from == null then "?" else .from end) -> \(.to)") | join("; "))
           + (if $res and $res.status == "failed" then "\n          \($res.message)" else "" end)
         end ),
+    ( (.actions // {action: "none", needed: false}) as $a | ($p | result_of("actions")) as $res
+      | if $a.needed | not then empty
+        elif $a.action == "none" then "  ok      GitHub Actions may open pull requests (the release workflow opens the back-merges)"
+        elif $a.action == "unknown" then "  note    could not read whether GitHub Actions may open pull requests; the release workflow needs it for the back-merges (Settings → Actions → General → Workflow permissions)"
+        else "  \(mark(if $res then $res.status else "update" end))allow GitHub Actions to create pull requests (the release workflow opens the back-merges)"
+          + (if $res and $res.status == "failed" then "\n          \($res.message)" else "" end) end ),
     "",
     ( if (.results // null) != null then
         ([.results[] | select(.status == "failed")] | length) as $f

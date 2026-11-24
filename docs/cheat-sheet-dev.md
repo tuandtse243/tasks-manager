@@ -42,9 +42,9 @@ fix the files, `git add`, `git merge --continue`, or `git merge --abort` to go b
 
 Every PR is checked by `pr-check`: a [Conventional Commits](https://www.conventionalcommits.org)
 title (`feat(auth): log in with email`, `fix: …`), the right base branch (a task branch into
-`develop`, never into `main`), and `Closes #N`. Try the same checks before pushing:
-`scrum pr-check --title "feat: log in"`. Squash-merge task PRs; a back-merge (`main` → `develop`)
-is merged with a merge commit.
+`develop`, never into `main`), and `Closes #N`. It runs on GitHub when the PR is opened or
+edited; `/scrum-github:task-pr` proposes a title and base that pass. Squash-merge task PRs; a
+back-merge (`main` → `develop`) is merged with a merge commit.
 
 ## Hotfix (production cannot wait)
 

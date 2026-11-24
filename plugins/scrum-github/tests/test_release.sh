@@ -1118,6 +1118,9 @@ test_release_finish_twice_changes_nothing() {
   route_first 'api --paginate repos/acme/blog/releases*' 'rels.json'
   printf '[{"tag_name":"v1.4.0","draft":false}]' > "$FAKE_GH_DIR/rels.json"
   printf '[]' > "$FAKE_GH_DIR/dev-issues.json"
+  # #12 was set Done and closed by the first run.
+  route_first 'api repos/acme/blog/issues/12' 'done12.json'
+  printf '{"number":12,"state":"closed","state_reason":"completed","labels":[{"name":"status: Done"}]}' > "$FAKE_GH_DIR/done12.json"
   route_first 'api --paginate repos/acme/blog/pulls?state=open&per_page=100&head=acme%3Amain&base=develop' 'bmopen.json'
   printf '[{"number":51,"title":"Back-merge main into develop","html_url":"https://github.com/acme/blog/pull/51","head":{"ref":"main"},"base":{"ref":"develop"}}]' > "$FAKE_GH_DIR/bmopen.json"
   run_scrum release finish
@@ -1196,4 +1199,15 @@ test_release_workflow_template() {
   assert_contains "$s" "sparse-checkout: .github"
   assert_contains "$s" ".github/scrum/bin/scrum release finish"
   assert_not_contains "$s" "github.event.pull_request.head" "never the code of the pull request"
+}
+
+# Review fix: a release pull request merged with squash contains none of develop's merge commits;
+# finish takes the tasks its notes list that still wait on a branch, and warns.
+test_release_finish_squashed_release_uses_the_notes() {
+  finish_env
+  printf '[]' > "$FAKE_GH_DIR/dev-issues.json"
+  run_scrum release finish
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$ERR" "squashed"
+  assert_contains "$(write_paths)" "PUT repos/acme/blog/issues/12/labels"
 }

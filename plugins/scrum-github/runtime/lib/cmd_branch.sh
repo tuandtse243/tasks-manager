@@ -192,8 +192,11 @@ cleanup_plan() {
   remotes="$(git -C "$dir" for-each-ref --format='%(refname)%09%(objectname)' refs/remotes/origin \
     | jq -R -s -c '[split("\n")[] | select(. != "") | split("\t") | {name: (.[0] | ltrimstr("refs/remotes/origin/")), sha: .[1]}
         | select(.name != "HEAD")]')"
+  local heads='[]' hs
   for x in $(printf '%s' "$long" | jq -r '.[]'); do
     git -C "$dir" rev-parse --verify -q "refs/remotes/origin/$x" >/dev/null || continue
+    hs="$(git -C "$dir" rev-parse "refs/remotes/origin/$x")"
+    heads="$(printf '%s' "$heads" | jq -c --arg s "$hs" '. + [$s]')"
     cl="$(git -C "$dir" for-each-ref --merged "refs/remotes/origin/$x" --format='%(refname:short)' refs/heads \
       | jq -R -s -c --argjson m "$cl" --arg x "$x" '$m + {($x): (split("\n") | map(select(. != "")))}')"
     cr="$(git -C "$dir" for-each-ref --merged "refs/remotes/origin/$x" --format='%(refname)' refs/remotes/origin \
@@ -201,8 +204,9 @@ cleanup_plan() {
   done
   jq -nc --argjson locals "$locals" --argjson remotes "$remotes" --argjson cl "$cl" --argjson cr "$cr" \
       --argjson merged "$merged" --argjson open "$open" --argjson long "$long" --arg current "$cur" \
+      --argjson heads "$heads" \
       '{locals: $locals, remotes: $remotes, contained_local: $cl, contained_remote: $cr,
-        merged: $merged, open_heads: $open, long_lived: $long, current: $current}' \
+        merged: $merged, open_heads: $open, long_lived: $long, long_heads: $heads, current: $current}' \
     | jqlib branches-overview --arg step cleanup
 }
 

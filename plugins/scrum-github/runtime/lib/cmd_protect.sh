@@ -64,7 +64,12 @@ protect_plan() {
   templates="$(jq -n --rawfile w "$tpl/working.json" --rawfile s "$tpl/staging.json" \
     --rawfile r "$tpl/release.json" --rawfile t "$tpl/tags.json" '{working: $w, staging: $s, release: $r, tags: $t}')"
 
-  jqlib protect-plan -n --argjson cfg "$CONFIG_JSON" --argjson templates "$templates" \
+  local actions=null
+  if has_working_branch; then
+    actions="$(gh_get "repos/$repo/actions/permissions/workflow" 2>/dev/null)" || actions=null
+    printf '%s' "$actions" | jq -e 'type == "object"' >/dev/null 2>&1 || actions=null
+  fi
+  jqlib protect-plan -n --argjson cfg "$CONFIG_JSON" --argjson templates "$templates" --argjson actions "$actions" \
     --argjson branches "$branches" --argjson rulesets "$rulesets" --arg rules_error "$rules_error" \
     --argjson settings "$settings" --arg check "$PROTECT_CHECK_NAME" --arg step plan
 }
@@ -108,6 +113,9 @@ $(printf '%s' "$plan" | jq -c '.rulesets[]')
 EOF
   if [ "$(printf '%s' "$plan" | jq -r .settings.action)" = update ]; then
     protect_send settings settings PATCH "repos/$repo" "$(printf '%s' "$plan" | jq -c .settings.desired)"
+  fi
+  if [ "$(printf '%s' "$plan" | jq -r '.actions.action // "none"')" = update ]; then
+    protect_send actions settings PUT "repos/$repo/actions/permissions/workflow" "$(printf '%s' "$plan" | jq -c .actions.desired)"
   fi
 }
 

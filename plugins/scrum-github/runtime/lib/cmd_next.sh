@@ -11,6 +11,7 @@ next_release_info() {
   last="$(printf '%s' "$2" | jq -c '[.[] | select(.state == "closed")] | sort_by(.closed_at // "") | .[-1] // null')"
   [ "$last" != null ] || { printf 'null'; return 0; }
   . "$SCRUM_ROOT/lib/cmd_release.sh"
+  trunk_follow_default_branch "$repo"
   branch="$(branch_role release)"
   vtags="$(release_version_tags "$repo" 2>/dev/null)" || { printf 'null'; return 0; }
   # Version tags that cannot be confirmed on the branch: whether the sprint is released is unknown.
@@ -27,15 +28,21 @@ next_release_info() {
 next_flow_info() {
   local repo="$1" b rules open unprotected='[]' back='[]' promo=false rel=false issues='[]' release working staging
   release="$(branch_role release)"; working="$(branch_role working)"; staging="$(branch_role staging)"
-  while IFS= read -r b; do
-    [ -n "$b" ] || continue
-    rules="$(branch_rules "$repo" "$b" 2>/dev/null)" || continue
-    if [ "$(printf '%s' "$rules" | jq 'length')" = 0 ]; then
+  # Protect is suggested only when it can be done: the user is an admin of the repository and
+  # its plan offers rulesets (a private repository on a free plan answers 403). A branch with
+  # classic branch protection counts as protected.
+  if [ "$(gh_get "repos/$repo" 2>/dev/null | jq -r '.permissions.admin // false' 2>/dev/null)" = true ] \
+      && gh_get "repos/$repo/rulesets?per_page=1" >/dev/null 2>&1; then
+    while IFS= read -r b; do
+      [ -n "$b" ] || continue
+      rules="$(branch_rules "$repo" "$b" 2>/dev/null)" || continue
+      [ "$(printf '%s' "$rules" | jq 'length')" = 0 ] || continue
+      [ "$(gh_get "repos/$repo/branches/$(branch_uri "$b")" 2>/dev/null | jq -r '.protected // false' 2>/dev/null)" != true ] || continue
       unprotected="$(printf '%s' "$unprotected" | jq -c --arg b "$b" '. + [$b]')"
-    fi
-  done <<BRANCHES
+    done <<BRANCHES
 $(branch_role chain)
 BRANCHES
+  fi
   while IFS= read -r b; do
     [ -n "$b" ] || continue
     open="$(open_prs "$repo" "$release" "$b" 2>/dev/null)" || continue
