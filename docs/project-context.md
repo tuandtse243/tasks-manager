@@ -98,7 +98,7 @@ Who uses it in practice beyond a sandbox repo: unknown.
 | `plugins/scrum-github/tests/` | Bash test runner `run.sh`, `fake-gh` stub, 33 `test_*.sh` files (four of them `test_scenarios_*`), `fixtures/` (tests/) |
 | `plugins/scrum-github/docs/` | `e2e-testing.md`, the manual end-to-end scenarios (docs/e2e-testing.md) |
 | `openspec/specs/` | Main specs, one per capability (25) (openspec/specs/) |
-| `openspec/changes/` | Change not yet archived: `team-and-backlog-tasks` (23 of 24 tasks done, only the test on a real repo left); 14 finished changes under `archive/YYYY-MM-DD-<name>/` (openspec/changes/team-and-backlog-tasks/tasks.md, openspec/changes/archive/) |
+| `openspec/changes/` | No open change; 15 finished changes under `archive/YYYY-MM-DD-<name>/`, the last `team-and-backlog-tasks` (openspec/changes/archive/) |
 | `docs/` | `adoption-guide.md`, `cheat-sheet-{po,sm,dev}.md`, this context document, `diagrams/` (sprint flow as archify source, HTML and PNG) |
 | `.claude/` | OpenSpec tooling only: `commands/opsx/*` and `skills/openspec-*` |
 
@@ -320,8 +320,8 @@ Who uses it in practice beyond a sandbox repo: unknown.
   (reference/planning-rules.md, agents/implementer.md).
 - **Language**: new documents in this repository are in English. Main specs started in
   Vietnamese; changes since `release` are in English and requirements edited in place keep their
-  language (openspec/changes/archive/2026-11-24-branching-and-release-flow/design.md). The active
-  change `team-and-backlog-tasks` is in Vietnamese (openspec/changes/team-and-backlog-tasks/proposal.md).
+  language (openspec/changes/archive/2026-11-24-branching-and-release-flow/design.md). The change
+  `team-and-backlog-tasks` is in Vietnamese (openspec/changes/archive/2026-11-24-team-and-backlog-tasks/proposal.md).
 - **OpenSpec workflow**: `/opsx:propose` → `/opsx:apply` → `/opsx:archive` into
   `changes/archive/YYYY-MM-DD-<name>`, which merges the specs into `openspec/specs/`; specs
   written as `### Requirement:` (SHALL/MUST) with `#### Scenario:` WHEN/THEN; tasks.md items say
