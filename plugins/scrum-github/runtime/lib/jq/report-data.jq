@@ -19,3 +19,7 @@ include "scrum";
     history_limited: $limited,
     velocity: ([$ms[] | sprint_info | select(.state == "closed")] | sort_by(.end // "") | .[-6:]
                | map({title, end, velocity})) }
+# With a working branch: the tasks In review and where they are, with the words to show.
++ (if has_working_branch($cfg) then
+     {review: [$issues | review_locations($cfg)[] | . + {where: location_text($strings; .location)}]}
+   else {} end)

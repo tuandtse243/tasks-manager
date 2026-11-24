@@ -696,3 +696,15 @@ def board_mutations($meta; $size):
                "m\($k): clearProjectV2ItemFieldValue(input: {\($base), fieldId: \($meta.points_field | tojson)}) { clientMutationId }"
              end)
      | "mutation {\n  " + join("\n  ") + "\n}"];
+
+# ---- Stream B ----
+# Location of tasks in review (spec sprint-reporting "Location of tasks in review").
+# Input: issues. The open tasks In review with where they are, by number:
+# [{number, title, assignees, location: "code_review" | branch}]; [] in trunk.
+def review_locations($cfg):
+  if has_working_branch($cfg) | not then []
+  else [.[] | select(.state == "open" and is_task($cfg)) | review_location($cfg) as $l | select($l != null)
+        | {number, title, assignees: assignee_logins, location: $l}] | sort_by(.number) end;
+# The words for a location from review_location ($s: strings of one language).
+def location_text($s; $loc):
+  if $loc == "code_review" then tr($s; "loc_code_review") else tr($s; "loc_on_branch"; {branch: $loc}) end;

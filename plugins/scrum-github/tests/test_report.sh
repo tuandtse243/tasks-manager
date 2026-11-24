@@ -622,3 +622,125 @@ test_progress_without_estimates_rows_have_no_time() {
   p="$(progress_of "$(cat "$FIXTURES/issues-sprint1.json")" 2014-09-24)"
   assert_eq "false" "$(jq -c '[.rows[] | has("time")] | any' <<<"$p")" "no time on the rows"
 }
+
+# ---------- change branching-and-release-flow (delta sprint-reporting "Location of tasks in
+# review", "Tasks waiting to be released need attention") ----------
+
+preset_defaults() { defaults | jq -c --arg p "$1" '.branching.preset = $p | .statuses.in_review = "In review"'; }
+# #3 In review with an open pull request, #4 In review with "on: develop".
+loc_issues() {
+  jq -c '(.[] | select(.number == 3) | .labels) |= map(if .name == "status: In progress" then {name: "status: In review"} else . end)
+    | (.[] | select(.number == 4) | .labels) |= (map(select(.name | startswith("status: ") | not)) + [{name: "status: In review"}, {name: "on: develop"}])' \
+    "$FIXTURES/issues-sprint1.json"
+}
+
+test_location_status_table_mixed() {
+  local p table
+  p="$(jqt progress -n --argjson cfg "$(preset_defaults standard)" --argjson sprint "$(sprint1)" --argjson issues "$(loc_issues)" --arg today 2014-09-24)"
+  assert_eq '[{"number":3,"location":"code_review"},{"number":4,"location":"develop"}]' "$(jq -c '[.review[] | {number, location}]' <<<"$p")"
+  table="$(jqt progress-table -r --argjson cfg "$(preset_defaults standard)" --argjson strings "$(strings en)" <<<"$p")"
+  assert_contains "$table" "In review:
+  #3 Write a post: in code review
+  #4 Add a comment: on develop"
+}
+
+test_location_trunk_outputs_unchanged() {
+  local cfg before after
+  cfg="$(review_defaults)"
+  before="$(jqt progress -n --argjson cfg "$cfg" --argjson sprint "$(sprint1)" --argjson issues "$(review_issues)" --arg today 2014-09-24 \
+    | jqt progress-table -r --argjson cfg "$cfg" --argjson strings "$(strings en)")"
+  after="$(jqt progress -n --argjson cfg "$cfg" --argjson sprint "$(sprint1)" --argjson issues "$(loc_issues)" --arg today 2014-09-24 \
+    | jqt progress-table -r --argjson cfg "$cfg" --argjson strings "$(strings en)")"
+  assert_not_contains "$after" "code review"
+  assert_not_contains "$after" "on develop"
+  assert_eq "false" "$(jqt progress -n --argjson cfg "$cfg" --argjson sprint "$(sprint1)" --argjson issues "$(loc_issues)" --arg today 2014-09-24 | jq 'has("review")')"
+  assert_contains "$before" "In review"
+  local body
+  body="$(jqt digest -n --argjson cfg "$cfg" --argjson sprint "$(sprint1)" --argjson issues "$(review_issues)" \
+    --argjson comments '[]' --arg today 2014-09-24 --argjson off 0 --argjson strings "$(strings en)" --argjson attention '[]' | jq -r .body)"
+  assert_contains "$body" "- @david: #3 Write a post (1 pt)"
+  assert_not_contains "$body" "code review"
+}
+
+test_location_digest_mixed() {
+  local body
+  body="$(jqt digest -n --argjson cfg "$(preset_defaults standard)" --argjson sprint "$(sprint1)" --argjson issues "$(loc_issues)" \
+    --argjson comments '[]' --arg today 2014-09-24 --argjson off 0 --argjson strings "$(strings en)" --argjson attention '[]' | jq -r .body)"
+  assert_contains "$body" "#3 Write a post (1 pt), in code review"
+  assert_contains "$body" "#4 Add a comment ("
+  assert_contains "$body" "), on develop"
+}
+
+test_location_digest_in_vietnamese() {
+  local body
+  body="$(jqt digest -n --argjson cfg "$(preset_defaults standard)" --argjson sprint "$(sprint1)" --argjson issues "$(loc_issues)" \
+    --argjson comments '[]' --arg today 2014-09-24 --argjson off 0 --argjson strings "$(strings vi)" --argjson attention '[]' | jq -r .body)"
+  assert_contains "$body" ", đang review code"
+  assert_contains "$body" ", trên develop"
+}
+
+test_location_report_data() {
+  local d
+  d="$(jqt report-data -n --argjson cfg "$(preset_defaults environments)" --argjson sprint "$(sprint1)" --argjson issues "$(loc_issues)" \
+    --argjson ms '[]' --arg today 2014-09-24 --argjson off 0 --arg now 2014-09-24T08:00:00Z --arg repo acme/blog \
+    --argjson hissues "$(loc_issues)" --argjson attention '{"lines":[]}' --argjson strings "$(strings en)" --argjson limited false)"
+  assert_eq '[{"number":3,"where":"in code review"},{"number":4,"where":"on develop"}]' "$(jq -c '[.review[] | {number, where}]' <<<"$d")"
+  d="$(jqt report-data -n --argjson cfg "$(review_defaults)" --argjson sprint "$(sprint1)" --argjson issues "$(loc_issues)" \
+    --argjson ms '[]' --arg today 2014-09-24 --argjson off 0 --arg now 2014-09-24T08:00:00Z --arg repo acme/blog \
+    --argjson hissues "$(loc_issues)" --argjson attention '{"lines":[]}' --argjson strings "$(strings en)" --argjson limited false)"
+  assert_eq "false" "$(jq 'has("review")' <<<"$d")" "trunk: no review data"
+}
+
+test_cmd_status_shows_locations() {
+  report_env
+  printf 'version: 1\nbranching:\n  preset: standard\nstatuses:\n  in_review: In review\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  loc_issues > "$FAKE_GH_DIR/issues.json"
+  route_json 'api --paginate repos/acme/blog/issues/4/events*' '[{"event":"labeled","label":{"name":"on: develop"},"created_at":"2014-09-12T08:00:00Z"}]'
+  run_scrum status
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "  - #4 Add a comment is waiting on develop for 8 working days."
+  assert_contains "$OUT" "  #3 Write a post: in code review"
+  assert_contains "$OUT" "  #4 Add a comment: on develop"
+  assert_contains "$(gh_calls)" "repos/acme/blog/issues/4/events" "the label date of the task on develop"
+  assert_not_contains "$(gh_calls)" "repos/acme/blog/issues/3/events"
+  assert_eq "" "$(gh_writes)"
+}
+
+# The task got "on: develop" on LABELED_AT; today is Tuesday 2026-11-24. A sprint without dates
+# leaves "behind the ideal line" out.
+NODATE_SPRINT='{"number":4,"title":"Sprint 4","state":"open"}'
+waiting_of() { # waiting_of LABELED_AT [PROMOTE_DAYS]
+  local cfg issues events
+  cfg="$(preset_defaults standard | jq -c --argjson d "${2:-5}" '.attention.promote_days = $d')"
+  issues="$(at_issue 13 'In review' 3 alice 2026-11-24T08:00:00Z | jq -c '.labels += [{name: "on: develop"}]' | jq -sc .)"
+  events="$(jq -nc --arg at "$1" '{"13": [{event: "labeled", label: {name: "status: In review"}, created_at: "2026-11-02T08:00:00Z"},
+                                          {event: "labeled", label: {name: "on: develop"}, created_at: $at}]}')"
+  jqt attention -n --argjson cfg "$cfg" --argjson sprint "$NODATE_SPRINT" --argjson issues "$issues" --argjson blocked '{}' \
+    --argjson prs '[]' --arg today 2026-11-24 --argjson off 0 --arg repo acme/blog --argjson strings "$(strings en)" --argjson events "$events"
+}
+
+test_attention_waiting_on_develop() {
+  local a
+  a="$(waiting_of 2026-11-13T09:00:00Z)"
+  assert_eq '["#13 Task 13 is waiting on develop for 7 working days."]' "$(jq -c .lines <<<"$a")"
+  assert_eq '{"kind":"waiting_release","number":13,"branch":"develop","days":7}' "$(jq -c '.items[0] | del(.text)' <<<"$a")"
+}
+
+test_attention_recently_merged_not_listed() {
+  assert_eq '[]' "$(waiting_of 2026-11-20T09:00:00Z | jq -c .lines)"
+}
+
+test_attention_waiting_not_listed_without_label_date() {
+  local cfg issues
+  cfg="$(preset_defaults standard)"
+  issues="$(at_issue 13 'In review' 3 alice 2026-11-24T08:00:00Z | jq -c '.labels += [{name: "on: develop"}]' | jq -sc .)"
+  assert_eq '[]' "$(jqt attention -n --argjson cfg "$cfg" --argjson sprint "$NODATE_SPRINT" --argjson issues "$issues" --argjson blocked '{}' \
+    --argjson prs '[]' --arg today 2026-11-24 --argjson off 0 --arg repo acme/blog --argjson strings "$(strings en)" | jq -c .lines)"
+}
+
+test_attention_task_on_branch_is_not_waiting_for_review() {
+  # In review on develop since long ago with no activity: waiting for the release, not for review.
+  local a
+  a="$(waiting_of 2026-11-02T09:00:00Z 30)"
+  assert_eq '[]' "$(jq -c .lines <<<"$a")"
+}

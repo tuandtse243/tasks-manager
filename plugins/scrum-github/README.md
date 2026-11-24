@@ -95,9 +95,9 @@ the full path, and the skills now use the full path from the first call). Elsewh
 | `/scrum-github:run` | `scrum run plan [N,…]`, `scrum run start`, `scrum run record`, `scrum run merge N`, `scrum run finish [--wave W]`, `scrum run status [ID]` | Work your `ai-ready` tasks with AI agents, one local git worktree each, wave by wave, into one pull request ready for review; `--dry-run` shows the plan only. See "Running tasks with agents" |
 | `/scrum-github:task` | `scrum task list [--mine] [--sprint S \| --backlog] [--status ROLE]`, `scrum task move N… --sprint S \| --backlog`, `scrum task estimate N [P] [--work D] [--review D] [--by ai\|human]`, `scrum task assign N LOGIN… [--unassign]`, `scrum task drop N [--reason T]` | See tasks; move, re-estimate, assign or drop them without editing labels by hand |
 | `/scrum-github:task-pr` | `gh pr create` / `gh pr edit`, after you approve | Write the pull request description for the task of the current branch |
-| `/scrum-github:sprint-status` | `scrum status [SPRINT]` | Table by person and status with points; work and review minutes left when tasks have time estimates |
+| `/scrum-github:sprint-status` | `scrum status [SPRINT]` | Table by person and status with points; work and review minutes left when tasks have time estimates; with a working branch, where each task In review is |
 | `/scrum-github:sprint-report` | `scrum report [SPRINT] [--out FILE]` | Self-contained HTML burndown and velocity |
-| `/scrum-github:sprint-close` | `scrum sprint close [SPRINT] [--yes] [--create-next]` | Record velocity, carry over open tasks, close the milestone; suggests a release when the sprint had Done tasks |
+| `/scrum-github:sprint-close` | `scrum sprint close [SPRINT] [--yes] [--create-next]` | Record velocity, carry over open tasks, close the milestone; lists merged but unreleased tasks apart; suggests a release when the sprint had Done tasks |
 | `/scrum-github:release` | `scrum release [VERSION] [--since TAG] [--sprint S]… [--from REF] [--draft] [--notes-file FILE] [--json] [--yes]`, `scrum release finish [--pr N]` | Suggest the next version, write the release notes, and with `--yes` create the tag and the GitHub Release (`trunk`) or open the release pull request (presets with a working branch); `release finish` publishes after that pull request is merged. See "Releasing a version" |
 | `/scrum-github:protect` | `scrum protect [--json] [--yes]` | Create the long-lived branches of the preset, apply branch and tag rules and the merge settings; preview first, writes with `--yes` |
 | `/scrum-github:sync` | `scrum sync` | Merge the working branch (the release branch on a hotfix branch) into the current task branch; lists conflicts with who last changed each file |
@@ -733,9 +733,37 @@ progress; ready for review moved label and card to In review; back to draft, and
 merging, moved both back to In progress; reopening moved both to In review; the merge gave Done and
 closed the issue. A card dragged to In Review set the label at the next sync.
 
-A merge into **any** branch closes the task, not only a merge into the default branch. The
-workflow uses `pull_request_target`, so it runs the workflow file of the PR's base branch: that
-branch needs `.github/` from `scrum init`.
+With `branching.preset: trunk` (or no `branching` block), a merge into **any** branch closes the
+task, not only a merge into the default branch. The workflow uses `pull_request_target`, so it
+runs the workflow file of the PR's base branch: that branch needs `.github/` from `scrum init`.
+
+### Status follows the code through the branches
+
+With `branching.preset: standard` or `environments`, a task is Done only when its code reaches
+the release branch (`main`). Until then it stays open and In review, and a **location label**
+(`on: develop`, `on: staging`; prefix `branching.location_prefix`) says which long-lived branch
+holds it. A task has at most one location label.
+
+| Pull request merged | Task |
+|---|---|
+| Task branch into the working branch (`develop`) | Stays open; New or In progress → In review; gets `on: develop` |
+| Promotion `develop` → `staging` (`environments`) | The tasks the merge commit contains get `on: staging` in place of `on: develop`; tasks merged into `develop` after the promoted commit keep `on: develop` |
+| `release/*` into `main` | Unchanged by this workflow: `scrum release finish` sets the released tasks Done and closes them |
+| `hotfix/*` into `main` | Done, closed as completed, location label removed |
+| Back-merge (`main` → `develop`, `staging` → `develop`) | Unchanged |
+| Into any other branch (for example another task branch) | Unchanged |
+
+Which tasks a promotion contains is computed from the commits (the merge commit of each task's
+pull request compared with the promotion's merge commit), not from the pull request text. A task
+on a branch does not move back to In progress when another of its pull requests is closed or made
+a draft. Closing a task by hand as completed still sets Done and drops its location label.
+
+`sprint-status`, the digest, the HTML report and `my-tasks` show each task In review as "in code
+review" (no location label: its pull request is open) or "on `<branch>`". Needs attention lists a
+task that has waited on a branch more than `attention.promote_days` working days, counted from
+the day its location label was added (read from the issue's events). The sprint close preview
+lists these tasks as "Merged but not released": they are not in the velocity, and closing carries
+them over with their status and label. Release first to count them.
 
 ## How the data is stored
 

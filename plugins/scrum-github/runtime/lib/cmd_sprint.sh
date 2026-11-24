@@ -74,16 +74,25 @@ cmd_sprint_close() {
     return 0
   fi
 
-  printf '%s' "$plan" | jq -r --argjson cfg "$CONFIG_JSON" '
+  printf '%s' "$plan" | jq -r -L "$JQ_LIB" --argjson cfg "$CONFIG_JSON" --argjson s "$(strings_json)" 'include "scrum";
     def pts: if . == null then "unestimated" else "\(.) pt\(if . == 1 then "" else "s" end)" end;
+    # Merged but not released (with a working branch): listed apart, carried over like the rest.
+    .release_branch as $rb
+    | ([(.unreleased // [])[].number]) as $unrel
+    | def held: . as $n | $unrel | index($n) != null;
     "Closing \(.sprint.title) (\(.sprint.start) to \(.sprint.end))",
     "Velocity: \(.velocity) points from \(.done | length) done task\(if (.done | length) == 1 then "" else "s" end)"
       + (if (.unestimated_done | length) > 0 then " (\(.unestimated_done | length) done without points: \(.unestimated_done | map("#\(.)") | join(", ")))" else "" end),
     (if (.done | length) > 0 then "Done:", (.done[] | "  #\(.number) \(.title) (\(.points | pts))") else empty end),
     (if (.carry | length) > 0 then
        "Carry over to \(.next.title)\(if .next.exists then "" else " (does not exist yet; would be created: \(.next.start) to \(.next.end))" end):",
-       (.carry[] | "  #\(.number) \(.title) (\(.points | pts), \($cfg.statuses[.status] // .status))")
+       (.carry[] | select(.number | held | not) | "  #\(.number) \(.title) (\(.points | pts), \($cfg.statuses[.status] // .status))")
      else "Nothing to carry over." end),
+    (if ((.unreleased // []) | length) > 0 then
+       "\(tr($s; "close_unreleased_title")):",
+       (.unreleased[] | "  #\(.number) \(.title) (\(.points | pts), \($cfg.statuses[.status] // .status), \(location_text($s; .branch)))"),
+       "  " + tr($s; "close_unreleased_note"; {branch: $rb})
+     else empty end),
     (if (.dropped | length) > 0 then "Not planned (not counted): \(.dropped | map("#\(.)") | join(", "))" else empty end)'
 
   local carry_count next_exists next_title next_number

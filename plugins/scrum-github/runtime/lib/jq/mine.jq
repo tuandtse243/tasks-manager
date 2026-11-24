@@ -10,7 +10,8 @@
 #          reviews: [{number, title, author, url}]|null,
 #          time: {tasks, estimated, missing, missing_numbers, work_minutes, review_minutes, waves}|null,
 #          ai_ready: [numbers of the New tasks of the open sprint labelled labels.ai_ready]}
-# task: {number, title, points, status, role, sprint, blocked_by: [numbers]|null, estimate|null, ai_ready}
+# task: {number, title, points, status, role, sprint, blocked_by: [numbers]|null, estimate|null, ai_ready,
+#        location?: "code_review"|branch (In review, with a working branch only)}
 # time (spec my-work "Thời gian trong việc của một người"): the open tasks in the open sprint;
 # work by waves of the blocking graph between them, like the plan view; null without them.
 include "scrum";
@@ -29,7 +30,10 @@ include "scrum";
               else ($msinfo[.milestone.number | tostring].end // (.milestone.due_on // "" | .[0:10]) | if . == "" then null else . end) end),
         blocked_by: ((.number | tostring) as $k | if $blocked | has($k) then $blocked[$k] else null end),
         estimate: issue_estimate,
-        ai_ready: has_label_ci($cfg.labels.ai_ready) } ]
+        ai_ready: has_label_ci($cfg.labels.ai_ready) }
+      # With a working branch, where a task In review is: "code_review" or the branch of its
+      # location label (spec sprint-reporting "Location of tasks in review"); absent in trunk.
+      + (review_location($cfg) as $l | if $l == null then {} else {location: $l} end) ]
 | sort_by(.number) as $tasks
 
 # groups, in the order of the spec
