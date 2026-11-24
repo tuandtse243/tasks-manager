@@ -61,3 +61,33 @@ Lệnh `scrum next` MUST NOT ghi gì lên GitHub hay vào repo. Với `--json`, 
 #### Scenario: JSON khi đang làm dở
 - **WHEN** người dùng chạy `scrum next --json` lúc có task #12 In progress
 - **THEN** đầu ra là JSON hợp lệ có mã bước của trường hợp đang làm dở và danh sách issue chứa 12, và không có lời gọi ghi nào lên GitHub
+
+### Requirement: Suggest a release
+When the most recently closed sprint has Done tasks closed after the latest version tag, and no step with a higher priority applies, `scrum next` SHALL suggest `/scrum-github:release`. When the tags cannot be read, this step SHALL be skipped.
+
+#### Scenario: Sprint done, not released
+- **WHEN** Sprint 5 is closed with 4 Done tasks closed after tag `v1.4.2`, and no step with a higher priority applies
+- **THEN** `scrum next` suggests `/scrum-github:release`
+
+#### Scenario: Already released
+- **WHEN** every Done task of Sprint 5 was closed before the latest tag
+- **THEN** `scrum next` does not suggest a release
+
+### Requirement: Branch flow steps
+`scrum next` SHALL suggest, in this order of priority after the setup steps: protecting the repository when a long-lived branch has no rule; merging an open back-merge pull request; promoting, in `environments`, when the working branch holds tasks the staging branch lacks and no promotion is open; and releasing when In review tasks are ready on the branch the release starts from and no release pull request is open.
+
+#### Scenario: Unprotected repository
+- **WHEN** setup is complete and `main` has no rule
+- **THEN** the next step is `/scrum-github:protect`
+
+#### Scenario: Back-merge open
+- **WHEN** a pull request from `main` into `develop` is open
+- **THEN** the next step is to merge it, with its link
+
+#### Scenario: Ready to release
+- **WHEN** the preset is `standard`, #12 and #13 are `on: develop`, and no release pull request is open
+- **THEN** the next step is `/scrum-github:release` with the number of tasks waiting
+
+#### Scenario: Ready to promote
+- **WHEN** the preset is `environments`, #12 is `on: develop` and no promotion is open
+- **THEN** the next step is `/scrum-github:promote`

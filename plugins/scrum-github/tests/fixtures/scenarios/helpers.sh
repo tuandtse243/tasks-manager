@@ -1,6 +1,7 @@
 # shellcheck shell=bash
 # Shared helpers for tests/test_scenarios_*.sh (black-box tests written from the spec scenarios
-# of openspec/changes/branching-and-release-flow). Sourced by each scenario test file.
+# of openspec/changes/archive/2026-11-24-branching-and-release-flow, now merged into
+# openspec/specs). Sourced by each scenario test file.
 #
 # GitHub reads use the REST endpoints a straightforward implementation calls; where the
 # endpoint is a guess, the route carries a comment "# assumes: ...".

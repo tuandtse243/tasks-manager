@@ -36,7 +36,7 @@ Paths are relative to `plugins/scrum-github/`. Groups 2 to 5 run in parallel in 
 
 - [x] 4.1 Make `task start` (`cmd_task.sh`) fetch and branch from the remote working branch, with the offline fallback and warning; verify the two new scenarios of "Bắt đầu task" in the task tests and that the existing ones still pass
 - [x] 4.2 Make `run` (`cmd_run.sh`) create its integration branch from the working branch and open its pull requests into it; verify the "Run in standard" scenario in the run tests and that trunk runs are unchanged
-- [ ] 4.3 Update the `task-pr` skill: base branch by preset and for `hotfix/*`, Conventional Commits title, warning when behind the base; verify the two new scenarios of "Soạn mô tả PR cho task" by a documented manual run in the pull request description, and `tests/test_docs.sh` for the skill text
+- [x] 4.3 Update the `task-pr` skill: base branch by preset and for `hotfix/*`, Conventional Commits title, warning when behind the base; verify the two new scenarios of "Soạn mô tả PR cho task" by a documented manual run in the pull request description, and `tests/test_docs.sh` for the skill text
 - [x] 4.4 Implement `sync` in a new `runtime/lib/cmd_branch.sh`; verify with a new `tests/test_branch.sh` using temporary git repositories for every scenario of "Sync a task branch" and "Sync reports conflicts"
 - [x] 4.5 Implement `branches` (`cmd_branch.sh`, `jq/branches-overview.jq`, `--json`); verify in `tests/test_branch.sh` every scenario of "Branch overview"
 - [x] 4.6 Implement `cleanup` (preview, `--yes`); verify in `tests/test_branch.sh` every scenario of "Clean up merged branches"
