@@ -128,8 +128,13 @@ release:
   # Presets with a working branch: files whose version the release pull request updates. A
   # .json file with only a path gets its top-level "version"; any other file needs a pattern
   # with {version} (the first match with the previous version is replaced).
+  # Every place that holds the plugin version (tests/test_manifest.sh checks that they agree).
   version_files:
     - path: plugins/scrum-github/.claude-plugin/plugin.json
+    - path: plugins/scrum-github/runtime/VERSION
+      pattern: "{version}"
+    - path: README.md
+      pattern: "(version {version}, see"
   # File that gets the release notes at the top, or null for none.
   # changelog: CHANGELOG.md
 
