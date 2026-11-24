@@ -4,18 +4,20 @@
 
 Run Scrum on GitHub itself, without Jira or Trello. This repository is a **Claude Code plugin
 marketplace**. It currently holds one plugin, [`scrum-github`](plugins/scrum-github/README.md)
-(version 0.12.0, see the [releases](https://github.com/tuandtse243/tasks-manager/releases)).
+(version 0.13.0, see the [releases](https://github.com/tuandtse243/tasks-manager/releases)).
 
 | Scrum | On GitHub |
 |---|---|
 | Sprint | Milestone `Sprint {n}` |
 | Task | Issue with a `status: …` label and a `points: N` label, optionally a time estimate (AI work and human review) |
 | Backlog | Open tasks with no milestone |
-| Status | Changes on its own when a pull request with `Closes #n` is opened or merged |
+| Status | Changes on its own when a pull request with `Closes #n` is opened or merged; with a `develop` branch a merged task waits In review, labelled `on: develop`, and is Done when released into `main` |
+| Branches | A preset: `trunk` (`main` only), `standard` (`develop` → `main`, the default) or `environments` (`develop` → `staging` → `main`); `protect` sets the branch rules, every pull request is checked for its title, source branch and task |
 | Team | A `team` block in `.github/scrum.yml`: who works here, their areas and capacity |
 | Planning | Claude splits a requirement into epic → features → tasks with suggested assignees and sprint; you approve once, then the issues are created |
 | AI work | Tasks labelled `ai-ready` are worked by agents in local worktrees and come back as one pull request to review |
-| Release | A tag and a GitHub Release with notes written from the Done tasks and their pull requests, the version suggested by semver |
+| Release | A tag and a GitHub Release with notes written from the tasks and their pull requests, the version suggested by semver; with `develop`, through a release pull request into `main` that publishes on merge and opens the back-merge; hotfixes from `main` |
+| Deployment | Optional: a workflow for Docker (SSH and Compose) or Cloudflare (Wrangler), or the Vercel settings, mapping each long-lived branch to an environment, with approval before production and a manual rollback |
 | Tracking | A progress table with a "Needs attention" section, an HTML report with a burndown, a digest every morning (also on Slack or Telegram if you want) |
 
 ## Install in three steps
@@ -27,7 +29,8 @@ marketplace**. It currently holds one plugin, [`scrum-github`](plugins/scrum-git
    /plugin install scrum-github@tasks-manager
    ```
 3. In your project's repository: `/scrum-github:init`, commit and push `.github/` to the default
-   branch, then `/scrum-github:doctor` to check the whole setup.
+   branch, `/scrum-github:protect` to create `develop` and the branch rules, then
+   `/scrum-github:doctor` to check the whole setup.
 
 ## One task from start to finish
 
@@ -38,9 +41,13 @@ marketplace**. It currently holds one plugin, [`scrum-github`](plugins/scrum-git
 /scrum-github:task-start 12                            # Dev: take the task, In progress, create the branch
 git push -u origin feat/12-log-in-with-email           # Dev: push when the code is done
 /scrum-github:task-pr                                  # Dev: PR description with "Closes #12", open the PR
-                                                       # Merge the PR: #12 moves to Done and closes
+                                                       # Merge the PR into develop: #12 In review, on: develop
 /scrum-github:sprint-status                            # Everyone: progress and "Needs attention"
+/scrum-github:release                                  # SM: release PR into main; merging it makes #12 Done
 ```
+
+That is preset `standard`, what a new `init` writes. With `branching.preset: trunk` (or no
+`branching` block, as before 0.13.0) the PR goes into `main` and its merge makes the task Done.
 
 With no sprint open, `task-new` puts the task in the backlog and says so (`--backlog` does it on
 purpose); `/scrum-github:sprint-fill` later moves it into a sprint. For a larger requirement,
@@ -53,8 +60,9 @@ agents, which work them in parallel in local git worktrees and open one pull req
 [adoption guide](docs/adoption-guide.md)).
 
 After closing a sprint, `/scrum-github:release` publishes a version: it suggests the number
-(major, minor or patch from the tasks' labels), writes the release notes, and creates the tag and
-the GitHub Release once you agree.
+(major, minor or patch from the tasks' labels), writes the release notes, and once you agree
+creates the tag and the GitHub Release (`trunk`) or opens the release pull request whose merge
+publishes them (`standard`, `environments`).
 
 ![One sprint with scrum-github](docs/diagrams/sprint-flow.png)
 

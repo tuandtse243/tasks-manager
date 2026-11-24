@@ -40,6 +40,23 @@ back into it. In `trunk` everything starts from and goes into `main`.
 conflict it lists each file with who last changed it on `develop` and leaves the merge for you:
 fix the files, `git add`, `git merge --continue`, or `git merge --abort` to go back.
 
+Every PR is checked by `pr-check`: a [Conventional Commits](https://www.conventionalcommits.org)
+title (`feat(auth): log in with email`, `fix: …`), the right base branch (a task branch into
+`develop`, never into `main`), and `Closes #N`. Try the same checks before pushing:
+`scrum pr-check --title "feat: log in"`. Squash-merge task PRs; a back-merge (`main` → `develop`)
+is merged with a merge commit.
+
+## Hotfix (production cannot wait)
+
+Presets `standard` and `environments`; in `trunk` a normal task already starts from `main`.
+
+| Step | Command | Example |
+|---|---|---|
+| 1. Branch `hotfix/N-slug` from `main`, task In progress | `/scrum-github:hotfix` | `/scrum-github:hotfix 31` |
+| 2. Fix, commit, then write the patch version into the version files | `scrum hotfix prepare` | `scrum hotfix prepare`, then `scrum hotfix prepare --yes` |
+| 3. Open the PR into `main` (with the version marker) | `/scrum-github:task-pr` | `/scrum-github:task-pr` |
+| 4. Merge it | (on GitHub) | The version is published, the task is Done, back-merge PRs open |
+
 ## Let AI agents work your tasks
 
 | Step | Command | Example |

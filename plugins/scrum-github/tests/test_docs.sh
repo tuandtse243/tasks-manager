@@ -29,6 +29,18 @@ test_every_scrum_command_in_the_readme_exists() {
   assert_eq "" "${unknown#, }" "commands in the README that scrum does not have"
 }
 
+# Every `scrum …` command the adoption guide and the cheat sheets show exists in `scrum help`.
+test_every_scrum_command_in_the_guides_exists() {
+  local f first known unknown=""
+  known=" $(help_commands | awk '{print $1}' | sort -u | tr '\n' ' ') "
+  for f in "$GUIDE" "$REPO_ROOT"/docs/cheat-sheet-*.md "$REPO_ROOT/README.md"; do
+    for first in $(grep -oE '(`|^ *)scrum [a-z][a-z-]*' "$f" | sed 's/.*scrum //' | sort -u); do
+      case "$known" in *" $first "*) ;; *) unknown="$unknown, ${f#"$REPO_ROOT"/}: $first" ;; esac
+    done
+  done
+  assert_eq "" "${unknown#, }" "commands in the guides that scrum does not have"
+}
+
 test_every_configuration_key_is_in_the_readme() {
   local cfg key missing=""
   cfg="$(awk '/^## Configuration/{f=1} f&&/^```yaml/{y=1;next} y&&/^```/{exit} y' "$PLUGIN_README")"
