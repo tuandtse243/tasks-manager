@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Work plan of one requirement (version 2)",
+  "description": "Kept in the target repo at <planning.dir>/<slug>/plan.json. Written by /scrum-github:plan, approved by the user, checked with `scrum plan validate FILE`, viewed with `scrum plan render FILE`, applied with `scrum plan apply FILE`. Epic (optional) -> features -> tasks. `issue` stays null until apply creates the issue and writes its number back. Version 1 (still accepted, no `version` key): {\"sprint\": \"Sprint 2\" (omit = current sprint), \"feature\": {\"title\", \"body\"}, \"tasks\": [{\"title\", \"body\", \"acceptance\", \"points\", \"assignees\", \"bug\"}]}; it is read as version 2 with one feature F1, tasks T1..Tn, and sprint \"current\" when omitted.",
+  "type": "object",
+  "required": ["version", "title", "features"],
+  "properties": {
+    "version": { "const": 2 },
+    "title": { "type": "string", "minLength": 1 },
+    "sprint": {
+      "type": ["string", "null"],
+      "description": "Sprint (milestone) title, \"current\" for the current sprint, or null/omitted for the backlog (no milestone). A task's own sprint overrides it. Epic and features take this one."
+    },
+    "epic": {
+      "type": ["object", "null"],
+      "required": ["title"],
+      "properties": {
+        "title": { "type": "string", "minLength": 1 },
+        "body": { "type": "string" },
+        "issue": { "$ref": "#/$defs/issue" }
+      }
+    },
+    "features": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "tasks"],
+        "properties": {
+          "id": { "$ref": "#/$defs/id" },
+          "title": { "type": "string", "minLength": 1 },
+          "body": { "type": "string" },
+          "issue": { "$ref": "#/$defs/issue" },
+          "tasks": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/task" } }
+        }
+      }
+    },
+    "assumptions": { "type": "array", "items": { "type": "string" } },
+    "out_of_scope": { "type": "array", "items": { "type": "string" } },
+    "review": {
+      "type": "array",
+      "description": "Optional. Findings of the plan-critic review, written by /scrum-github:plan after the review, shown in plan.html. `plan apply` ignores it.",
+      "items": {
+        "type": "object",
+        "required": ["kind", "text", "status"],
+        "properties": {
+          "kind": { "type": "string", "minLength": 1, "description": "missing, out_of_scope, too_large, dependency, untestable or fragile" },
+          "text": { "type": "string", "minLength": 1 },
+          "status": { "enum": ["fixed", "kept"], "description": "fixed: the plan was changed; kept: left as it is, with the reason in text" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Stable id, unique across all features and tasks of the plan (F1, T1, ...). Never reuse or renumber after apply."
+    },
+    "issue": {
+      "type": ["integer", "null"],
+      "minimum": 1,
+      "description": "Issue number on GitHub, written by `scrum plan apply`. null until created."
+    },
+    "task": {
+      "type": "object",
+      "required": ["id", "title"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "title": { "type": "string", "minLength": 1 },
+        "body": { "type": "string" },
+        "acceptance": { "type": "array", "items": { "type": "string" } },
+        "subtasks": { "type": "array", "items": { "type": "string" }, "description": "Checklist in the issue body, not separate issues" },
+        "points": { "type": ["integer", "null"], "description": "Must be one of points.scale; null = not estimated" },
+        "depends_on": { "type": "array", "items": { "type": "string" }, "description": "Ids of tasks that must be done first; becomes GitHub's \"blocked by\"" },
+        "assignees": { "type": "array", "items": { "type": "string" } },
+        "bug": { "type": "boolean" },
+        "ai_ready": { "type": "boolean", "description": "true: the task can be worked by an AI agent with /scrum-github:run; `plan apply` gives its issue the labels.ai_ready label (ai-ready), and `plan apply --update` adds it, or removes it when this is false. Omitted: the label is left as it is." },
+        "sprint": { "type": ["string", "null"], "description": "Overrides the plan's sprint for this task; null puts this task in the backlog. Omit the key to use the plan's sprint." },
+        "estimate": {
+          "type": "object",
+          "description": "Optional time estimate, next to points (not instead of them): minutes of work, minutes a person needs to review and test by hand, and who does the work. Written into the issue body as the estimate block by `plan apply`, updated by `plan apply --update`.",
+          "required": ["work_minutes", "review_minutes"],
+          "properties": {
+            "work_minutes": { "type": "integer", "minimum": 1 },
+            "review_minutes": { "type": "integer", "minimum": 1, "description": "Review and manual testing by a person" },
+            "by": { "enum": ["ai", "human"], "description": "Who does the work; ai when omitted" }
+          }
+        },
+        "issue": { "$ref": "#/$defs/issue" }
+      }
+    }
+  }
+}

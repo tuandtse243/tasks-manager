@@ -1,0 +1,290 @@
+#!/usr/bin/env bash
+# scrum: Scrum on GitHub. Entry point for skills, workflows and the command line.
+# Works on Bash 3.2 (macOS default) and later.
+set -euo pipefail
+
+SCRUM_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export SCRUM_ROOT
+
+# shellcheck source=../lib/common.sh
+. "$SCRUM_ROOT/lib/common.sh"
+
+usage() {
+  cat <<'EOF'
+Usage: scrum <command> [options]
+
+Setup
+  init [--dry-run] [--force] [--force-file PATH]   Prepare this repo: config, labels, templates, workflows
+  config                                          Print the merged configuration as JSON
+  uninstall [--dry-run] [--yes]                   Remove what init installed (keeps scrum.yml and edited files)
+  doctor [--json]                                 Check tools, login, configuration and what is installed; read-only
+  next [--json]                                   The one thing to do next, with its command; read-only
+  team [--json]                                   Team members, areas, capacity and load in the open sprint; read-only
+  protect [--json] [--yes]                        Long-lived branches, branch and tag rules, merge settings of the
+                                                  preset (branching.preset); preview, writes with --yes
+
+Backlog and sprints
+  backlog [--json]                                Open tasks without a sprint, with points, parent and blockers
+  sprint new [--title T] [--start YYYY-MM-DD] [--length DAYS] [--goal TEXT]
+  sprint close [SPRINT] [--yes] [--create-next]
+  sprint fill [SPRINT] [--capacity N] [--add N,N,...] [--yes]
+                                                  Capacity from velocity, the backlog, and adding tasks to the sprint
+
+Tasks
+  task new --title T [--body B] [--points N] [--assignee LOGIN]... [--sprint S | --backlog] [--bug]
+           [--work D] [--review D] [--by ai|human]
+                                                  In the open sprint, or the backlog when none is open;
+                                                  D is a duration: 90, 25m, 2h or 1h30m
+  task start NUMBER
+  task list [--mine] [--sprint S | --backlog] [--status new|in_progress|in_review|done] [--json]
+  mine [--user LOGIN] [--json]                    Every open task of one person (all sprints and the backlog),
+                                                  pull requests waiting for their review, what to do next
+  task move N... --sprint S | --backlog           Move tasks between sprints and the backlog (with a comment)
+  task estimate N [POINTS] [--work D] [--review D] [--by ai|human]
+                                                  Replace the points label (checked against the scale)
+                                                  and/or change the time estimate (work, review, who works)
+  task assign N LOGIN... [--unassign]             Add or remove assignees
+  task drop N [--reason TEXT]                     Close as not planned: counts nowhere
+
+Branches (branching.preset: trunk, standard or environments)
+  sync                                            Merge the working branch into the current task branch
+                                                  (the release branch into a hotfix branch); conflicts are listed
+  branches [--json]                               What each long-lived branch holds that the next one lacks,
+                                                  drift, open promotion/release/back-merge pull requests,
+                                                  stale task branches; read-only
+  cleanup [--json] [--yes]                        Local and remote branches already merged; deletes with --yes
+  promote [--json] [--yes]                        environments: the tasks on the working branch that staging
+                                                  lacks; with --yes open the promotion pull request
+  hotfix NUMBER                                   Start a hotfix: hotfix/N-<slug> from the release branch,
+                                                  task In progress
+  hotfix prepare [--json] [--yes]                 On a hotfix branch: the version it publishes; with --yes
+                                                  commit the version files and changelog on it
+
+Running tasks with AI agents (driven by /scrum-github:run; state in .scrum/run/<id>.json)
+  run plan [N,N...] [--json]                      Tasks and waves of a run, what is left out and why, time
+                                                  estimate; read-only. Default: my New ai-ready tasks of
+                                                  the open sprint
+  run start [N,N...] [--expect N,N...] [--max-parallel K] [--pr-per-wave]
+                                                  Create the integration branch, save the run, assign the
+                                                  tasks and set them In progress; --expect: stop unless
+                                                  the tasks are exactly these (the confirmed plan)
+  run record N --started | --done --branch B [--notes FILE]
+             | --failed (--reason R | --reason-file FILE | --notes FILE)
+                                                  Record what an agent did and its actual time
+  run merge N                                     Merge the task's branch into the integration branch
+                                                  (--no-ff); a conflict is aborted and recorded
+  run finish [--wave W]                           Push the integration branch, open the pull request
+                                                  (--wave W for each wave of a --pr-per-wave run)
+  run status [ID] [--json]                        Each task of a run (default: the unfinished one)
+  Each of record, merge and finish takes [--run ID] (default: the unfinished run).
+
+Plans (a plan file per requirement: <planning.dir>/<slug>/plan.json, see share/plan.schema.json)
+  plan init "<title>" [--slug SLUG]               Create the plan folder; print its paths as JSON (offline)
+  plan validate FILE                              Check a plan; print features, tasks, points (offline)
+  plan render FILE [--out PATH] [--offline]       Write the plan.md view with estimates
+  plan check FILE [--offline] [--json]            validate, render, waves, load and capacity, what apply would do;
+                                                  writes nothing to GitHub
+  plan apply FILE [--dry-run] [--update]          Create the missing epic, features and tasks, link them, record numbers
+
+Documents (offline)
+  doc check FILE [--type brief|context]           Check the required sections of a brief or the project context
+  context inventory                               Print an inventory of the repo (git ls-files) as JSON
+  context status                                  Print whether the project context exists and how stale it is
+  context stamp                                   Record HEAD and today's date in the project context
+
+Progress
+  status [SPRINT] [--json]                        Progress table by person and status
+  report [SPRINT] [--out FILE]                    Self-contained HTML burndown report
+  digest                                          Post the daily digest (used by the scheduled workflow)
+
+Releases
+  release [VERSION] [--since TAG] [--sprint S]... [--draft] [--notes-file FILE] [--json] [--yes]
+                                                  Version, tasks and release notes from the Done tasks
+                                                  since the last version tag (or of the sprints); with
+                                                  VERSION --yes create the tag and the GitHub Release
+                                                  (trunk), or open the release pull request from
+                                                  release/<tag> (presets with a working branch)
+          [--from REF]                            Release up to REF instead of the head of the working
+                                                  (or staging) branch
+  release finish [--pr N]                         After a release or hotfix pull request is merged: tag,
+                                                  GitHub Release, tasks Done, back-merge pull requests
+                                                  (used by the release workflow; idempotent)
+
+Project board (GitHub Projects, optional: project.enabled in .github/scrum.yml)
+  project init [--dry-run] [--allow-builtin-workflows]
+                                                  Check the project, create its fields, add sprint tasks
+  project sync [--issue N]                        Sync statuses and points between labels and the board
+
+Automation (GitHub Actions)
+  event                                           Apply status rules for $GITHUB_EVENT_PATH
+  pr-check [--title | --source | --link]          Fail when a pull request links no task, has a title that
+                                                  is not a Conventional Commit, or targets a branch its
+                                                  source branch may not target (one check with an option)
+
+Environment
+  SCRUM_REPO      owner/name of the target repo (default: GITHUB_REPOSITORY or the current git remote)
+  SCRUM_TODAY     override today's date (YYYY-MM-DD), mainly for tests
+  SCRUM_PROJECT_TOKEN  token for the project board (default: gh's own login)
+EOF
+}
+
+cmd="${1:-}"
+if [ $# -gt 0 ]; then shift; fi
+
+case "$cmd" in
+  ""|help|-h|--help)
+    usage
+    ;;
+  --version|version)
+    cat "$SCRUM_ROOT/VERSION"
+    ;;
+  init)
+    . "$SCRUM_ROOT/lib/cmd_init.sh"; cmd_init "$@"
+    ;;
+  next)
+    . "$SCRUM_ROOT/lib/cmd_next.sh"; cmd_next "$@"
+    ;;
+  doctor)
+    . "$SCRUM_ROOT/lib/cmd_doctor.sh"; cmd_doctor "$@"
+    ;;
+  uninstall)
+    . "$SCRUM_ROOT/lib/cmd_uninstall.sh"; cmd_uninstall "$@"
+    ;;
+  config)
+    require_tools nogh
+    load_config
+    printf '%s\n' "$CONFIG_JSON"
+    ;;
+  sprint)
+    sub="${1:-}"; if [ $# -gt 0 ]; then shift; fi
+    . "$SCRUM_ROOT/lib/cmd_sprint.sh"
+    case "$sub" in
+      new) cmd_sprint_new "$@" ;;
+      close) cmd_sprint_close "$@" ;;
+      fill) cmd_sprint_fill "$@" ;;
+      *) die "unknown sprint command '${sub}'. Use: scrum sprint new | close | fill" ;;
+    esac
+    ;;
+  task)
+    sub="${1:-}"; if [ $# -gt 0 ]; then shift; fi
+    . "$SCRUM_ROOT/lib/cmd_task.sh"
+    case "$sub" in
+      new) cmd_task_new "$@" ;;
+      start) cmd_task_start "$@" ;;
+      list) cmd_task_list "$@" ;;
+      move) cmd_task_move "$@" ;;
+      estimate) cmd_task_estimate "$@" ;;
+      assign) cmd_task_assign "$@" ;;
+      drop) cmd_task_drop "$@" ;;
+      *) die "unknown task command '${sub}'. Use: scrum task new | start | list | move | estimate | assign | drop" ;;
+    esac
+    ;;
+  plan)
+    sub="${1:-}"; if [ $# -gt 0 ]; then shift; fi
+    . "$SCRUM_ROOT/lib/cmd_plan.sh"
+    case "$sub" in
+      init) cmd_plan_init "$@" ;;
+      validate) cmd_plan_validate "$@" ;;
+      render) cmd_plan_render "$@" ;;
+      check) cmd_plan_check "$@" ;;
+      apply) cmd_plan_apply "$@" ;;
+      *) die "unknown plan command '${sub}'. Use: scrum plan init | validate | render | check | apply" ;;
+    esac
+    ;;
+  doc)
+    sub="${1:-}"; if [ $# -gt 0 ]; then shift; fi
+    . "$SCRUM_ROOT/lib/cmd_doc.sh"
+    case "$sub" in
+      check) cmd_doc_check "$@" ;;
+      *) die "unknown doc command '${sub}'. Use: scrum doc check FILE [--type brief|context]" ;;
+    esac
+    ;;
+  context)
+    sub="${1:-}"; if [ $# -gt 0 ]; then shift; fi
+    . "$SCRUM_ROOT/lib/cmd_context.sh"
+    case "$sub" in
+      inventory) cmd_context_inventory "$@" ;;
+      status) cmd_context_status "$@" ;;
+      stamp) cmd_context_stamp "$@" ;;
+      *) die "unknown context command '${sub}'. Use: scrum context inventory | status | stamp" ;;
+    esac
+    ;;
+  project)
+    sub="${1:-}"; if [ $# -gt 0 ]; then shift; fi
+    . "$SCRUM_ROOT/lib/cmd_project.sh"
+    case "$sub" in
+      init) cmd_project_init "$@" ;;
+      sync) cmd_project_sync "$@" ;;
+      *) die "unknown project command '${sub}'. Use: scrum project init | scrum project sync" ;;
+    esac
+    ;;
+  backlog)
+    . "$SCRUM_ROOT/lib/cmd_backlog.sh"; cmd_backlog "$@"
+    ;;
+  team)
+    . "$SCRUM_ROOT/lib/cmd_team.sh"; cmd_team "$@"
+    ;;
+  mine)
+    . "$SCRUM_ROOT/lib/cmd_mine.sh"; cmd_mine "$@"
+    ;;
+  run)
+    sub="${1:-}"; if [ $# -gt 0 ]; then shift; fi
+    . "$SCRUM_ROOT/lib/cmd_run.sh"
+    case "$sub" in
+      plan) cmd_run_plan "$@" ;;
+      start) cmd_run_start "$@" ;;
+      record) cmd_run_record "$@" ;;
+      merge) cmd_run_merge "$@" ;;
+      finish) cmd_run_finish "$@" ;;
+      status) cmd_run_status "$@" ;;
+      *) die "unknown run command '${sub}'. Use: scrum run plan | start | record | merge | finish | status" ;;
+    esac
+    ;;
+  release)
+    . "$SCRUM_ROOT/lib/cmd_release.sh"
+    if [ "${1:-}" = finish ]; then shift; cmd_release_finish "$@"; else cmd_release "$@"; fi
+    ;;
+  protect)
+    . "$SCRUM_ROOT/lib/cmd_protect.sh"; cmd_protect "$@"
+    ;;
+  promote)
+    . "$SCRUM_ROOT/lib/cmd_promote.sh"; cmd_promote "$@"
+    ;;
+  hotfix)
+    . "$SCRUM_ROOT/lib/cmd_promote.sh"
+    case "${1:-}" in
+      prepare) shift; cmd_hotfix_prepare "$@" ;;
+      ""|-h|--help) die "usage: scrum hotfix NUMBER | scrum hotfix prepare [--json] [--yes]" ;;
+      *) cmd_hotfix "$@" ;;
+    esac
+    ;;
+  sync)
+    . "$SCRUM_ROOT/lib/cmd_branch.sh"; cmd_sync "$@"
+    ;;
+  branches)
+    . "$SCRUM_ROOT/lib/cmd_branch.sh"; cmd_branches "$@"
+    ;;
+  cleanup)
+    . "$SCRUM_ROOT/lib/cmd_branch.sh"; cmd_cleanup "$@"
+    ;;
+  status)
+    . "$SCRUM_ROOT/lib/cmd_report.sh"; cmd_status "$@"
+    ;;
+  report)
+    . "$SCRUM_ROOT/lib/cmd_report.sh"; cmd_report "$@"
+    ;;
+  digest)
+    . "$SCRUM_ROOT/lib/cmd_digest.sh"; cmd_digest "$@"
+    ;;
+  event)
+    . "$SCRUM_ROOT/lib/cmd_event.sh"; cmd_event "$@"
+    ;;
+  pr-check)
+    . "$SCRUM_ROOT/lib/cmd_event.sh"; cmd_pr_check "$@"
+    ;;
+  *)
+    printf 'scrum: unknown command "%s"\n\n' "$cmd" >&2
+    usage >&2
+    exit 2
+    ;;
+esac

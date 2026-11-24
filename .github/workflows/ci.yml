@@ -3,7 +3,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, develop]
 
 # The workflow runs the code of the pull request, so it gets read access only and no secret.
 permissions:
@@ -19,8 +19,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # The repository is private, where a macOS minute counts as ten: pull requests run on
-        # Ubuntu only, and every push to main (a merge) runs on macOS too.
+        # Pull requests run on Ubuntu only, to keep them fast; every push to develop or main (a
+        # merge) runs on macOS too, where the plugin's users run it with Bash 3.2.
         os: ${{ github.event_name == 'push' && fromJSON('["ubuntu-latest", "macos-latest"]') || fromJSON('["ubuntu-latest"]') }}
     runs-on: ${{ matrix.os }}
     steps:

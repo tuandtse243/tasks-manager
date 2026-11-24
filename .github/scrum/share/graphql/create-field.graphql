@@ -1,0 +1,6 @@
+# Create a project field. Variables: project, name, type (TEXT or NUMBER).
+mutation($project: ID!, $name: String!, $type: ProjectV2CustomFieldType!) {
+  createProjectV2Field(input: {projectId: $project, name: $name, dataType: $type}) {
+    projectV2Field { ... on ProjectV2FieldCommon { id name dataType } }
+  }
+}

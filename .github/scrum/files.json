@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "files": {
+    ".github/ISSUE_TEMPLATE/task.yml": "06d5fd877b8e9cf1d3faeb938e6b3bf89b1f3caf",
+    ".github/pull_request_template.md": "4ca7eb69b3a399bedf1fa9ef1233d0ae4e1d538a",
+    ".github/workflows/scrum-status-sync.yml": "61075bc7087e203163db0f4a3b6c1be0ce949fce",
+    ".github/workflows/scrum-pr-link-check.yml": "c03a6ff0f77172ef8550320d917a08859e583e4c",
+    ".github/workflows/scrum-daily-digest.yml": "d53f376b2ff7c0020bf5cc493b59c9d990688ddb",
+    ".github/workflows/scrum-release.yml": "379801a158e6f4e5dc11cbb2e43e9138d7c4a13a"
+  }
+}

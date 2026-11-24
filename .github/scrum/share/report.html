@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sprint report</title>
+<style>
+/* Self-contained: no fonts, scripts or images from the network. */
+:root {
+  --bg: #f5f7f9; --surface: #ffffff; --line: #d8dee4; --fg: #1b2530; --muted: #5a6672;
+  --actual: #0b6b86; --ideal: #9aa6b2; --new: #6b4fd8; --prog: #b86e00; --review: #1d5fbf; --done: #1d7f45;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #10161c; --surface: #18212a; --line: #2c3a46; --fg: #e3eaf0; --muted: #98a6b3;
+    --actual: #5cc2de; --ideal: #6b7884; --new: #a793ff; --prog: #f0a94a; --review: #7fb0ff; --done: #5cc98a;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.55 var(--font); padding: 32px 16px 48px; }
+main { max-width: 920px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px; }
+h1 { font-size: 1.8rem; margin: 0; letter-spacing: -0.01em; }
+h2 { font-size: 1.05rem; margin: 0 0 12px; }
+.meta { color: var(--muted); margin: 4px 0 0; }
+.goal { margin: 10px 0 0; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+.kpi { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
+.kpi .v { font-size: 1.6rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.kpi .l { font-size: 0.75rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+section { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 16px; }
+.chart { overflow-x: auto; }
+svg text { fill: var(--muted); font: 11px var(--font); }
+.legend { display: flex; gap: 16px; font-size: 0.82rem; color: var(--muted); margin-top: 6px; flex-wrap: wrap; }
+.legend span::before { content: ""; display: inline-block; width: 18px; height: 3px; vertical-align: middle; margin-right: 6px; background: var(--actual); }
+.legend .ideal::before { background: repeating-linear-gradient(90deg, var(--ideal) 0 5px, transparent 5px 9px); }
+.legend .scope::before { background: var(--prog); height: 2px; }
+.attention ul { margin: 0; padding-left: 20px; }
+.attention li { margin: 4px 0; }
+.tbl { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; font-size: 0.9rem; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+tr.total td { font-weight: 700; border-bottom: 0; }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+.notes { color: var(--muted); font-size: 0.82rem; }
+.empty { color: var(--muted); }
+</style>
+</head>
+<body>
+<main id="app"></main>
+<script id="scrum-data" type="application/json">__SCRUM_DATA__</script>
+<script>
+(function () {
+  var d = JSON.parse(document.getElementById("scrum-data").textContent);
+  var p = d.progress, b = d.burndown, st = d.statuses, S = d.strings || {};
+  // Text in the configured language: {name} is replaced by args.name; "<key>_one" for 1 if present.
+  function t(key, args, n) {
+    var k = (n === 1 && S[key + "_one"] != null) ? key + "_one" : key;
+    var s = S[k] != null ? S[k] : key;
+    args = args || {}; if (n != null) args.n = n;
+    return s.replace(/\{(\w+)\}/g, function (m, a) { return args[a] != null ? String(args[a]) : m; });
+  }
+  var app = document.getElementById("app");
+  var NS = "http://www.w3.org/2000/svg";
+
+  function el(tag, attrs, text) {
+    var e = document.createElement(tag);
+    for (var k in attrs || {}) e.setAttribute(k, attrs[k]);
+    if (text != null) e.textContent = text;
+    return e;
+  }
+  function svg(tag, attrs, text) {
+    var e = document.createElementNS(NS, tag);
+    for (var k in attrs || {}) e.setAttribute(k, attrs[k]);
+    if (text != null) e.textContent = text;
+    return e;
+  }
+  function pts(n) { return t("pts", null, n); }
+  function cell(x) { return t("cell", { count: x.count, pts: pts(x.points) }); }
+
+  document.documentElement.lang = d.language || "en";
+  document.title = t("report_title", { title: p.sprint.title });
+
+  // Header
+  var head = el("header");
+  head.appendChild(el("h1", null, p.sprint.title));
+  head.appendChild(el("p", { "class": "meta" }, t("report_meta", { repo: d.repo, start: p.sprint.start, end: p.sprint.end,
+    at: d.generated_at.replace("T", " ").replace("Z", " UTC") })));
+  if (d.goal) head.appendChild(el("p", { "class": "goal" }, t("report_goal", { goal: d.goal })));
+  app.appendChild(head);
+
+  // Key numbers
+  var remaining = p.total.total.points - p.total.done.points;
+  var kpis = el("div", { "class": "kpis" });
+  [[p.pct_done == null ? t("na") : p.pct_done + "%", t("report_points_done")],
+   [remaining + " / " + p.total.total.points, t("report_points_remaining")],
+   [p.days_left == null ? t("na") : String(p.days_left), t("report_days_left")],
+   [String(p.total.total.count), t("report_tasks")],
+   [String(p.unestimated), t("report_unestimated")]].forEach(function (k) {
+    var box = el("div", { "class": "kpi" });
+    box.appendChild(el("div", { "class": "v" }, k[0]));
+    box.appendChild(el("div", { "class": "l" }, k[1]));
+    kpis.appendChild(box);
+  });
+  app.appendChild(kpis);
+
+  // Needs attention (left out when empty)
+  if (d.attention && d.attention.length) {
+    var at = el("section", { "class": "attention" }); at.appendChild(el("h2", null, t("attention_title")));
+    var ul = el("ul"); d.attention.forEach(function (line) { ul.appendChild(el("li", null, line)); });
+    at.appendChild(ul); app.appendChild(at);
+  }
+
+  // Where the tasks in review are (only with a working branch: d.review is absent in trunk)
+  if (d.review && d.review.length) {
+    var rv = el("section", { "class": "attention" }); rv.appendChild(el("h2", null, d.statuses.in_review));
+    var rl = el("ul"); d.review.forEach(function (r) { rl.appendChild(el("li", null, "#" + r.number + " " + r.title + ": " + r.where)); });
+    rv.appendChild(rl); app.appendChild(rv);
+  }
+
+  // Burndown
+  (function () {
+    var sec = el("section"); sec.appendChild(el("h2", null, t("report_burndown")));
+    var W = 860, H = 300, L = 44, R = 16, T = 12, B = 40;
+    var n = b.days.length;
+    var max = Math.max.apply(null, [b.total, 1].concat(b.days.map(function (day) { return day.scope || 0; })));
+    var x = function (i) { return L + (n === 1 ? (W - L - R) / 2 : i * (W - L - R) / (n - 1)); };
+    var y = function (v) { return T + (H - T - B) * (1 - v / max); };
+    var s = svg("svg", { viewBox: "0 0 " + W + " " + H, width: W, height: H, role: "img",
+      "aria-label": t("report_burndown") });
+    var step = max <= 10 ? 1 : max <= 40 ? 5 : max <= 100 ? 10 : Math.ceil(max / 10 / 10) * 10;
+    for (var v = 0; v <= max; v += step) {
+      s.appendChild(svg("line", { x1: L, x2: W - R, y1: y(v), y2: y(v), stroke: "var(--line)", "stroke-width": 1 }));
+      s.appendChild(svg("text", { x: L - 8, y: y(v) + 4, "text-anchor": "end" }, String(v)));
+    }
+    var every = Math.max(1, Math.ceil(n / 10));
+    b.days.forEach(function (day, i) {
+      if (i % every === 0 || i === n - 1)
+        s.appendChild(svg("text", { x: x(i), y: H - B + 18, "text-anchor": "middle" }, day.date.slice(5)));
+    });
+    var ideal = b.days.map(function (day, i) { return x(i) + "," + y(day.ideal); }).join(" ");
+    s.appendChild(svg("polyline", { points: ideal, fill: "none", stroke: "var(--ideal)", "stroke-width": 2, "stroke-dasharray": "6 5" }));
+    var real = b.days.filter(function (day) { return day.remaining !== null; });
+    var scoped = b.days.filter(function (day) { return day.scope != null; });
+    if (scoped.length)
+      s.appendChild(svg("polyline", { points: scoped.map(function (day) { return x(b.days.indexOf(day)) + "," + y(day.scope); }).join(" "),
+        fill: "none", stroke: "var(--prog)", "stroke-width": 1.5 }));
+    if (real.length) {
+      s.appendChild(svg("polyline", { points: real.map(function (day) { return x(b.days.indexOf(day)) + "," + y(day.remaining); }).join(" "),
+        fill: "none", stroke: "var(--actual)", "stroke-width": 2.5 }));
+      real.forEach(function (day) {
+        var c = svg("circle", { cx: x(b.days.indexOf(day)), cy: y(day.remaining), r: 3.5, fill: "var(--actual)" });
+        c.appendChild(svg("title", null, t("report_remaining_tip", { date: day.date, pts: pts(day.remaining) })));
+        s.appendChild(c);
+      });
+    }
+    var wrap = el("div", { "class": "chart" }); wrap.appendChild(s); sec.appendChild(wrap);
+    var lg = el("div", { "class": "legend" });
+    lg.appendChild(el("span", null, t("report_remaining"))); lg.appendChild(el("span", { "class": "ideal" }, t("report_ideal")));
+    lg.appendChild(el("span", { "class": "scope" }, t("report_scope")));
+    sec.appendChild(lg);
+    if (b.added || b.removed)
+      sec.appendChild(el("p", { "class": "notes" }, t("report_scope_change", { added: b.added || 0, removed: b.removed || 0 })));
+    app.appendChild(sec);
+  })();
+
+  // By person
+  (function () {
+    var sec = el("section"); sec.appendChild(el("h2", null, t("report_by_person")));
+    var wrap = el("div", { "class": "tbl" }), t = el("table");
+    var hr = el("tr");
+    var roles = d.roles || ["new", "in_progress", "done"];
+    var dot = { new: "--new", in_progress: "--prog", in_review: "--review", done: "--done" };
+    [[t("assignee")]].concat(roles.map(function (r) { return [st[r], dot[r]]; })).concat([[t("total")]]).forEach(function (h) {
+      var th = el("th"); if (h[1]) th.appendChild(el("span", { "class": "dot", style: "background:var(" + h[1] + ")" }));
+      th.appendChild(document.createTextNode(h[0])); hr.appendChild(th);
+    });
+    var thead = el("thead"); thead.appendChild(hr); t.appendChild(thead);
+    var tb = el("tbody");
+    p.rows.concat([Object.assign({ assignee: t("total"), _total: true }, p.total)]).forEach(function (r) {
+      var tr = el("tr", r._total ? { "class": "total" } : null);
+      [r.assignee === "Unassigned" && !r._total ? t("unassigned") : r.assignee]
+        .concat(roles.map(function (k) { return cell(r[k]); })).concat([cell(r.total)])
+        .forEach(function (c) { tr.appendChild(el("td", null, c)); });
+      tb.appendChild(tr);
+    });
+    t.appendChild(tb); wrap.appendChild(t); sec.appendChild(wrap);
+    app.appendChild(sec);
+  })();
+
+  // Velocity
+  (function () {
+    var sec = el("section"); sec.appendChild(el("h2", null, t("report_velocity")));
+    var v = d.velocity;
+    if (!v.length) { sec.appendChild(el("p", { "class": "empty" }, t("report_no_closed"))); app.appendChild(sec); return; }
+    var W = 860, H = 220, L = 44, B = 36, T = 20, bw = Math.min(80, (W - L) / v.length - 24);
+    var max = Math.max.apply(null, v.map(function (s) { return s.velocity || 0; }).concat([1]));
+    var s = svg("svg", { viewBox: "0 0 " + W + " " + H, width: W, height: H, role: "img", "aria-label": t("report_velocity") });
+    s.appendChild(svg("line", { x1: L, x2: W, y1: H - B, y2: H - B, stroke: "var(--line)" }));
+    v.forEach(function (sp, i) {
+      var cx = L + (i + 0.5) * (W - L) / v.length, val = sp.velocity, h = (H - B - T) * ((val || 0) / max);
+      if (val != null) s.appendChild(svg("rect", { x: cx - bw / 2, y: H - B - h, width: bw, height: h, rx: 3, fill: "var(--done)" }));
+      s.appendChild(svg("text", { x: cx, y: H - B - h - 6, "text-anchor": "middle" }, val == null ? t("na") : String(val)));
+      s.appendChild(svg("text", { x: cx, y: H - B + 18, "text-anchor": "middle" }, sp.title));
+    });
+    var wrap = el("div", { "class": "chart" }); wrap.appendChild(s); sec.appendChild(wrap);
+    app.appendChild(sec);
+  })();
+
+  app.appendChild(el("p", { "class": "notes" }, t("report_notes")));
+  if (d.history_limited) app.appendChild(el("p", { "class": "notes" }, t("report_history_limited")));
+})();
+</script>
+</body>
+</html>
