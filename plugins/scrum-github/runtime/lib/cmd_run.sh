@@ -158,17 +158,21 @@ run_resolve() {
 # folder next to it (mkdir is atomic), waited for up to 30 seconds, removed on exit.
 RUN_LOCK=""
 RUN_LOCK_TRIES="${SCRUM_RUN_LOCK_TRIES:-300}"
+run_trace() { [ -z "${SCRUM_RUN_TRACE:-}" ] || printf '%s %s %s\n' "$(date +%s.%N)" "$$" "$*" >> "$SCRUM_RUN_TRACE"; }
 run_lock() {
   local lock="$1.lock" i=0
+  run_trace "lock-wait $lock"
   while ! mkdir "$lock" 2>/dev/null; do
     i=$((i + 1))
     [ "$i" -lt "$RUN_LOCK_TRIES" ] || die "another scrum run command is changing this run (lock $lock). If none is running, remove that folder"
     sleep 0.1
   done
   RUN_LOCK="$lock"
+  run_trace "lock-got after $i tries"
   trap 'if [ -n "$RUN_LOCK" ]; then rmdir "$RUN_LOCK" 2>/dev/null; fi' EXIT
 }
 run_unlock() {
+  run_trace "unlock"
   if [ -n "$RUN_LOCK" ]; then rmdir "$RUN_LOCK" 2>/dev/null || true; fi
   RUN_LOCK=""
   trap - EXIT
@@ -182,10 +186,12 @@ run_apply() {
   shift 2
   file="$(run_file "$id")"
   run_lock "$file"
+  run_trace "read $(jq -c '.tasks | map_values(.state)' "$file" 2>&1)"
   out="$(jqlib run-state --arg op "$op" --argjson strings "$(strings_json)" "$@" < "$file")" || die "cannot update run $id"
   err="$(printf '%s' "$out" | jq -r '.error // empty')"
   [ -z "$err" ] || die "$err"
   printf '%s\n' "$out" | jq '.state' | write_atomic "$file"
+  run_trace "wrote $(jq -c '.tasks | map_values(.state)' "$file" 2>&1)"
   run_unlock
   RUN_EFFECTS="$(printf '%s' "$out" | jq -c .effects)"
 }

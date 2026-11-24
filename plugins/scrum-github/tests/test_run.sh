@@ -1117,6 +1117,7 @@ test_cmd_run_record_in_parallel_keeps_every_change() {
   git_env
   run_scrum run start
   local p102 p107 p103 s102=0 s107=0 s103=0
+  export SCRUM_RUN_TRACE="$T/trace"
   "$BASH" "$SCRUM" run record 102 --started >"$T/o102" 2>"$T/e102" & p102=$!
   "$BASH" "$SCRUM" run record 107 --started >"$T/o107" 2>"$T/e107" & p107=$!
   "$BASH" "$SCRUM" run record 103 --started >"$T/o103" 2>"$T/e103" & p103=$!
@@ -1125,7 +1126,8 @@ test_cmd_run_record_in_parallel_keeps_every_change() {
   wait "$p107" || s107=$?
   wait "$p103" || s103=$?
   assert_eq "running running running" "$(task_state 102) $(task_state 107) $(task_state 103)" \
-    "a parallel record was lost; exit $s102 $s107 $s103; stdout: $(cat "$T/o102" "$T/o107" "$T/o103"); stderr: $(cat "$T/e102" "$T/e107" "$T/e103"); state: $(jq -c '.tasks | map_values(.state)' "$(state_file)")"
+    "a parallel record was lost; exit $s102 $s107 $s103; stdout: $(cat "$T/o102" "$T/o107" "$T/o103"); stderr: $(cat "$T/e102" "$T/e107" "$T/e103"); state: $(jq -c '.tasks | map_values(.state)' "$(state_file)"); pids: $p102 $p107 $p103; trace:
+$(cat "$T/trace")"
   assert_eq "0 0 0" "$s102 $s107 $s103" "a parallel record failed"
   [ ! -d "$(state_file).lock" ] || _fail "lock left behind"
   mkdir "$(state_file).lock"
