@@ -273,7 +273,8 @@ test_init_records_generated_files() {
   [ -f "$rec" ] || _fail "no files.json"
   assert_eq "$(git hash-object "$SCRUM_REPO_DIR/.github/pull_request_template.md")" \
     "$(jq -r '.files[".github/pull_request_template.md"]' "$rec")"
-  assert_eq "5" "$(jq '.files | length' "$rec")"
+  # 5 templates plus scrum-release.yml, installed with preset standard (the template's)
+  assert_eq "6" "$(jq '.files | length' "$rec")"
 }
 
 test_init_updates_issue_form_after_scale_change() {
@@ -439,7 +440,7 @@ test_init_fresh_project_gets_governance_files() {
   assert_contains "$c" "/scrum-github:release"
   assert_contains "$c" "\`on: develop\`"
   # Governance files belong to the project: not recorded, so uninstall and updates leave them.
-  assert_eq "5" "$(jq '.files | length' "$g/scrum/files.json")"
+  assert_eq "6" "$(jq '.files | length' "$g/scrum/files.json")"
 }
 
 test_init_existing_contributing_is_skipped() {
