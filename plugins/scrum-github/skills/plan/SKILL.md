@@ -176,7 +176,9 @@ Only after an explicit approval: `scrum plan apply <plan.json>`. Do not ask anyt
 It creates what is missing (epic, features, tasks) with their sprint (milestone) and assignees,
 links sub-issues and "blocked by" dependencies, writes each issue number into `plan.json` as it
 goes, and renders `plan.md` and `plan.html` again. Report the created issue numbers, and say so
-if a fallback was used (checklist or "Blocked by" section in the issue body). The tasks are
+if a fallback was used (checklist or "Blocked by" section in the issue body). Give the absolute
+path of `plan.html` and offer to open it in the browser: it is the page to review the result on
+(what was created, with links to the issues); `plan.md` is the text version. The tasks are
 already in their sprint and assigned: there is no `sprint-fill` or assignment step after this.
 
 - Run again after a failure: only the missing items are created.
