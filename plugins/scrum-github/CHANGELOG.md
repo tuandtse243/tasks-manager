@@ -4,6 +4,15 @@ All notable changes to the `scrum-github` plugin. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the plugin uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.1] - 2026-11-24
+
+### Fixed
+
+- **Docs of AI runs.** `scrum run` creates its integration branch from the working branch of the
+  preset (`develop` in `standard`) and opens its pull requests into it; the README and the
+  adoption guide said the default branch.
+- The marketplace description names AI runs and releases, as `plugin.json` does.
+
 ## [0.13.0] - 2026-11-24
 
 ### Breaking
