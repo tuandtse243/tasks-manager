@@ -179,16 +179,19 @@ test_release_version_file_one_commit() {
   printf 'release:\n  version_files:\n    - path: package.json\n' >> "$SCRUM_REPO_DIR/.github/scrum.yml"
   local pkg
   pkg="$(printf '{\n  "name": "blog",\n  "version": "1.3.0"\n}\n' | base64 | tr -d '\n')"
-  # assumes: files are read and written with the contents API
+  # Files are read with the contents API and written as one commit with the git data API
+  # (tree, commit, then the branch moved to it).
   route_json 'api repos/acme/blog/contents/package.json*' "{\"type\":\"file\",\"path\":\"package.json\",\"sha\":\"pkgsha\",\"encoding\":\"base64\",\"content\":\"$pkg\"}"
-  route_json 'api -X PUT repos/acme/blog/contents/package.json --input -' '{"commit":{"sha":"vercommit"}}'
+  route_json 'api repos/acme/blog/git/commits/dev999' '{"sha":"dev999","tree":{"sha":"tree999"}}'
+  route_json 'api -X POST repos/acme/blog/git/trees --input -' '{"sha":"newtree"}'
+  route_json 'api -X POST repos/acme/blog/git/commits --input -' '{"sha":"vercommit"}'
+  route_json 'api -X PATCH repos/acme/blog/git/refs/heads/release%2Fv1.4.0 --input -' '{"object":{"sha":"vercommit"}}'
   run_scrum release 1.4.0 --yes
   assert_status 0 "$STATUS" "$ERR"
-  local puts
-  puts="$(stdin_of '-X PUT repos/acme/blog/contents/')"
-  assert_eq "1" "$(printf '%s\n' "$puts" | grep -c . | tr -d ' ')" "one commit"
-  assert_eq "release/v1.4.0" "$(printf '%s' "$puts" | jq -r .branch)" "on the release branch"
-  assert_eq "1.4.0" "$(printf '%s' "$puts" | jq -r .content | base64 -d 2>/dev/null | jq -r .version)"
+  assert_eq "1" "$(stdin_of '-X POST repos/acme/blog/git/commits' | grep -c . | tr -d ' ')" "one commit"
+  assert_eq '["dev999"]' "$(stdin_of '-X POST repos/acme/blog/git/commits' | jq -c .parents)" "on top of the release branch start"
+  assert_eq "1.4.0" "$(stdin_of '-X POST repos/acme/blog/git/trees' | jq -r '.tree[] | select(.path == "package.json") | .content' | jq -r .version)"
+  assert_eq "vercommit" "$(stdin_of '-X PATCH repos/acme/blog/git/refs/heads/release%2Fv1.4.0' | jq -r .sha)" "release/v1.4.0 moved to the commit"
   [ -n "$(pr_opened release/v1.4.0 main)" ] || _fail "the pull request is opened after the commit"
 }
 
@@ -457,8 +460,9 @@ test_hotfix_trunk_refused() {
 # The body of the hotfix pull request: "Closes #31" and the version it publishes.
 # assumes: the marker of the hotfix version (written by hotfix prepare) is one of these forms
 hotfix_body() {
-  printf '%s\n' 'Closes #31' '' 'Publishes v1.4.1.' '<!-- scrum-release: v1.4.1 -->' '<!-- scrum:version=v1.4.1 -->' \
-    '<!-- scrum-release-version: v1.4.1 -->' '<!-- scrum-release-notes -->' '## Bug fixes' '' '- Payment fails (#31)' '<!-- scrum-release-notes -->'
+  # The marker line `scrum hotfix prepare` prints and the task-pr skill puts in the body.
+  printf '%s\n' 'Closes #31' '' 'Publishes v1.4.1.' '<!-- scrum-release-tag: v1.4.1 -->' \
+    '<!-- scrum-release-notes -->' '## Bug fixes' '' '- Payment fails (#31)' '<!-- /scrum-release-notes -->'
 }
 
 # hotfix_routes  Previous version v1.4.0; #31 a bug In review closed by the hotfix PR #60.

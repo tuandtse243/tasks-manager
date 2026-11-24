@@ -117,9 +117,9 @@ Project board (GitHub Projects, optional: project.enabled in .github/scrum.yml)
 
 Automation (GitHub Actions)
   event                                           Apply status rules for $GITHUB_EVENT_PATH
-  pr-check                                        Fail when a pull request links no task, has a title that
+  pr-check [--title | --source | --link]          Fail when a pull request links no task, has a title that
                                                   is not a Conventional Commit, or targets a branch its
-                                                  source branch may not target
+                                                  source branch may not target (one check with an option)
 
 Environment
   SCRUM_REPO      owner/name of the target repo (default: GITHUB_REPOSITORY or the current git remote)

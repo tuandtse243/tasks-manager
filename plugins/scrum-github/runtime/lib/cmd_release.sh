@@ -746,7 +746,9 @@ release_back_merge() {
     title="$(jq -rn -L "$JQ_LIB" --argjson cfg "$CONFIG_JSON" --arg b "$b" 'include "scrum"; back_merge_title($cfg; $b)')"
     body="Brings $rel${tag:+ ($tag)} back into $b, so that $b holds everything released and the next release starts from it.
 
-Merge it with a **merge commit**, not squash or rebase: a squash breaks the history between the branches and the next release would conflict."
+Merge it with a **merge commit**, not squash or rebase: a squash breaks the history between the branches and the next release would conflict.
+
+This pull request was opened by the release workflow, and GitHub does not start other workflows for it, so its required checks have not run yet: close and reopen it to run them."
     if pr="$(jq -nc --arg t "$title" --arg h "$rel" --arg b "$b" --arg body "$body" '{title: $t, head: $h, base: $b, body: $body}' \
         | gh_send POST "repos/$repo/pulls" 2>/dev/null)"; then
       info "Opened the back-merge #$(printf '%s' "$pr" | jq -r .number) into $b: $(printf '%s' "$pr" | jq -r '.html_url // ""')"

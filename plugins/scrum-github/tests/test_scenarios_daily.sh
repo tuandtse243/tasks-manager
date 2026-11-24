@@ -360,8 +360,10 @@ cleanup_env() {
   # the squash merge on develop
   seed_commits develop 1 signup.txt "feat: signup (#30)"
   git -C "$SCRUM_REPO_DIR" fetch -q origin
-  local merged open
-  merged='{"number":30,"title":"feat: signup","state":"closed","merged_at":"2026-11-20T10:00:00Z","merge_commit_sha":"sq30","head":{"ref":"feat/7-signup"},"base":{"ref":"develop"},"html_url":"https://github.com/acme/blog/pull/30"}'
+  local merged open tip
+  tip="$(git -C "$SCRUM_REPO_DIR" rev-parse feat/7-signup)"
+  # GitHub gives the head commit of a merged pull request; cleanup lists the branch only while its tip is that commit.
+  merged='{"number":30,"title":"feat: signup","state":"closed","merged_at":"2026-11-20T10:00:00Z","merge_commit_sha":"sq30","head":{"ref":"feat/7-signup","sha":"'"$tip"'"},"base":{"ref":"develop"},"html_url":"https://github.com/acme/blog/pull/30"}'
   open='{"number":31,"title":"feat: profile","state":"open","merged_at":null,"head":{"ref":"feat/8-profile"},"base":{"ref":"develop"},"html_url":"https://github.com/acme/blog/pull/31"}'
   # assumes: pull requests are read by state (closed/all/open) or by head branch
   route_json 'api*repos/acme/blog/pulls[?]*state=open*head=*7-signup*' '[]'

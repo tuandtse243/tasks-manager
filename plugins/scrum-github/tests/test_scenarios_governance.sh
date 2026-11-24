@@ -350,10 +350,15 @@ test_init_digest_checks_out_main_in_trunk() {
   local wf
   wf="$(cat "$SCRUM_REPO_DIR/.github/workflows/scrum-daily-digest.yml")"
   assert_not_contains "$wf" "develop"
-  # assumes: trunk writes "ref: main" or leaves ref out (the default branch is main)
+  # Without a branching block the ref is empty: the default branch, which is main here (older
+  # installs whose default branch has another name keep working). An explicit trunk writes main.
   if printf '%s\n' "$wf" | grep -qE '^[[:space:]]*ref:'; then
-    printf '%s\n' "$wf" | grep -qE '^[[:space:]]*ref:[[:space:]]*["'"'"']?main["'"'"']?[[:space:]]*$' || _fail "the digest checks out another branch than main"
+    printf '%s\n' "$wf" | grep -qE '^[[:space:]]*ref:[[:space:]]*(""|["'"'"']?main["'"'"']?)[[:space:]]*$' || _fail "the digest checks out another branch than main"
   fi
+  printf 'branching:\n  preset: trunk\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  run_scrum init
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$(cat "$SCRUM_REPO_DIR/.github/workflows/scrum-daily-digest.yml")" 'ref: "main"'
 }
 
 # ---------- doctor ----------

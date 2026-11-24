@@ -168,13 +168,16 @@ EOF
 }
 
 # route_branch_head BRANCH SHA  The head commit of a branch on GitHub (git/ref and branches).
-route_branch_head() {
-  local enc
+route_branch_head() { # a later call for the same branch wins (its routes go first)
+  local enc f
   enc="$(jq -rn --arg s "$1" '$s|@uri')"
-  route_json "api repos/acme/blog/git/ref/heads/$enc" "{\"ref\":\"refs/heads/$1\",\"object\":{\"sha\":\"$2\",\"type\":\"commit\"}}"
-  route_json "api repos/acme/blog/git/ref/heads/$1" "{\"ref\":\"refs/heads/$1\",\"object\":{\"sha\":\"$2\",\"type\":\"commit\"}}"
-  route_json "api repos/acme/blog/branches/$enc" "{\"name\":\"$1\",\"commit\":{\"sha\":\"$2\"},\"protected\":false}"
-  route_json "api repos/acme/blog/branches/$1" "{\"name\":\"$1\",\"commit\":{\"sha\":\"$2\"},\"protected\":false}"
+  f="head-$(printf '%s' "$1" | tr '/' '_')-$2.json"
+  printf '{"ref":"refs/heads/%s","object":{"sha":"%s","type":"commit"}}' "$1" "$2" > "$FAKE_GH_DIR/$f"
+  printf '{"name":"%s","commit":{"sha":"%s"},"protected":false}' "$1" "$2" > "$FAKE_GH_DIR/b$f"
+  route_first "api repos/acme/blog/git/ref/heads/$enc" "$f"
+  route_first "api repos/acme/blog/git/ref/heads/$1" "$f"
+  route_first "api repos/acme/blog/branches/$enc" "b$f"
+  route_first "api repos/acme/blog/branches/$1" "b$f"
 }
 
 # ---------- local git ----------

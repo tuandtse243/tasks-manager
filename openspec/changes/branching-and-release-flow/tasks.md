@@ -14,45 +14,45 @@ Paths are relative to `plugins/scrum-github/`. Groups 2 to 5 run in parallel in 
 
 ## 2. Stream A: governance
 
-- [ ] 2.1 Add `templates/rulesets/{working,staging,release,tags}.json` and `jq/protect-plan.jq` that compares the repository with the preset (branches, rules, merge settings); verify against the current GitHub ruleset docs that the merge-method parameter exists and record the result in a comment in `protect-plan.jq`
-- [ ] 2.2 Implement `runtime/lib/cmd_protect.sh` (preview, `--json`, `--yes`, per-item failure reporting, non-zero exit when an item is refused); verify with a new `tests/test_protect.sh` covering every scenario of "Protection preview and confirmation", "Long-lived branches exist", "Branch rules", "Version tags are protected", "Repository merge settings" and "Protection that cannot be applied is reported"
-- [ ] 2.3 Add the governance file templates (`CODEOWNERS`, `CONTRIBUTING.md` per preset, `SECURITY.md`, `dependabot.yml`) and install them from `cmd_init.sh` without overwriting existing files; verify in `tests/test_init.sh` the "Fresh project" and "Existing CONTRIBUTING" scenarios
-- [ ] 2.4 Add the title and source-branch checks to `scrum pr-check` and `templates/github/workflows/scrum-pr-link-check.yml` as named steps, with the release, promotion and back-merge exemptions; verify in `tests/test_event.sh` every scenario of "Pull request title check" and "Allowed source branches"
-- [ ] 2.5 Pin every action in `templates/github/workflows/*.yml` and in `.github/workflows/ci.yml` of this repository to a full commit SHA with a version comment; verify with a test in `tests/test_manifest.sh` that fails on any `uses:` without a 40-character SHA
-- [ ] 2.6 Make scheduled and issue-triggered workflow templates check out the working branch, written by `init` from the preset; verify in `tests/test_init.sh` the "Daily digest in standard" and "Daily digest in trunk" scenarios
-- [ ] 2.7 Add the governance checks to `cmd_doctor.sh` and `jq/doctor-report.jq`; verify in `tests/test_doctor.sh` every scenario of "Diagnostics for governance"
-- [ ] 2.8 Add the `protect` skill and update the `init` and `doctor` skills; document `protect`, the `governance` block and the installed files in `README.md`; verify `tests/test_docs.sh` and `claude plugin validate plugins/scrum-github` pass
+- [x] 2.1 Add `templates/rulesets/{working,staging,release,tags}.json` and `jq/protect-plan.jq` that compares the repository with the preset (branches, rules, merge settings); verify against the current GitHub ruleset docs that the merge-method parameter exists and record the result in a comment in `protect-plan.jq`
+- [x] 2.2 Implement `runtime/lib/cmd_protect.sh` (preview, `--json`, `--yes`, per-item failure reporting, non-zero exit when an item is refused); verify with a new `tests/test_protect.sh` covering every scenario of "Protection preview and confirmation", "Long-lived branches exist", "Branch rules", "Version tags are protected", "Repository merge settings" and "Protection that cannot be applied is reported"
+- [x] 2.3 Add the governance file templates (`CODEOWNERS`, `CONTRIBUTING.md` per preset, `SECURITY.md`, `dependabot.yml`) and install them from `cmd_init.sh` without overwriting existing files; verify in `tests/test_init.sh` the "Fresh project" and "Existing CONTRIBUTING" scenarios
+- [x] 2.4 Add the title and source-branch checks to `scrum pr-check` and `templates/github/workflows/scrum-pr-link-check.yml` as named steps, with the release, promotion and back-merge exemptions; verify in `tests/test_event.sh` every scenario of "Pull request title check" and "Allowed source branches"
+- [x] 2.5 Pin every action in `templates/github/workflows/*.yml` and in `.github/workflows/ci.yml` of this repository to a full commit SHA with a version comment; verify with a test in `tests/test_manifest.sh` that fails on any `uses:` without a 40-character SHA
+- [x] 2.6 Make scheduled and issue-triggered workflow templates check out the working branch, written by `init` from the preset; verify in `tests/test_init.sh` the "Daily digest in standard" and "Daily digest in trunk" scenarios
+- [x] 2.7 Add the governance checks to `cmd_doctor.sh` and `jq/doctor-report.jq`; verify in `tests/test_doctor.sh` every scenario of "Diagnostics for governance"
+- [x] 2.8 Add the `protect` skill and update the `init` and `doctor` skills; document `protect`, the `governance` block and the installed files in `README.md`; verify `tests/test_docs.sh` and `claude plugin validate plugins/scrum-github` pass
 
 ## 3. Stream B: status flow and reporting
 
-- [ ] 3.1 Pass base and head to `jq/event-decide.jq` from `cmd_event.sh` and implement the merge table of design decision 4; verify in `tests/test_event.sh` every scenario of the modified "Vòng đời PR khi bật In review", of "Task location after merge" and of "Done only on the release branch", and that all existing trunk cases still pass
-- [ ] 3.2 Handle the merged promotion pull request in `cmd_event.sh` (recompute contained tasks, swap the location label); verify in `tests/test_event.sh` the "Promoted to staging" and "Not in the promotion" scenarios
-- [ ] 3.3 Show the location of In review tasks in `jq/progress-table.jq`, `jq/digest.jq`, `jq/report-data.jq` and `jq/mine.jq`; verify in `tests/test_mine.sh` and the status and report tests the "Mixed locations" and "Trunk" scenarios
-- [ ] 3.4 Add "waiting to be released" to `jq/attention.jq` using the label date from the timeline; verify both scenarios of "Tasks waiting to be released need attention" in the attention tests
-- [ ] 3.5 List merged-but-unreleased tasks in the close preview (`cmd_sprint.sh`, `jq/close-plan.jq`); verify both scenarios of "Closing a sprint shows unreleased tasks"
-- [ ] 3.6 Update the `sprint-status`, `sprint-report`, `sprint-close` and `my-tasks` skills and the status section of `README.md`; verify `tests/test_docs.sh` passes
+- [x] 3.1 Pass base and head to `jq/event-decide.jq` from `cmd_event.sh` and implement the merge table of design decision 4; verify in `tests/test_event.sh` every scenario of the modified "Vòng đời PR khi bật In review", of "Task location after merge" and of "Done only on the release branch", and that all existing trunk cases still pass
+- [x] 3.2 Handle the merged promotion pull request in `cmd_event.sh` (recompute contained tasks, swap the location label); verify in `tests/test_event.sh` the "Promoted to staging" and "Not in the promotion" scenarios
+- [x] 3.3 Show the location of In review tasks in `jq/progress-table.jq`, `jq/digest.jq`, `jq/report-data.jq` and `jq/mine.jq`; verify in `tests/test_mine.sh` and the status and report tests the "Mixed locations" and "Trunk" scenarios
+- [x] 3.4 Add "waiting to be released" to `jq/attention.jq` using the label date from the timeline; verify both scenarios of "Tasks waiting to be released need attention" in the attention tests
+- [x] 3.5 List merged-but-unreleased tasks in the close preview (`cmd_sprint.sh`, `jq/close-plan.jq`); verify both scenarios of "Closing a sprint shows unreleased tasks"
+- [x] 3.6 Update the `sprint-status`, `sprint-report`, `sprint-close` and `my-tasks` skills and the status section of `README.md`; verify `tests/test_docs.sh` passes
 
 ## 4. Stream C: daily commands
 
-- [ ] 4.1 Make `task start` (`cmd_task.sh`) fetch and branch from the remote working branch, with the offline fallback and warning; verify the two new scenarios of "Bắt đầu task" in the task tests and that the existing ones still pass
-- [ ] 4.2 Make `run` (`cmd_run.sh`) create its integration branch from the working branch and open its pull requests into it; verify the "Run in standard" scenario in the run tests and that trunk runs are unchanged
+- [x] 4.1 Make `task start` (`cmd_task.sh`) fetch and branch from the remote working branch, with the offline fallback and warning; verify the two new scenarios of "Bắt đầu task" in the task tests and that the existing ones still pass
+- [x] 4.2 Make `run` (`cmd_run.sh`) create its integration branch from the working branch and open its pull requests into it; verify the "Run in standard" scenario in the run tests and that trunk runs are unchanged
 - [ ] 4.3 Update the `task-pr` skill: base branch by preset and for `hotfix/*`, Conventional Commits title, warning when behind the base; verify the two new scenarios of "Soạn mô tả PR cho task" by a documented manual run in the pull request description, and `tests/test_docs.sh` for the skill text
-- [ ] 4.4 Implement `sync` in a new `runtime/lib/cmd_branch.sh`; verify with a new `tests/test_branch.sh` using temporary git repositories for every scenario of "Sync a task branch" and "Sync reports conflicts"
-- [ ] 4.5 Implement `branches` (`cmd_branch.sh`, `jq/branches-overview.jq`, `--json`); verify in `tests/test_branch.sh` every scenario of "Branch overview"
-- [ ] 4.6 Implement `cleanup` (preview, `--yes`); verify in `tests/test_branch.sh` every scenario of "Clean up merged branches"
-- [ ] 4.7 Add the `sync`, `branches` and `cleanup` skills and update `task-start` and `run`; document the commands in `README.md` and the repository-root `docs/cheat-sheet-dev.md`; verify `tests/test_docs.sh` and `claude plugin validate plugins/scrum-github` pass
+- [x] 4.4 Implement `sync` in a new `runtime/lib/cmd_branch.sh`; verify with a new `tests/test_branch.sh` using temporary git repositories for every scenario of "Sync a task branch" and "Sync reports conflicts"
+- [x] 4.5 Implement `branches` (`cmd_branch.sh`, `jq/branches-overview.jq`, `--json`); verify in `tests/test_branch.sh` every scenario of "Branch overview"
+- [x] 4.6 Implement `cleanup` (preview, `--yes`); verify in `tests/test_branch.sh` every scenario of "Clean up merged branches"
+- [x] 4.7 Add the `sync`, `branches` and `cleanup` skills and update `task-start` and `run`; document the commands in `README.md` and the repository-root `docs/cheat-sheet-dev.md`; verify `tests/test_docs.sh` and `claude plugin validate plugins/scrum-github` pass
 
 ## 5. Stream D: release flow
 
-- [ ] 5.1 Extend `jq/release-plan.jq` and `cmd_release.sh` to select tasks contained in the start ref and untasked pull requests when the preset has a working branch; verify in `tests/test_release.sh` every scenario of "Tasks of a release" and "Pull requests without a task"
-- [ ] 5.2 Implement the version files and changelog commit on the release branch; verify in `tests/test_release.sh` both scenarios of "Version files and changelog"
-- [ ] 5.3 Make `scrum release --yes` open the release pull request (`release/<tag>`, `--from REF`, notes between markers) and keep the direct tag in `trunk`; verify every scenario of "Release pull request" and "Trunk releases as before"
-- [ ] 5.4 Implement `scrum release finish` and `templates/github/workflows/scrum-release.yml` (tag on the merge commit, GitHub Release, tasks Done, idempotent); verify every scenario of "Publishing on merge"
-- [ ] 5.5 Implement the back-merge pull requests in the finish step; verify every scenario of "Back-merge after the release branch changes"
-- [ ] 5.6 Implement `promote` in a new `runtime/lib/cmd_promote.sh`; verify with a new `tests/test_promote.sh` every scenario of "Promote the working branch to staging"
-- [ ] 5.7 Implement `hotfix` (start, version and version files on the hotfix branch); verify in `tests/test_promote.sh` every scenario of "Start a hotfix" and "Hotfix release"
-- [ ] 5.8 Add the branch flow steps to `jq/next-step.jq` and `cmd_next.sh`; verify in `tests/test_next.sh` every scenario of "Branch flow steps"
-- [ ] 5.9 Add the `promote` and `hotfix` skills and update `release` and `next`; rewrite "Releasing a version" in `README.md` for the three presets; verify `tests/test_docs.sh` and `claude plugin validate plugins/scrum-github` pass
+- [x] 5.1 Extend `jq/release-plan.jq` and `cmd_release.sh` to select tasks contained in the start ref and untasked pull requests when the preset has a working branch; verify in `tests/test_release.sh` every scenario of "Tasks of a release" and "Pull requests without a task"
+- [x] 5.2 Implement the version files and changelog commit on the release branch; verify in `tests/test_release.sh` both scenarios of "Version files and changelog"
+- [x] 5.3 Make `scrum release --yes` open the release pull request (`release/<tag>`, `--from REF`, notes between markers) and keep the direct tag in `trunk`; verify every scenario of "Release pull request" and "Trunk releases as before"
+- [x] 5.4 Implement `scrum release finish` and `templates/github/workflows/scrum-release.yml` (tag on the merge commit, GitHub Release, tasks Done, idempotent); verify every scenario of "Publishing on merge"
+- [x] 5.5 Implement the back-merge pull requests in the finish step; verify every scenario of "Back-merge after the release branch changes"
+- [x] 5.6 Implement `promote` in a new `runtime/lib/cmd_promote.sh`; verify with a new `tests/test_promote.sh` every scenario of "Promote the working branch to staging"
+- [x] 5.7 Implement `hotfix` (start, version and version files on the hotfix branch); verify in `tests/test_promote.sh` every scenario of "Start a hotfix" and "Hotfix release"
+- [x] 5.8 Add the branch flow steps to `jq/next-step.jq` and `cmd_next.sh`; verify in `tests/test_next.sh` every scenario of "Branch flow steps"
+- [x] 5.9 Add the `promote` and `hotfix` skills and update `release` and `next`; rewrite "Releasing a version" in `README.md` for the three presets; verify `tests/test_docs.sh` and `claude plugin validate plugins/scrum-github` pass
 
 ## 6. Deployment templates (after merging groups 2 to 5)
 

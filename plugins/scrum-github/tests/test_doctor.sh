@@ -21,6 +21,8 @@ doctor_env() {
   route 'api --paginate repos/acme/blog/rules/branches/*' "rules.json"
   printf '{"status":"behind","ahead_by":0,"behind_by":3}' > "$FAKE_GH_DIR/compare.json"
   route 'api repos/acme/blog/compare/*' "compare.json"
+  route_json 'api repos/acme/blog/branches/main' '{"name":"main","commit":{"sha":"aaa000"}}'
+  route_json 'api repos/acme/blog/branches/develop' '{"name":"develop","commit":{"sha":"ddd000"}}'
   run_scrum init
   assert_status 0 "$STATUS" "$ERR"
   # init writes preset standard (statuses.in_review and the "on: develop" label).

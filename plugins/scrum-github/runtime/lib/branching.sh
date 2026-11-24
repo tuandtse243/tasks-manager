@@ -93,8 +93,11 @@ open_prs_matching() {
 # Returns 1 when GitHub could not be read.
 branch_rules() { gh_get_all "repos/$1/rules/branches/$(branch_uri "$2")"; }
 
-# branch_exists REPO BRANCH  True when the branch exists on GitHub.
-branch_exists() { gh_get "repos/$1/branches/$(branch_uri "$2")" >/dev/null 2>&1; }
+# branch_exists REPO BRANCH  True when GitHub answers with that branch (an empty or other answer
+# is not taken as "exists").
+branch_exists() {
+  gh_get "repos/$1/branches/$(branch_uri "$2")" 2>/dev/null | jq -e --arg b "$2" '.name == $b' >/dev/null 2>&1
+}
 
 # branch_sha REPO BRANCH  The head commit of BRANCH on GitHub.
 branch_sha() { gh_get "repos/$1/git/ref/heads/$(branch_uri "$2")" | jq -r '.object.sha // empty'; }
