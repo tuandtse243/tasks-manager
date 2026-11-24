@@ -48,6 +48,12 @@ Run it from the root of the repository the user wants to manage (a clone with a 
   `feat(auth): log in with email`), the source branch (task branches target `develop`; `main`
   accepts only `release/*` and `hotfix/*`) and the linked task. Scheduled and issue-triggered
   workflows check out the working branch for the configuration and the runtime.
+- With `deploy.platform: docker` or `cloudflare`, `init` installs `.github/workflows/deploy.yml`
+  (each long-lived branch to its GitHub environment, manual rollback), and skips a `deploy.yml`
+  the project wrote itself. With `vercel` it installs no workflow and writes the Vercel settings
+  into the `CONTRIBUTING.md` it creates. Relay the secret names and the settings page `init`
+  prints, and tell the user to add required reviewers to the environment `production`. Never ask
+  the user for a secret value or set one: they enter values on the GitHub settings page.
 - To remove what `init` installed: `scrum uninstall` (it shows what it would remove; add `--yes`).
 - Mention the optional `team` block of `.github/scrum.yml` (an example is commented in the
   file): members with `login`, `areas` and `capacity`. `/scrum-github:plan` suggests assignees

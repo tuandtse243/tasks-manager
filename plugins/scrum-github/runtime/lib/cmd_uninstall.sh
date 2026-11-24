@@ -26,6 +26,7 @@ cmd_uninstall() {
   info "Repository: $DIR"
   while IFS="$(printf '\t')" read -r src rel; do
     [ -f "$DIR/$rel" ] || continue
+    deploy_is_foreign "$rel" && continue   # the project's own deployment workflow
     if is_pristine "$rel" "$src"; then
       info "  remove  $rel"
       removing="$removing$rel"$'\n'

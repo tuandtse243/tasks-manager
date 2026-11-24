@@ -143,6 +143,7 @@ doctor_install() {
   VARS="$(template_vars)"
   record_load
   while IFS="$(printf '\t')" read -r src rel; do
+    deploy_is_foreign "$rel" && continue   # the project's own deployment workflow
     if [ ! -f "$DIR/$rel" ]; then absent="$absent $rel"
     elif ! render_template "$src" "$VARS" | cmp -s - "$DIR/$rel"; then
       if is_pristine_by_record "$rel"; then stale="$stale $rel"; else edited="$edited $rel"; fi
@@ -175,7 +176,7 @@ EOF
   while IFS="$(printf '\t')" read -r src rel; do
     case "$rel" in
       .github/workflows/scrum-project-sync.yml) continue ;;   # checked with the board
-      .github/workflows/*) ;;
+      .github/workflows/*) deploy_is_foreign "$rel" && continue ;;
       *) continue ;;
     esac
     name="${rel##*/}"
@@ -313,6 +314,35 @@ EOF
   done
 }
 
+# Production needs approval (spec deploy-templates "Production needs approval"): with a deployment
+# platform, the GitHub environment production must have a required reviewer.
+doctor_deploy() {
+  local platform out rc=0 page
+  [ "$CFG_OK" = 1 ] || return 0
+  platform="$(deploy_platform)"
+  [ "$platform" != none ] || return 0
+  if [ "$GH_OK" != 1 ] || [ -z "$REPO" ]; then
+    check governance production-reviewers skip "needs a gh login and a GitHub remote"; return 0
+  fi
+  page="https://github.com/$REPO/settings/environments"
+  out="$(gh_get "repos/$REPO/environments/production" 2>&1)" || rc=$?
+  if [ "$rc" != 0 ]; then
+    case "$out" in
+      *"HTTP 404"*|*"Not Found"*)
+        check governance production-reviewers warn "deploy.platform is $platform, but the GitHub environment production does not exist, so nothing asks for approval before a production deployment" \
+          "Create the environment production and add required reviewers: $page" ;;
+      *)
+        check governance production-reviewers warn "cannot read the GitHub environment production of $REPO" \
+          "Check it yourself: $page" ;;
+    esac
+  elif printf '%s' "$out" | jq -e '[.protection_rules[]? | select(.type == "required_reviewers") | .reviewers[]?] | length > 0' >/dev/null 2>&1; then
+    check governance production-reviewers ok "the environment production has required reviewers"
+  else
+    check governance production-reviewers warn "deploy.platform is $platform, but the GitHub environment production has no required reviewers, so a production deployment needs no approval" \
+      "Add required reviewers to the environment production: $page"
+  fi
+}
+
 cmd_doctor() {
   local json=0
   while [ $# -gt 0 ]; do
@@ -346,6 +376,7 @@ cmd_doctor() {
   doctor_repo
   doctor_install
   doctor_governance
+  doctor_deploy
   doctor_board
 
   local report

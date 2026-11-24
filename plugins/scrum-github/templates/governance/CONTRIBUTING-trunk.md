@@ -25,4 +25,4 @@ required checks and the review.
 ## Releases
 
 `/scrum-github:release` shows the next version and the release notes from the Done tasks; after
-you confirm, it creates the tag on `{{RELEASE_BRANCH}}` and the GitHub Release.
+you confirm, it creates the tag on `{{RELEASE_BRANCH}}` and the GitHub Release.{{DEPLOY_SECTION}}

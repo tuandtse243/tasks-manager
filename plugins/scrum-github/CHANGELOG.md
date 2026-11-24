@@ -4,6 +4,76 @@ All notable changes to the `scrum-github` plugin. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the plugin uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.0] - 2026-11-24
+
+### Breaking
+
+- **With a working branch, a merged pull request no longer makes a task Done.** In the presets
+  `standard` and `environments`, a task whose pull request is merged into `develop` stays open
+  and In review with the location label `on: develop` (later `on: staging`) until a release brings
+  its code into `main`; only then is it Done and closed. Until then it is not in the velocity, and
+  closing the sprint carries it over. Projects without a `branching` block behave as before (preset `trunk`: a merge makes
+  the task Done). A new `init` writes `branching.preset: standard` (with `statuses.in_review`) into
+  the `.github/scrum.yml` it creates; an existing configuration is never changed.
+
+### Added
+
+- **Branching presets.** The block `branching`: `preset` (`trunk`, `standard`, `environments`),
+  `main`, `develop`, `staging`, `location_prefix` (default `on: `) and `stale_days`. Every
+  command asks the preset for the working branch: `task start`, `run` and `/scrum-github:task-pr`
+  start from and target `origin/develop` (`main` in `trunk`). Scheduled and issue-triggered
+  workflows check out the working branch. `standard` and `environments` require
+  `statuses.in_review`.
+- **Status follows the code.** `scrum event` adds and moves the location labels on merges into
+  the working branch and on promotions, leaves release and back-merge merges to the release
+  workflow, and makes a `hotfix/*` merge Done. `sprint-status`, the digest, the HTML report and
+  `my-tasks` show where each task In review is; Needs attention lists tasks that waited on a
+  branch longer than `attention.promote_days` (default 5); the sprint close preview lists them as
+  "merged but not released".
+- **Protecting the repository.** `/scrum-github:protect` and `scrum protect [--json] [--yes]`:
+  creates the missing long-lived branches, one ruleset per long-lived branch (pull request with
+  `governance.approvals` approvals, required checks `pr-check` plus `governance.required_checks`,
+  no force push or deletion, the merge methods of the preset), a tag ruleset, and the merge
+  settings. The block `governance`: `approvals`, `required_checks`, `codeowners`.
+- **Governance files.** `init` installs `.github/CODEOWNERS`, `CONTRIBUTING.md` (per preset),
+  `SECURITY.md` and `dependabot.yml` when the project has none, and never overwrites them.
+- **Pull request checks.** The job `pr-check` checks the Conventional Commits title, the source
+  branch for the base (only `release/*` and `hotfix/*` into `main`) and the linked task; also
+  `scrum pr-check [--title | --source | --link]`. Release, promotion and back-merge pull requests
+  are exempt. Every installed workflow pins its actions to a commit SHA.
+- **Daily branch commands.** `/scrum-github:sync` (`scrum sync`) merges the latest working branch
+  into the task branch and lists conflicts without resolving them; `/scrum-github:branches`
+  (`scrum branches [--json]`) shows what waits on each branch, drift, back-merges and stale
+  branches; `/scrum-github:cleanup` (`scrum cleanup [--json] [--yes]`) deletes merged branches.
+- **Release through a pull request.** With a working branch, `scrum release … --yes` opens
+  `release/<tag>` → `main` from the head of `develop` (`staging` in `environments`, or
+  `--from REF`), with the notes and a commit of `release.version_files` and `release.changelog`.
+  The installed workflow `scrum-release.yml` runs `scrum release finish [--pr N]` on its merge:
+  tag on the merge commit, GitHub Release, released tasks Done, back-merge pull requests.
+- **Hotfix and promote.** `/scrum-github:hotfix` (`scrum hotfix N`, `scrum hotfix prepare
+  [--json] [--yes]`) branches from `main` and publishes a patch version on merge;
+  `/scrum-github:promote` (`scrum promote [--json] [--yes]`) opens the promotion `develop` →
+  `staging`. `scrum next` suggests protect, the open back-merge, promote and release.
+- **Deployment.** The block `deploy` with `platform` (`none`, `vercel`, `cloudflare`, `docker`).
+  `init` installs `.github/workflows/deploy.yml` for `docker` (an image per source tree in
+  ghcr.io, built only when missing, deployed over SSH with Docker Compose) and `cloudflare`
+  (`wrangler deploy --env <environment>`), mapping each long-lived branch to a GitHub environment
+  (`staging`/`production` in `standard`; `development`/`staging`/`production` in `environments`),
+  with a manual rollback to a released version and a step that names missing secrets. For
+  `vercel` it writes the Vercel settings into `CONTRIBUTING.md`. It prints the secret names per
+  environment and never asks for or stores a value, and never replaces a `deploy.yml` the project
+  wrote itself.
+- `doctor` checks the default branch, the long-lived branches and their rules, a missing
+  back-merge, the governance files and, with a deployment platform, required reviewers on the
+  environment `production` (with the settings page).
+
+### Notes
+
+- The back-merge pull request is opened by the workflow's token, which starts no workflows:
+  close and reopen it to run its required checks, then merge it with a merge commit.
+- Run `/scrum-github:init` after updating, then `/scrum-github:protect` when you choose a preset
+  with a working branch.
+
 ## [0.12.0] - 2026-11-23
 
 ### Added
