@@ -1,5 +1,6 @@
 # -n --argjson ms MILESTONES --argjson cfg CONFIG --argjson sprint MILESTONE --argjson issues ISSUES --arg today DATE
-# Plan for closing a sprint: velocity, done tasks, tasks to carry over, the next sprint, new description.
+# Plan for closing a sprint: velocity, done tasks, tasks to carry over, the next sprint, new description;
+# with a working branch also release_branch and unreleased: [{number, title, points, status, branch}].
 include "scrum";
 ($sprint | sprint_info) as $s
 | [$issues[] | select(is_task($cfg))] as $tasks
@@ -26,3 +27,11 @@ include "scrum";
        | gsub("\n*\\*\\*Velocity:\\*\\*[^\n]*"; "")
        | gsub("\n*<!-- scrum:velocity=[0-9]+ -->"; ""))
       + "\n\n**Velocity:** \($velocity) points\n<!-- scrum:velocity=\($velocity) -->") }
+# With a working branch: the tasks In review on a long-lived branch, merged but not released
+# (spec sprint-lifecycle "Closing a sprint shows unreleased tasks"). They are in `carry` too and
+# are moved like any unfinished task; only Done tasks count in the velocity.
++ (if has_working_branch($cfg) then
+     {release_branch: release_branch($cfg),
+      unreleased: [$tasks[] | select(.state == "open" and task_role($cfg) == "in_review") | task_location($cfg) as $b
+                   | select($b != null) | {number, title, points: task_points($cfg), status: task_role($cfg), branch: $b}]}
+   else {} end)

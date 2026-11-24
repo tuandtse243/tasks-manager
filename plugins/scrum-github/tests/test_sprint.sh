@@ -476,3 +476,54 @@ test_cmd_fill_without_estimates_prints_no_review() {
   assert_status 0 "$STATUS" "$ERR"
   assert_not_contains "$OUT" "Review"
 }
+
+# ---------- change branching-and-release-flow (delta sprint-lifecycle "Closing a sprint shows
+# unreleased tasks") ----------
+
+# Sprint 1 with #4 In review on develop (#1 and #2 Done, #3 In progress).
+unreleased_env() {
+  sprint_env
+  printf 'version: 1\nbranching:\n  preset: standard\nstatuses:\n  in_review: In review\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  jq '(.[] | select(.number == 4) | .labels) |= [{name: "status: In review"}, {name: "points: 3"}, {name: "on: develop"}]' \
+    "$FIXTURES/issues-sprint1.json" > "$FAKE_GH_DIR/issues.json"
+  jq '. + [{"number":2,"title":"Sprint 2","state":"open","description":"<!-- scrum:start=2014-09-29 end=2014-10-03 -->"}]' \
+    "$FIXTURES/milestones.json" > "$FAKE_GH_DIR/milestones.json"
+}
+
+test_close_plan_unreleased_tasks() {
+  local cfg ms plan
+  cfg="$(defaults | jq -c '.branching.preset = "standard" | .statuses.in_review = "In review"')"
+  ms="$(cat "$FIXTURES/milestones.json")"
+  plan="$(jqt close-plan -n --argjson ms "$ms" --argjson cfg "$cfg" --argjson sprint "$(jq '.[0]' <<<"$ms")" --arg today 2014-09-26 \
+    --argjson issues "$(jq -c '(.[] | select(.number == 4) | .labels) += [{name: "on: develop"}] | (.[] | select(.number == 4) | .labels) |= map(if .name == "status: New" then {name: "status: In review"} else . end)' "$FIXTURES/issues-sprint1.json")")"
+  assert_eq "10" "$(jq -r .velocity <<<"$plan")" "only Done tasks count"
+  assert_eq '[{"number":4,"title":"Add a comment","points":3,"status":"in_review","branch":"develop"}]' "$(jq -c .unreleased <<<"$plan")"
+  assert_eq "main" "$(jq -r .release_branch <<<"$plan")"
+  assert_eq "[3,4]" "$(jq -c '[.carry[].number]' <<<"$plan")" "carried over like other unfinished tasks"
+  assert_eq "false" "$(close_plan "$ms" "$(jq '.[0]' <<<"$ms")" "$(cat "$FIXTURES/issues-sprint1.json")" | jq 'has("unreleased")')" "trunk: as before"
+}
+
+test_cmd_close_preview_lists_merged_but_not_released() {
+  unreleased_env
+  run_scrum sprint close
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "Velocity: 10 points from 2 done tasks"
+  assert_contains "$OUT" "Merged but not released:
+  #4 Add a comment (3 pts, In review, on develop)
+  Not counted in the velocity: their code is not on main yet. Release first: /scrum-github:release"
+  assert_contains "$OUT" "#3 Write a post (1 pt, In progress)"
+  assert_not_contains "$OUT" "#4 Add a comment (3 pts, In review)"
+  assert_eq "" "$(gh_writes)"
+}
+
+test_cmd_close_without_releasing_moves_and_keeps_labels() {
+  unreleased_env
+  run_scrum sprint close --yes
+  assert_status 0 "$STATUS" "$ERR"
+  local log; log="$(gh_calls)"
+  assert_contains "$log" "api -X PATCH repos/acme/blog/issues/4 --input -"
+  assert_contains "$log" '{"milestone":2}'
+  assert_contains "$OUT" "Moved #4 to Sprint 2."
+  assert_not_contains "$log" "issues/4/labels" "status and location label are kept"
+  assert_contains "$log" 'scrum:velocity=10'
+}
