@@ -3,7 +3,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, develop]
 
 # The workflow runs the code of the pull request, so it gets read access only and no secret.
 permissions:

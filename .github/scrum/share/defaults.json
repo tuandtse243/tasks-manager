@@ -1,0 +1,105 @@
+{
+  "version": 1,
+  "timezone": "UTC",
+  "language": "en",
+  "sprint": {
+    "length_days": 5,
+    "name_pattern": "Sprint {n}",
+    "working_days": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ]
+  },
+  "points": {
+    "scale": [
+      0,
+      1,
+      3,
+      7
+    ],
+    "label_prefix": "points: "
+  },
+  "statuses": {
+    "label_prefix": "status: ",
+    "new": "New",
+    "in_progress": "In progress",
+    "in_review": null,
+    "done": "Done"
+  },
+  "labels": {
+    "bug": "bug",
+    "feature": "type: feature",
+    "epic": "type: epic",
+    "meta": "scrum: meta",
+    "no_task": "no-task",
+    "ai_ready": "ai-ready"
+  },
+  "branch": {
+    "pattern": "feat/{number}-{slug}"
+  },
+  "digest": {
+    "enabled": true,
+    "cron": "0 1 * * 1-5",
+    "webhook_format": "slack"
+  },
+  "colors": {},
+  "project": {
+    "enabled": false,
+    "owner": null,
+    "number": null,
+    "status_field": "Status",
+    "status_options": {
+      "new": "Todo",
+      "in_progress": "In Progress",
+      "in_review": "In Review",
+      "done": "Done"
+    },
+    "synced_field": "Synced status",
+    "points_field": "Points",
+    "poll_cron": "*/15 * * * *"
+  },
+  "planning": {
+    "dir": "docs/plans",
+    "context_file": "docs/project-context.md",
+    "hours_per_point": null,
+    "context_stale_commits": 50,
+    "merge_minutes": 5
+  },
+  "attention": {
+    "stale_days": 2,
+    "behind_percent": 15,
+    "review_days": 2,
+    "promote_days": 5
+  },
+  "team": [],
+  "run": {
+    "test_command": "",
+    "max_parallel": 3,
+    "branch_pattern": "run/{sprint}-{login}"
+  },
+  "release": {
+    "tag_prefix": "v",
+    "breaking_label": "breaking",
+    "first_version": "0.1.0",
+    "version_files": [],
+    "changelog": null
+  },
+  "branching": {
+    "main": "main",
+    "develop": "develop",
+    "staging": "staging",
+    "location_prefix": "on: ",
+    "stale_days": 5
+  },
+  "governance": {
+    "approvals": 1,
+    "required_checks": [],
+    "codeowners": []
+  },
+  "deploy": {
+    "platform": "none"
+  }
+}

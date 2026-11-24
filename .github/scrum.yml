@@ -1,0 +1,179 @@
+# Scrum on GitHub configuration, read by the scrum-github plugin and its workflows.
+# Every key is optional; a missing key uses the default shown here.
+version: 1
+
+# Time zone for "today", burndown days and the daily digest, e.g. Asia/Ho_Chi_Minh.
+timezone: UTC
+
+# Language of the status table, the digest, the HTML report and the sprint summary: en or vi.
+# Status names come from "statuses" below.
+language: en
+
+sprint:
+  # Calendar days per sprint, start day included (22 to 26 September = 5).
+  length_days: 5
+  # Sprint (milestone) title. {n} is the sprint number.
+  name_pattern: "Sprint {n}"
+  # Working days (1 = Monday ... 7 = Sunday). "Days left" counts them, and the ideal burndown
+  # line stays flat on the other days.
+  working_days: [1, 2, 3, 4, 5]
+
+points:
+  # Allowed story points. Each value becomes a label such as "points: 3".
+  scale: [0, 1, 3, 7]
+  label_prefix: "points: "
+
+statuses:
+  # Each status becomes a label such as "status: In progress". A task has exactly one.
+  label_prefix: "status: "
+  new: New
+  in_progress: In progress
+  # Fourth status between In progress and Done. A pull request ready for review moves its task
+  # here and a draft moves it back to In progress. Required with branching.preset standard or
+  # environments: a merged task waits here (with an "on: <branch>" label) until it is released.
+  # Comment it out only with preset trunk. Run init again after changing it.
+  in_review: In review
+  done: Done
+
+labels:
+  bug: bug
+  # Parent issue of the tasks created by /plan. Not counted in points.
+  feature: "type: feature"
+  # Parent issue of several features (a large requirement). Not counted in points.
+  epic: "type: epic"
+  # Bookkeeping issues such as the daily digest. Not counted.
+  meta: "scrum: meta"
+  # Put this label on a pull request that has no task, so the link check passes.
+  no_task: no-task
+  # A task ready to be worked by an AI agent with /scrum-github:run.
+  ai_ready: ai-ready
+
+branching:
+  # How the long-lived branches are organised. Code moves one way: task branch -> develop ->
+  # (staging) -> main; only hotfix/* starts from main. Tags live only on main, which stays the
+  # default branch of the repository.
+  #   standard      develop (working branch) + main (release branch). Release by pull request.
+  #   environments  develop + staging + main; /scrum-github:promote moves develop to staging.
+  #   trunk         main only: task branches start from main and a merge makes a task Done.
+  # Left out, the preset is trunk (as before 0.13.0). After changing it run init again (labels,
+  # workflows), push .github/ to the default branch, then /scrum-github:protect.
+  preset: standard
+  # Branch names. Change them only if the repository already uses other names.
+  # main: main
+  # develop: develop
+  # staging: staging            # environments only
+  # Label of a task merged into a long-lived branch and not released yet: "on: develop".
+  # location_prefix: "on: "
+  # /scrum-github:branches lists task branches with no commit for this many working days.
+  # stale_days: 5
+
+branch:
+  # Branch created by task-start. {number} is the issue number, {slug} comes from its title.
+  pattern: "feat/{number}-{slug}"
+
+digest:
+  enabled: true
+  # When the daily digest runs (cron, UTC). This value is written into the workflow file,
+  # so after changing it run scrum init (or /scrum-github:init) again.
+  cron: "0 1 * * 1-5"
+  # The digest also goes to a chat when the repository secret SCRUM_DIGEST_WEBHOOK is set:
+  # slack (also Google Chat and Mattermost) or telegram.
+  webhook_format: slack
+
+attention:
+  # "Needs attention" in the status table, digest and report: a task In progress with no
+  # activity for this many working days, and a sprint behind the ideal line by more than this
+  # percentage of its scope.
+  stale_days: 2
+  behind_percent: 15
+  # With statuses.in_review set: a task In review with no activity for this many working days.
+  review_days: 2
+  # Presets with a working branch: a task merged into a long-lived branch and waiting there for
+  # more than this many working days to be promoted or released.
+  promote_days: 5
+
+planning:
+  # Where /plan and /discover keep plans: <dir>/<slug>/plan.json, plan.md, brief.md.
+  # A path inside the repo, relative to its root.
+  dir: docs/plans
+  # Project context document written by /project-scan.
+  context_file: docs/project-context.md
+  # Hours per story point, to show hours in plan.md. Unset (null) shows points only.
+  hours_per_point: null
+  # The project context counts as stale after this many commits.
+  context_stale_commits: 50
+  # Minutes to merge and run the tests between two waves of parallel work, used when time
+  # estimates add up how long a plan or a sprint takes (scrum mine, plan.md, plan.html).
+  merge_minutes: 5
+
+run:
+  # /scrum-github:run works your ai-ready tasks with agents, each in its own local git worktree,
+  # merges them into one integration branch and opens one pull request.
+  # Command that runs the repository's tests. Empty: each agent finds how to test on its own.
+  test_command: ""
+  # At most this many agents work at the same time.
+  max_parallel: 3
+  # The integration branch. {sprint} is the sprint title as a slug (sprint-5), {login} your
+  # GitHub login, {date} today (YYYY-MM-DD).
+  branch_pattern: "run/{sprint}-{login}"
+
+release:
+  # /scrum-github:release publishes a version: a tag and a GitHub Release from the Done tasks.
+  # Tag names are <tag_prefix>X.Y.Z, e.g. v1.4.2. "" for tags without a prefix (1.4.2).
+  tag_prefix: v
+  # A task with this label makes the next version a major one (2.0.0 after 1.4.2).
+  breaking_label: breaking
+  # The version of the first release, when the repository has no version tag yet.
+  first_version: "0.1.0"
+  # Presets with a working branch: files whose version the release pull request updates. A
+  # .json file with only a path gets its top-level "version"; any other file needs a pattern
+  # with {version} (the first match with the previous version is replaced).
+  version_files:
+    - path: plugins/scrum-github/.claude-plugin/plugin.json
+  # File that gets the release notes at the top, or null for none.
+  # changelog: CHANGELOG.md
+
+# Optional: who is on the team. /plan suggests an assignee for each task from this list (by
+# areas and current load), `scrum team` shows each person's load, and task new, task assign and
+# plan check warn about a login that is not here. Left out, the list is the people GitHub lets
+# you assign issues to in this repository, without areas or capacity.
+# team:
+#   - login: tuandt
+#     areas: [backend, api]          # optional: what this person usually works on
+#     capacity: 10                   # optional: points per sprint
+#     review_hours: 6                # optional: hours of review per sprint (sprint fill warns above it)
+#   - login: an-nguyen
+#     areas: [frontend]
+
+# Optional: repository rules applied by /scrum-github:protect, and the files init installs.
+governance:
+  approvals: 0                   # approvals a pull request needs (0 to 6; 0 for a solo project)
+  required_checks: ["test (ubuntu-latest)", lint]  # the CI jobs of .github/workflows/ci.yml;
+                                 # the task-link check of the plugin is always required
+#   codeowners: []                 # owners written into CODEOWNERS, e.g. ["@acme/web", "@tuandt"]
+
+# Optional: a deployment workflow for a web project, mapped to the branches of the preset.
+# none (default), vercel (settings written into CONTRIBUTING.md), cloudflare or docker.
+# deploy:
+#   platform: none
+
+# Override label colors: label name -> 6-digit hex color.
+colors: {}
+
+# Optional: mirror task status on a GitHub Projects (v2) board. Off by default.
+# The "status: ..." labels stay the source of truth; moving a card on the board changes the label.
+# Needs the repository secret SCRUM_PROJECT_TOKEN (Projects and Issues read/write).
+# After turning it on run: scrum init, then scrum project init.
+# project:
+#   enabled: true
+#   owner: my-org                  # user or organization that owns the project
+#   number: 1                      # from the project URL: .../projects/1
+#   status_field: Status           # single-select field shown as board columns
+#   status_options:                # board option for each status
+#     new: Todo
+#     in_progress: In Progress
+#     in_review: In Review         # only used when statuses.in_review is set
+#     done: Done
+#   synced_field: Synced status    # text field the sync uses for bookkeeping; hide it in views
+#   points_field: Points           # number field filled from "points: N" labels; null to turn off
+#   poll_cron: "*/15 * * * *"      # how often board changes reach the labels (cron, UTC)
