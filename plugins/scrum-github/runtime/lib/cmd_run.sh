@@ -155,21 +155,23 @@ run_resolve() {
 }
 
 # run_lock FILE / run_unlock  One scrum run command at a time changes a state file: a lock
-# folder next to it (mkdir is atomic), waited for up to 30 seconds, removed on exit.
+# file next to it, waited for up to 30 seconds, removed on exit. The shell creates it with
+# noclobber (open with O_EXCL), so exactly one caller wins; `mkdir` is not a lock everywhere:
+# the uutils mkdir of Ubuntu 26.04 lets several concurrent callers succeed.
 RUN_LOCK=""
 RUN_LOCK_TRIES="${SCRUM_RUN_LOCK_TRIES:-300}"
 run_lock() {
   local lock="$1.lock" i=0
-  while ! mkdir "$lock" 2>/dev/null; do
+  while ! ( set -C; printf '%s\n' "$$" > "$lock" ) 2>/dev/null; do
     i=$((i + 1))
-    [ "$i" -lt "$RUN_LOCK_TRIES" ] || die "another scrum run command is changing this run (lock $lock). If none is running, remove that folder"
+    [ "$i" -lt "$RUN_LOCK_TRIES" ] || die "another scrum run command is changing this run (lock $lock). If none is running, remove that file"
     sleep 0.1
   done
   RUN_LOCK="$lock"
-  trap 'if [ -n "$RUN_LOCK" ]; then rmdir "$RUN_LOCK" 2>/dev/null; fi' EXIT
+  trap 'if [ -n "$RUN_LOCK" ]; then rm -f "$RUN_LOCK"; fi' EXIT
 }
 run_unlock() {
-  if [ -n "$RUN_LOCK" ]; then rmdir "$RUN_LOCK" 2>/dev/null || true; fi
+  if [ -n "$RUN_LOCK" ]; then rm -f "$RUN_LOCK"; fi
   RUN_LOCK=""
   trap - EXIT
 }
