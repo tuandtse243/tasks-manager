@@ -164,6 +164,9 @@ prepare_env() {
   git -C "$SCRUM_REPO_DIR" checkout -q -b hotfix/31-payment-fails
   git -C "$SCRUM_REPO_DIR" add -A
   git -C "$SCRUM_REPO_DIR" -c user.email=t@example.com -c user.name=t commit -q -m files
+  # hotfix prepare --yes commits as the user; a CI runner has no global git identity.
+  git -C "$SCRUM_REPO_DIR" config user.email t@example.com
+  git -C "$SCRUM_REPO_DIR" config user.name t
   export SCRUM_TODAY=2026-11-24
   route_json 'api --paginate repos/acme/blog/tags*' '[{"name":"v1.4.0"},{"name":"v1.3.0"}]'
   route_json 'api repos/acme/blog/compare/v1.4.0...main' '{"status":"identical","base_commit":{"commit":{"committer":{"date":"2026-11-20T08:00:00Z"}}}}'
