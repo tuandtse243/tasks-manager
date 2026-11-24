@@ -107,7 +107,9 @@ claude plugin validate plugins/scrum-github     # run by hand; CI does not insta
 ```
 
 CI (`.github/workflows/ci.yml`) runs the tests on Ubuntu and the `shellcheck` command above on
-every pull request, and the tests on macOS too on every push to `develop` or `main`. The plugin's
+every pull request and every merge, and the tests on macOS (Bash 3.2) too on release and hotfix
+pull requests into `main`. Hosted macOS runners are sometimes not available; the job is then
+cancelled, and rerunning it before the merge is enough. The plugin's
 version history is in the [CHANGELOG](plugins/scrum-github/CHANGELOG.md).
 
 This repository uses its own plugin with preset `standard` (`.github/scrum.yml`; the rules are in
