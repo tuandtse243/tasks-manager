@@ -317,16 +317,22 @@ test_cmd_next_no_release_without_done_tasks() {
   assert_eq "start" "$(printf '%s' "$OUT" | jq -r .step)"
 }
 
-# The default branch cannot be read: the release step is skipped.
-test_cmd_next_skips_release_when_repo_cannot_be_read() {
+# The release step compares tags with the release branch of the preset (branching.main), never
+# with the default branch of the repository (branching-and-release-flow, design 1): the
+# repository itself is not read. (Before, an unreadable default branch skipped the step.)
+test_cmd_next_release_uses_the_release_branch_not_the_default_branch() {
   next_env
+  printf 'version: 1\nbranching:\n  main: prod\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
   { issue 20 New 3 alice; } | issues > "$FAKE_GH_DIR/issues.json"
   printf '[%s,{"number":2,"title":"Sprint 2","state":"closed","closed_at":"2026-11-14T10:00:00Z","description":""}]' "$SPRINT" > "$FAKE_GH_DIR/milestones.json"
   route_json 'api --paginate repos/acme/blog/issues?milestone=2*' "$(done_at 7 2026-11-12T10:00:00Z | issues)"
   route 'api repos/acme/blog' '!fail'
+  route_json 'api --paginate repos/acme/blog/tags*' '[{"name":"v1.4.2"}]'
+  route_json 'api repos/acme/blog/compare/v1.4.2...prod' '{"status":"ahead","base_commit":{"commit":{"committer":{"date":"2026-11-10T12:00:00Z"}}}}'
   run_scrum next --json
   assert_status 0 "$STATUS" "$ERR"
-  assert_eq "start" "$(printf '%s' "$OUT" | jq -r .step)"
+  assert_eq "release [7]" "$(printf '%s' "$OUT" | jq -r '"\(.step) \(.issues | tojson)"')"
+  assert_eq "" "$(grep -x 'api repos/acme/blog' "$FAKE_GH_LOG" || true)" "the repository (default branch) is not read"
 }
 
 # The tags are listed but none can be compared with the default branch: whether they are released
