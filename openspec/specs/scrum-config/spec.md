@@ -148,3 +148,97 @@ Khoá `project.status_options.in_review` (mặc định `In Review`) SHALL là t
 #### Scenario: Trùng option
 - **WHEN** `statuses.in_review` đặt và `project.status_options.in_review` bằng `Done`
 - **THEN** kiểm tra cấu hình báo lỗi nêu `project.status_options`
+
+### Requirement: Release configuration
+The `release` block SHALL have `tag_prefix` (default `v`, may be empty), `breaking_label` (default `breaking`) and `first_version` (default `0.1.0`). The configuration check MUST reject a `first_version` that is not semver `X.Y.Z` and an empty `breaking_label`.
+
+#### Scenario: Defaults
+- **WHEN** the configuration has no `release` block
+- **THEN** `scrum config` prints `release.tag_prefix` as `v`, `release.breaking_label` as `breaking` and `release.first_version` as `0.1.0`
+
+#### Scenario: Invalid first version
+- **WHEN** the configuration sets `release.first_version: "1.0"`
+- **THEN** the configuration check reports an error naming `release.first_version`
+
+### Requirement: Cấu hình chạy task bằng agent
+Khối `run` SHALL có `test_command` (chuỗi, mặc định trống: agent tự tìm cách chạy test), `max_parallel` (số nguyên dương, mặc định 3) và `branch_pattern` (mặc định `run/{sprint}-{login}`, nhận `{sprint}`, `{login}`, `{date}`). Kiểm tra cấu hình MUST từ chối `max_parallel` không phải số nguyên dương và `branch_pattern` rỗng.
+
+#### Scenario: Mặc định
+- **WHEN** cấu hình không có khối `run`
+- **THEN** `scrum config` in `run.max_parallel` là 3 và `run.branch_pattern` là `run/{sprint}-{login}`
+
+#### Scenario: Song song sai
+- **WHEN** cấu hình đặt `run.max_parallel: 0`
+- **THEN** kiểm tra cấu hình báo lỗi nêu `run.max_parallel`
+
+### Requirement: Nhãn ai-ready
+Hệ thống SHALL đọc tên nhãn đánh dấu task sẵn sàng cho agent từ `labels.ai_ready`, mặc định `ai-ready`. Lệnh khởi tạo SHALL tạo và giữ label này giống các label khác do plugin quản lý. Tên này MUST khác các nhãn feature, epic, meta và bỏ qua kiểm tra PR.
+
+#### Scenario: Mặc định
+- **WHEN** cấu hình không có `labels.ai_ready` và người dùng chạy khởi tạo
+- **THEN** repo có label `ai-ready`
+
+### Requirement: Giờ review của thành viên
+Mỗi thành viên trong `team` SHALL có thể có `review_hours`: số giờ người đó dành cho review mỗi sprint. Giá trị không phải số dương MUST bị từ chối khi kiểm tra cấu hình.
+
+#### Scenario: Giá trị sai
+- **WHEN** một thành viên có `review_hours: -1`
+- **THEN** kiểm tra cấu hình báo lỗi nêu `team` và `review_hours`
+
+### Requirement: Thời gian merge giữa các đợt
+Khoá `planning.merge_minutes` SHALL là số nguyên không âm, mặc định 5, dùng trong mọi ước tính thời gian làm theo đợt. Giá trị khác MUST bị từ chối khi kiểm tra cấu hình.
+
+#### Scenario: Mặc định
+- **WHEN** cấu hình không có `planning.merge_minutes`
+- **THEN** `scrum config` in `planning.merge_minutes` là 5
+
+#### Scenario: Giá trị sai
+- **WHEN** cấu hình đặt `planning.merge_minutes: "x"`
+- **THEN** kiểm tra cấu hình báo lỗi nêu `planning.merge_minutes`
+
+### Requirement: Branching block
+The configuration SHALL accept a `branching` block: `preset` (`trunk`, `standard`, `environments`), `main` (default `main`), `develop` (default `develop`), `staging` (default `staging`), `location_prefix` (default `on: `) and `stale_days` (default 5, a positive integer). Validation SHALL reject two branches of the preset that have the same name.
+
+#### Scenario: Defaults
+- **WHEN** the block is `branching: {preset: standard}`
+- **THEN** the branches are `main` and `develop`, the location prefix is `on: ` and `stale_days` is 5
+
+#### Scenario: Duplicate branch names
+- **WHEN** `branching.develop` and `branching.main` are both `main` with preset `standard`
+- **THEN** validation fails and names the two keys
+
+### Requirement: Governance block
+The configuration SHALL accept a `governance` block: `approvals` (default 1, an integer from 0 to 6), `required_checks` (a list of check names, default empty) and `codeowners` (a list of GitHub logins or teams, default empty).
+
+#### Scenario: Solo project
+- **WHEN** `governance.approvals` is `0`
+- **THEN** validation passes
+
+#### Scenario: Invalid approvals
+- **WHEN** `governance.approvals` is `-1`
+- **THEN** validation fails and names the key
+
+### Requirement: Release files
+The `release` block SHALL accept `version_files`, a list of entries with a `path` and an optional `pattern` that contains `{version}`, and `changelog`, a path or null (default). Validation SHALL reject an entry without `path` and a `pattern` without `{version}`.
+
+#### Scenario: JSON manifest
+- **WHEN** `release.version_files` is `[{path: package.json}]`
+- **THEN** validation passes and the release updates the `version` field of that file
+
+#### Scenario: Pattern without placeholder
+- **WHEN** an entry has `pattern: "version 1.0"`
+- **THEN** validation fails and says the pattern needs `{version}`
+
+### Requirement: Deploy block
+The configuration SHALL accept a `deploy` block with `platform`: `none` (default), `vercel`, `cloudflare` or `docker`.
+
+#### Scenario: Unknown platform
+- **WHEN** `deploy.platform` is `heroku`
+- **THEN** validation fails and lists the accepted platforms
+
+### Requirement: Attention threshold for promotion
+The `attention` block SHALL accept `promote_days` (default 5, a positive integer): the number of working days a task may wait In review on a long-lived branch before it needs attention.
+
+#### Scenario: Default
+- **WHEN** `attention.promote_days` is not set
+- **THEN** the threshold is 5 working days

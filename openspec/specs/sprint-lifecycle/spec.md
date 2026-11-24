@@ -121,3 +121,36 @@ Sau khi tạo sprint, lệnh tạo sprint SHALL gợi ý `/scrum-github:sprint-f
 #### Scenario: Backlog có task
 - **WHEN** người dùng tạo Sprint 5 và backlog có 4 task
 - **THEN** lệnh in gợi ý chọn task cho Sprint 5 bằng `/scrum-github:sprint-fill`
+
+### Requirement: Suggest a release after closing a sprint
+After closing a sprint with at least one Done task, the sprint close command SHALL suggest `/scrum-github:release --sprint "<sprint name>"`. The suggestion MUST NOT be printed when the sprint has no Done task.
+
+#### Scenario: Done tasks
+- **WHEN** the user closes Sprint 5 with 4 Done tasks
+- **THEN** the command suggests `/scrum-github:release --sprint "Sprint 5"`
+
+#### Scenario: No Done task
+- **WHEN** the user closes a sprint with no Done task
+- **THEN** the command does not suggest a release
+
+### Requirement: Giờ review khi lập kế hoạch sprint
+`scrum sprint fill` SHALL in tổng phút review của các task đã có trong sprint và, khi có `--add`, của sprint sau khi thêm, theo từng người được giao. Khi một thành viên có `review_hours`, lệnh SHALL cảnh báo nếu tổng phút review giao cho họ vượt `review_hours` × 60. Cảnh báo MUST NOT chặn việc thêm task.
+
+#### Scenario: Vượt giờ review
+- **WHEN** `an-nguyen` có `review_hours: 2`, đang có 90 phút review trong sprint, và người dùng xem trước việc thêm một task review 45 phút giao cho họ
+- **THEN** lệnh cảnh báo `an-nguyen` có 135 trên 120 phút review
+
+#### Scenario: Không khai báo giờ review
+- **WHEN** không thành viên nào có `review_hours`
+- **THEN** lệnh in tổng phút review và không cảnh báo
+
+### Requirement: Closing a sprint shows unreleased tasks
+In `standard` and `environments`, the preview of closing a sprint SHALL list separately the tasks that are In review on a long-lived branch, say that they are not counted in the velocity because they are not released, and suggest releasing before closing. The close itself SHALL treat them like other unfinished tasks.
+
+#### Scenario: Merged but not released
+- **WHEN** the sprint has #12 Done and #13 In review with `on: develop`, and the user previews the close
+- **THEN** the velocity counts only #12, #13 is listed as merged but not released, and the preview suggests `/scrum-github:release`
+
+#### Scenario: Close without releasing
+- **WHEN** the user confirms the close anyway
+- **THEN** #13 moves to the next sprint like any unfinished task and keeps its status and location label
