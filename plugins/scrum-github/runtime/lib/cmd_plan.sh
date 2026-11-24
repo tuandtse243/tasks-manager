@@ -549,7 +549,9 @@ $list"; then
   if [ -z "$(printf '%s' "$PLAN_ACTIONS" | jq -r '.[] | select(.op != "skip") | .op' | head -1)" ]; then
     info "Nothing to do: every item of the plan already has its issue ($skipped)."
   else
-    info "Done. Issue numbers are recorded in $file; view: $view"
+    # plan.html is rendered again on exit (plan_apply_render_view) with what this run created.
+    info "Done. Issue numbers are recorded in $file."
+    info "Review it in $(plan_html_path "$file") (open it in a browser); text version: $view"
   fi
   [ "$failed" = 0 ] || exit 1
   APPLY_OK=1

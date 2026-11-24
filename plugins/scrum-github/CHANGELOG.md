@@ -4,6 +4,13 @@ All notable changes to the `scrum-github` plugin. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the plugin uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- `scrum plan apply` ends by pointing at `plan.html` as the page to review the result on (with
+  `plan.md` as the text version), and `/scrum-github:plan` offers to open it.
+
 ## [0.13.1] - 2026-11-24
 
 ### Fixed
