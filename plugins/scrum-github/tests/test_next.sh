@@ -365,3 +365,92 @@ test_cmd_next_release_boundary_is_the_tagger_date() {
   assert_status 0 "$STATUS" "$ERR"
   assert_eq "start" "$(printf '%s' "$OUT" | jq -r .step)"
 }
+
+# ---------- branch flow steps (spec next-step-guidance "Branch flow steps") ----------
+
+# flow_cfg PRESET  The defaults with that preset and In review on.
+flow_cfg() { defaults | jq -c --arg p "$1" '.branching.preset = $p | .statuses.in_review = "In review"'; }
+# review_issue NUMBER LOCATION  A task In review with the label "on: LOCATION".
+review_issue() {
+  jq -nc --argjson n "$1" --arg b "$2" '{number: $n, title: "Task \($n)", state: "open", labels: [{name: "status: In review"}, {name: "on: \($b)"}, {name: "points: 3"}], assignees: []}'
+}
+# flow_of PRESET FLOW  -> STEP, with a sprint where alice works on #12.
+flow_of() {
+  STEP="$(jqt next-step -n --argjson init true --argjson pushed true --argjson sprint "$SPRINT" \
+    --argjson issues "$(issue 12 'In progress' 3 alice | issues)" --arg me alice --arg today 2026-11-19 \
+    --argjson cfg "$(flow_cfg "$1")" --argjson backlog_count 0 --argjson flow "$2")"
+}
+NOFLOW='{"unprotected":[],"back_merge":[],"promotion_open":false,"release_open":false,"issues":[]}'
+
+# spec "Unprotected repository".
+test_next_flow_protect_first() {
+  flow_of standard "$(printf '%s' "$NOFLOW" | jq -c '.unprotected = ["main"] | .back_merge = [{"number":51}]')"
+  assert_eq "protect /scrum-github:protect" "$(printf '%s' "$STEP" | jq -r '"\(.step) \(.command)"')"
+  assert_contains "$(printf '%s' "$STEP" | jq -r .message)" "main has no branch rule"
+}
+
+# spec "Back-merge open": merge it, with its link.
+test_next_flow_back_merge_open() {
+  flow_of standard "$(printf '%s' "$NOFLOW" | jq -c '.back_merge = [{"number":51,"title":"Back-merge main into develop","html_url":"https://github.com/acme/blog/pull/51","head":"main","base":"develop"}]')"
+  assert_eq "back-merge [51]" "$(printf '%s' "$STEP" | jq -r '"\(.step) \(.issues | tojson)"')"
+  assert_contains "$(printf '%s' "$STEP" | jq -r .message)" "https://github.com/acme/blog/pull/51"
+  assert_contains "$(printf '%s' "$STEP" | jq -r .command)" "gh pr merge 51 --merge"
+}
+
+# spec "Ready to release": standard, #12 and #13 on develop, no release pull request open.
+test_next_flow_ready_to_release() {
+  flow_of standard "$(printf '%s' "$NOFLOW" | jq -c --argjson i "$( { review_issue 13 develop; review_issue 12 develop; } | issues)" '.issues = $i')"
+  assert_eq "release /scrum-github:release [12,13]" "$(printf '%s' "$STEP" | jq -r '"\(.step) \(.command) \(.issues | tojson)"')"
+  assert_contains "$(printf '%s' "$STEP" | jq -r .message)" "2 tasks are on develop waiting to be released"
+  flow_of standard "$(printf '%s' "$NOFLOW" | jq -c --argjson i "$(review_issue 12 develop | issues)" '.issues = $i | .release_open = true')"
+  assert_eq "continue" "$(step_id)" "a release pull request is open: no release step"
+}
+
+# spec "Ready to promote": environments, #12 on develop, no promotion open.
+test_next_flow_ready_to_promote() {
+  flow_of environments "$(printf '%s' "$NOFLOW" | jq -c --argjson i "$(review_issue 12 develop | issues)" '.issues = $i')"
+  assert_eq "promote /scrum-github:promote [12]" "$(printf '%s' "$STEP" | jq -r '"\(.step) \(.command) \(.issues | tojson)"')"
+  flow_of environments "$(printf '%s' "$NOFLOW" | jq -c --argjson i "$( { review_issue 12 develop; review_issue 14 staging; } | issues)" '.issues = $i | .promotion_open = true')"
+  assert_eq "release [14]" "$(printf '%s' "$STEP" | jq -r '"\(.step) \(.issues | tojson)"')" "environments releases from staging"
+}
+
+test_next_flow_nothing_falls_through() {
+  flow_of standard "$NOFLOW"
+  assert_eq "continue" "$(step_id)"
+}
+
+# Through scrum next: standard, main has no rule.
+test_cmd_next_flow_unprotected() {
+  next_env
+  printf 'version: 1\nbranching:\n  preset: standard\nstatuses:\n  in_review: In review\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  route_json 'api --paginate repos/acme/blog/rules/branches/develop' '[{"type":"pull_request"}]'
+  route_json 'api --paginate repos/acme/blog/rules/branches/main' '[]'
+  route_json 'api --paginate repos/acme/blog/pulls?state=open*' '[]'
+  route_json 'api --paginate repos/acme/blog/issues?state=open&labels=*' '[]'
+  run_scrum next --json
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "protect" "$(printf '%s' "$OUT" | jq -r .step)"
+  assert_eq "" "$(gh_writes)"
+}
+
+# Through scrum next: standard, everything protected, #12 and #13 waiting on develop.
+test_cmd_next_flow_ready_to_release() {
+  next_env
+  printf 'version: 1\nbranching:\n  preset: standard\nstatuses:\n  in_review: In review\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  route_json 'api --paginate repos/acme/blog/rules/branches/*' '[{"type":"pull_request"}]'
+  route_json 'api --paginate repos/acme/blog/pulls?state=open*' '[]'
+  route_json 'api --paginate repos/acme/blog/issues?state=open&labels=on%3A%20develop&per_page=100' "$( { review_issue 12 develop; review_issue 13 develop; } | issues)"
+  run_scrum next --json
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "release [12,13]" "$(printf '%s' "$OUT" | jq -r '"\(.step) \(.issues | tojson)"')"
+  assert_not_contains "$(gh_calls)" "/tags" "with a working branch the trunk release step is not read"
+}
+
+# Trunk: no branch flow lookups at all.
+test_cmd_next_trunk_reads_no_branch_rules() {
+  next_env
+  run_scrum next --json
+  assert_status 0 "$STATUS" "$ERR"
+  assert_not_contains "$(gh_calls)" "rules/branches"
+  assert_not_contains "$(gh_calls)" "pulls?state=open"
+}
