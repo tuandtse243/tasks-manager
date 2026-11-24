@@ -71,7 +71,7 @@ protect_plan() {
 
 # protect_send ITEM WHAT METHOD PATH BODY  One write; appends {item, status, message} to RESULTS.
 protect_send() {
-  local item="$1" what="$2" method="$3" path="$4" body="$5" err status=done msg=""
+  local item="$1" what="$2" method="$3" path="$4" body="$5" err status="done" msg=""
   err="$(mktemp "${TMPDIR:-/tmp}/scrum-protect.XXXXXX")"
   if ! printf '%s' "$body" | gh_send "$method" "$path" >/dev/null 2>"$err"; then
     status=failed; msg="$(protect_reason "$err" "$what")"
