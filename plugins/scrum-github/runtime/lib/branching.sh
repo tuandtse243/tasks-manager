@@ -98,3 +98,22 @@ branch_exists() { gh_get "repos/$1/branches/$(branch_uri "$2")" >/dev/null 2>&1;
 
 # branch_sha REPO BRANCH  The head commit of BRANCH on GitHub.
 branch_sha() { gh_get "repos/$1/git/ref/heads/$(branch_uri "$2")" | jq -r '.object.sha // empty'; }
+
+# ---- Stream C ----
+
+# work_base_branch REPO  The branch new work starts from and its pull requests target: the
+# working branch of the preset. In trunk it is the default branch of the repository as before
+# (the release branch when GitHub does not say), so installed projects see no change.
+work_base_branch() {
+  local b=""
+  if has_working_branch; then branch_role working; return 0; fi
+  b="$(ghx repo view "$1" --json defaultBranchRef -q .defaultBranchRef.name 2>/dev/null || true)"
+  [ -n "$b" ] || b="$(branch_role release)"
+  printf '%s' "$b"
+}
+
+# branch_kind_of NAME  The role of a branch name in the preset (scrum.jq branch_kind): release,
+# staging, working, release_pr, hotfix or task.
+branch_kind_of() {
+  jq -rn -L "$JQ_LIB" --argjson cfg "$CONFIG_JSON" --arg n "$1" 'include "scrum"; branch_kind($cfg; $n)'
+}

@@ -8,10 +8,12 @@ repository. Every option: [the plugin's README](../plugins/scrum-github/README.m
 | Step | Command | Example |
 |---|---|---|
 | 1. See your work and what to do next | `/scrum-github:my-tasks` | `/scrum-github:my-tasks` |
-| 2. Take the task: assigned to you, In progress, branch created | `/scrum-github:task-start` | `/scrum-github:task-start 12` |
+| 2. Take the task: assigned to you, In progress, branch created from the latest working branch | `/scrum-github:task-start` | `/scrum-github:task-start 12` |
 | 3. Write the code, commit, push the branch | (git as usual) | `git push -u origin feat/12-login` |
-| 4. Write the PR description and open the PR | `/scrum-github:task-pr` | `/scrum-github:task-pr` |
-| 5. Merge the PR | (on GitHub) | The task moves to Done and closes on its own |
+| 4. Bring in what the team merged meanwhile | `/scrum-github:sync` | `/scrum-github:sync` |
+| 5. Write the PR description and open the PR into the working branch | `/scrum-github:task-pr` | `/scrum-github:task-pr` |
+| 6. Merge the PR | (on GitHub) | `trunk`: the task moves to Done and closes. With `develop`: it stays In review with `on: develop` until the release |
+| 7. Delete merged branches | `/scrum-github:cleanup` | `/scrum-github:cleanup` |
 
 `my-tasks` lists your open tasks in every sprint and the backlog, what blocks them, their time
 estimates and the time left in the open sprint, the pull requests waiting for your review, and
@@ -20,6 +22,23 @@ teammate's.
 
 The PR description always has `Closes #12`. Without that line the `scrum-pr-link-check` check
 fails; a PR that belongs to no task gets the label `no-task`.
+
+## Branches
+
+The repository's `branching.preset` decides where a task goes. In `standard` and `environments`
+a task branch starts from `develop` and its pull request targets `develop`; the task reaches
+`main` (and Done) with a release. Only a hotfix (`hotfix/N-slug`) starts from `main` and goes
+back into it. In `trunk` everything starts from and goes into `main`.
+
+| What | Command | Example |
+|---|---|---|
+| Merge the latest `develop` into your task branch (`main` into a hotfix branch) | `/scrum-github:sync` | `scrum sync` |
+| What is on `develop` and not on `main`, drift, stale branches | `/scrum-github:branches` | `scrum branches` |
+| Delete branches whose PR was merged, locally and on origin (asks first) | `/scrum-github:cleanup` | `scrum cleanup`, then `scrum cleanup --yes` |
+
+`sync` refuses with uncommitted changes (commit or stash first) and on `develop` or `main`. On a
+conflict it lists each file with who last changed it on `develop` and leaves the merge for you:
+fix the files, `git add`, `git merge --continue`, or `git merge --abort` to go back.
 
 ## Let AI agents work your tasks
 
@@ -46,7 +65,7 @@ permissions, so the command shows the plan and waits for your yes. If a run stop
 | Draft | In progress |
 | Ready for review | In review |
 | Back to draft, or closed without merging | In progress |
-| Merged | Done |
+| Merged | Done in `trunk`; with `develop`, In review with `on: develop` until the release reaches `main` |
 
 ## When you need it
 

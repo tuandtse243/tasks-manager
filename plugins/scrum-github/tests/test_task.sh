@@ -182,6 +182,42 @@ test_cmd_task_start_assigned_to_someone_else() {
   assert_contains "$(gh_calls)" 'STDIN {"labels":["status: In progress"]}'
 }
 
+# delta task-management "Bắt đầu task" with a working branch: a bare origin whose develop is two
+# commits ahead of the local develop.
+standard_start_env() {
+  start_env
+  printf 'version: 1\nbranching: {preset: standard}\nstatuses: {in_review: In review}\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@example.com GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@example.com
+  git init -q --bare -b main "$T/remote.git"
+  git -C "$SCRUM_REPO_DIR" remote add origin "$T/remote.git"
+  git -C "$SCRUM_REPO_DIR" branch develop
+  git -C "$SCRUM_REPO_DIR" push -q origin main develop 2>/dev/null
+  git clone -q -b develop "$T/remote.git" "$T/other" 2>/dev/null
+  git -C "$T/other" commit -q --allow-empty -m "one on develop"
+  git -C "$T/other" commit -q --allow-empty -m "two on develop"
+  git -C "$T/other" push -q origin develop 2>/dev/null
+  route_json 'api repos/acme/blog/issues/2' '{"number":2,"title":"Login","state":"open","assignees":[{"login":"david"}],"labels":[{"name":"status: New"}]}'
+}
+
+test_cmd_task_start_standard_branches_from_origin_develop() {
+  standard_start_env
+  run_scrum task start 2
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "feat/2-login" "$(git -C "$SCRUM_REPO_DIR" rev-parse --abbrev-ref HEAD)"
+  assert_eq "$(git --git-dir="$T/remote.git" rev-parse develop)" "$(git -C "$SCRUM_REPO_DIR" rev-parse HEAD)" "has the two commits of origin/develop"
+  assert_contains "$OUT" "Created branch feat/2-login from origin/develop."
+  assert_not_contains "$(gh_calls)" "repo view" "the preset names the branch"
+}
+
+test_cmd_task_start_offline_uses_local_working_branch_and_warns() {
+  standard_start_env
+  git -C "$SCRUM_REPO_DIR" remote set-url origin "$T/nowhere.git"
+  run_scrum task start 2
+  assert_status 0 "$STATUS" "$ERR"
+  assert_eq "$(git -C "$SCRUM_REPO_DIR" rev-parse develop)" "$(git -C "$SCRUM_REPO_DIR" rev-parse HEAD)"
+  assert_contains "$ERR" "cannot fetch develop from origin; feat/2-login starts from your local develop, which may be stale"
+}
+
 # plan apply: see test_plan.sh
 
 # delta work-plan: subtasks are a checklist; a backlog task has no milestone key.
