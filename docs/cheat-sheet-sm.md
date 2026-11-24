@@ -63,7 +63,6 @@ compares each person's review minutes with their `review_hours`.
 | Change a task: points, assignee, sprint, drop it | `/scrum-github:task` | `/scrum-github:task assign #15 to an-nguyen` |
 | One person's work and their pending reviews | `/scrum-github:my-tasks` | `/scrum-github:my-tasks for an-nguyen` |
 | Your own next step | `/scrum-github:next` | `/scrum-github:next` |
-
 | What waits on `develop` (merged, not released), drift, stale branches | `/scrum-github:branches` | `scrum branches` |
 | Move `develop` to `staging` for testing (preset `environments`) | `/scrum-github:promote` | `/scrum-github:promote` |
 
