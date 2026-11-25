@@ -333,6 +333,8 @@ test_apply_records_numbers_and_renders_view() {
   assert_status 0 "$STATUS" "$ERR"
   assert_json_eq '[10,11,12,13]' "$(jq -c '[.features[0].issue, .features[0].tasks[].issue]' "$T/plan.json")"
   assert_contains "$(cat "$T/plan.md")" "| T3 | Comment form | 1 | – | #13 |"
+  assert_contains "$OUT" "Review it in $T/plan.html"
+  [ -f "$T/plan.html" ] || _fail "plan.html is not there after apply"
   assert_json_eq "$(plan3 | jq -S 'del(.. | .issue?)')" "$(jq -S 'del(.. | .issue?)' "$T/plan.json")" "rest of the plan unchanged"
 }
 

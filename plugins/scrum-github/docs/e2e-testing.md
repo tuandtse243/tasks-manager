@@ -210,3 +210,106 @@ Not run yet, needs a person:
 One thing to know when driving skills headless from a very long working directory: one session
 wrote the brief under a mistyped copy of the path. Asking for paths relative to the current
 directory avoided it.
+
+## Team, backlog and my tasks (0.9.0)
+
+```bash
+# A sandbox with one sprint open and no team block (the team is who GitHub lets you assign)
+/scrum-github:plan "show the app version, with a test"   # critic, plan.html, approve once
+bash "$SCRUM" plan check docs/plans/<slug>/plan.json --json   # sprint and assignee per task
+bash "$SCRUM" plan apply docs/plans/<slug>/plan.json
+bash "$SCRUM" mine                                     # sprint open: the new task, "Next: ..."
+#    close the open sprint (or use a repository without one)
+bash "$SCRUM" task new --title "..." --points 1         # no open sprint -> backlog
+bash "$SCRUM" mine                                     # "(no sprint is open)", Backlog group
+bash "$SCRUM" team                                     # "no load is shown" without a sprint
+```
+
+Result of the last run (2026-11-24, `tuandtse243/scrum-sandbox`, preset `standard`, one person,
+Sprint 2 over capacity: 27 of 10 points):
+- `plan init` wrote a `.gitignore` for `plan.html` and `.plan-snapshot.json` only. The critic gave
+  five findings, recorded as `review` entries and shown in `plan.html`.
+- `plan check --json` suggested the backlog for the task (sprint over capacity) and the only
+  person as assignee, and wrote neither `plan.html` nor the snapshot.
+- `plan.html`: eight sections, no remote `src`/`href`, light and dark, reduced motion, escaped text.
+  The first view said there was nothing to compare yet; after "T1 into Sprint 2" the next view
+  listed "T1 sprint: Backlog → Sprint 2" and nothing was created. Checked by reading the file (the
+  session could not open a browser).
+- After one approval, `plan apply` created feature #38 and task #39: Sprint 2, assignee,
+  `status: New`, `points: 1`, `ai-ready`, sub-issue of #38, on the board.
+- `mine` with Sprint 2 open listed #39 with "Next: #39 … scrum task start 39"; with no sprint open
+  it showed "(no sprint is open)" and the Backlog group, and suggested `/scrum-github:sprint-new`.
+- `task new` with no sprint open put #40 in the backlog: "There is no open sprint, so the task is in
+  the backlog".
+- Noted: `plan check` still says "better left in the backlog: T1" after T1 was put in the sprint by
+  hand; the feature gets no milestone (only tasks do).
+
+## Branches and releases (0.13.0)
+
+```bash
+# A sandbox clone with preset standard in .github/scrum.yml
+bash "$SCRUM" init                                     # on: develop, scrum-release.yml, governance files
+git add .github && git commit -m "Set up Scrum on GitHub" && git push
+bash "$SCRUM" protect                                  # preview
+bash "$SCRUM" protect --yes                            # develop, rulesets, settings
+bash "$SCRUM" task new --title "..." --points 1 && bash "$SCRUM" task start <n>
+#    commit, push; meanwhile push another commit to develop
+/scrum-github:task-pr                                  # base develop, warns: behind develop
+bash "$SCRUM" sync                                     # merges origin/develop into the task branch
+#    open the PR into develop ("feat: ...", "Closes #<n>"); checks pass; squash-merge it
+#                                                      -> task stays In review, label "on: develop"
+bash "$SCRUM" release 0.1.0                            # preview: the task, the version
+bash "$SCRUM" release 0.1.0 --yes                      # release/v0.1.0 -> main; no tag yet
+#    merge the release PR with a merge commit          -> scrum-release.yml: tag, GitHub Release,
+#                                                         task Done and closed, back-merge PR
+#    close and reopen the back-merge PR (its checks), merge it with a merge commit
+```
+
+Result of the last run (2026-11-24, `tuandtse243/scrum-sandbox`, private, free plan):
+- `protect --yes` created `develop` and applied the merge settings and the Actions setting; the
+  three rulesets were refused with 403 (rulesets need a public repository or a paid plan), each
+  reported, exit 1.
+- Task #32 started from `origin/develop`; its PR #33 into `develop` passed `pr-check` and moved #32
+  to In review; after the squash merge #32 stayed open, In review, with `on: develop`.
+- `release 0.1.0 --yes` opened #34 from `release/v0.1.0`. Merging it ran `scrum-release.yml`:
+  annotated tag `v0.1.0` on the merge commit, GitHub Release, #32 Done and closed without its
+  location label, back-merge #35 opened by the workflow. #35 ran its checks only after close and
+  reopen; merged, `develop` contained `main`.
+- The `task-pr` steps on `feat/36-…` (task #36): base `develop` from the preset, 1 commit ahead and
+  1 behind, so the warning and the `sync` suggestion; `sync` brought the commit in; PR #37 with
+  `feat: show the version in the footer` and "Closes #36" passed `pr-check`, #36 In review. The
+  steps were run by hand from the skill text, not by invoking the skill.
+
+The same flow on a public repository, this one (2026-11-24, release 0.13.1): `protect --yes`
+applied all three rulesets; `release 0.13.1 --yes` committed `plugin.json`, `runtime/VERSION` and
+the README version on `release/v0.13.1` (PR #29); merging it tagged `v0.13.1` on the merge commit,
+published the release and opened back-merge #30, merged after close and reopen.
+
+## AI run (0.11.0)
+
+```bash
+# In the sandbox clone (preset standard): two ai-ready tasks in the open sprint, #43 blocked by #42
+bash "$SCRUM" run plan                                 # 2 waves
+claude --plugin-dir <plugin>                           # in a terminal you type into
+/scrum-github:run 42,43                                # plan, warning, yes; wave 1, wave 2; one PR
+```
+
+Result of the last run (2026-11-25, `tuandtse243/scrum-sandbox`, a Node API, `node --test`):
+- The run created `run/sprint-2-tuandtse243` from `origin/develop`, one agent per task in its own
+  worktree (wave 1: #42, wave 2: #43), one merge commit per task, `node --test` 11 of 11 on the
+  integration branch, and one pull request into `develop` (#45) with "Closes #42", "Closes #43",
+  the acceptance criteria as checkboxes and "look closely at" notes. Both tasks were In review.
+  Only the integration branch reached origin; no task branch did.
+- Found: the title of that pull request ("Sprint 2: 2 tasks by AI (#42, #43)") failed `pr-check`
+  in preset `standard`. Fixed: it starts with `feat:`.
+- Found: the agents' worktrees started at the default branch (`main`), not at the integration
+  branch, so the first agent stopped on its base check; the others reset the worktree by hand.
+  Fixed: the `implementer` resets a fresh worktree to the base commit.
+- The sandbox's tests write to `/tmp`, which the agents' sandbox blocks, so the tests were run
+  outside it. Estimates: none were set, so "estimated against actual" showed nothing (0 minutes
+  actual: each agent took 20 to 30 seconds).
+- The headless attempts (`claude -p`) could not run it: `gh` fails its certificate check inside the
+  Claude sandbox (OSStatus -26276). Run it in a terminal.
+
+Not run yet on GitHub: `promote` (preset `environments`), `hotfix` with `hotfix prepare`, the
+deployment templates, and `--pr-per-wave`.

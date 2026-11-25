@@ -133,6 +133,8 @@ a time, never several at once"
 that is not merged anywhere"
   assert_contains "$a" "git merge-base --is-ancestor <base commit> HEAD"
   assert_contains "$a" "worktree not based on the integration branch"
+  assert_contains "$a" 'git reset --hard <base commit>'   # a fresh worktree is moved, not abandoned
+  assert_contains "$s" "resets it to that commit"
   assert_contains "$a" "install the dependencies there"
   assert_contains "$a" '"started_at"'
   assert_contains "$a" "Never push"

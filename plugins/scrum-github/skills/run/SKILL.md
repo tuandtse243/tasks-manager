@@ -87,8 +87,9 @@ For the wave W (`next_wave` of `scrum run status --json`, then the next one):
 
 1. **Check out the integration branch**: `git checkout <branch>` (the tree is clean: `merge`
    checked it), then note its commit: `git rev-parse HEAD`. The agents' worktrees are expected to
-   start from the current `HEAD`, which gives them the work of the waves before; each agent checks
-   it against that commit.
+   start from the current `HEAD`, which gives them the work of the waves before. They often do not
+   (a new worktree can be made from the default branch instead), so each agent checks its worktree
+   against that commit and, while it has changed nothing, resets it to that commit.
 2. **Start the agents.** The tasks to run are the wave's `to_run`. Take them in groups of at most
    K (`--max-parallel`, else the state's `max_parallel`), so that never more than K agents run at
    once. For each task of a group:
