@@ -285,5 +285,31 @@ applied all three rulesets; `release 0.13.1 --yes` committed `plugin.json`, `run
 the README version on `release/v0.13.1` (PR #29); merging it tagged `v0.13.1` on the merge commit,
 published the release and opened back-merge #30, merged after close and reopen.
 
+## AI run (0.11.0)
+
+```bash
+# In the sandbox clone (preset standard): two ai-ready tasks in the open sprint, #43 blocked by #42
+bash "$SCRUM" run plan                                 # 2 waves
+claude --plugin-dir <plugin>                           # in a terminal you type into
+/scrum-github:run 42,43                                # plan, warning, yes; wave 1, wave 2; one PR
+```
+
+Result of the last run (2026-11-25, `tuandtse243/scrum-sandbox`, a Node API, `node --test`):
+- The run created `run/sprint-2-tuandtse243` from `origin/develop`, one agent per task in its own
+  worktree (wave 1: #42, wave 2: #43), one merge commit per task, `node --test` 11 of 11 on the
+  integration branch, and one pull request into `develop` (#45) with "Closes #42", "Closes #43",
+  the acceptance criteria as checkboxes and "look closely at" notes. Both tasks were In review.
+  Only the integration branch reached origin; no task branch did.
+- Found: the title of that pull request ("Sprint 2: 2 tasks by AI (#42, #43)") failed `pr-check`
+  in preset `standard`. Fixed: it starts with `feat:`.
+- Found: the agents' worktrees started at the default branch (`main`), not at the integration
+  branch, so the first agent stopped on its base check; the others reset the worktree by hand.
+  Fixed: the `implementer` resets a fresh worktree to the base commit.
+- The sandbox's tests write to `/tmp`, which the agents' sandbox blocks, so the tests were run
+  outside it. Estimates: none were set, so "estimated against actual" showed nothing (0 minutes
+  actual: each agent took 20 to 30 seconds).
+- The headless attempts (`claude -p`) could not run it: `gh` fails its certificate check inside the
+  Claude sandbox (OSStatus -26276). Run it in a terminal.
+
 Not run yet on GitHub: `promote` (preset `environments`), `hotfix` with `hotfix prepare`, the
-deployment templates, and `/scrum-github:run` with real agents.
+deployment templates, and `--pr-per-wave`.

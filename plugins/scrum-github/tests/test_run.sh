@@ -522,7 +522,7 @@ test_pr_body_two_tasks() {
   local out body
   out="$(pr_body "$(pr_state)" "$(pr_issues)")"
   body="$(printf '%s' "$out" | jq -r .body)"
-  assert_eq "Sprint 5: 2 tasks by AI (#102, #107)" "$(printf '%s' "$out" | jq -r .title)"
+  assert_eq "feat: 2 tasks by AI, Sprint 5 (#102, #107)" "$(printf '%s' "$out" | jq -r .title)"
   assert_eq "[102,107]" "$(printf '%s' "$out" | jq -c .numbers)"
   assert_contains "$body" "## #102 Task 102
 
@@ -572,7 +572,31 @@ test_pr_body_per_wave() {
   assert_eq "[]" "$(printf '%s' "$out" | jq -c .numbers)"
   assert_contains "$(printf '%s' "$out" | jq -r .body)" "**Merge #200 first.** This pull request is based on its branch (wave 1). Once #200 is merged, change the base of this pull request to \`main\`"
   assert_not_contains "$(printf '%s' "$out" | jq -r .body)" "#110"
-  assert_eq "Sprint 5, wave 1: 2 tasks by AI (#102, #107)" "$(pr_body "$(pr_state)" "$(pr_issues)" 1 | jq -r .title)"
+  assert_eq "feat: 2 tasks by AI, Sprint 5 wave 1 (#102, #107)" "$(pr_body "$(pr_state)" "$(pr_issues)" 1 | jq -r .title)"
+}
+
+# Found by the live run on scrum-sandbox (2026-11-25): with preset standard the title of the run's
+# pull request failed the plugin's own title check ("Sprint 2: 2 tasks by AI ...").
+test_pr_titles_pass_the_conventional_commits_check() {
+  local lang key title
+  for lang in en vi; do
+    for key in run_pr_title run_pr_title_wave; do
+      title="$(jq -r --arg l "$lang" --arg k "$key" '.[$l][$k]' "$PLUGIN_DIR/runtime/share/strings.json")"
+      printf '%s' "$title" | grep -Eq '^feat: [^ ]' || _fail "the $lang $key template does not start with a type: $title"
+    done
+  done
+  # The plugin's own check, on the generated title (preset standard, where the check applies).
+  setup_fake_gh
+  setup_repo 'version: 1
+branching: {preset: standard}
+statuses: {in_review: In review}'
+  export GITHUB_EVENT_NAME=pull_request GITHUB_EVENT_PATH="$T/event.json"
+  for key in "" 1; do
+    title="$(pr_body "$(pr_state)" "$(pr_issues)" $key | jq -r .title)"
+    jq -n --arg t "$title" '{pull_request: {title: $t}}' > "$T/event.json"
+    run_scrum pr-check --title
+    assert_status 0 "$STATUS" "title \"$title\" fails pr-check: $ERR"
+  done
 }
 
 # ---------- scrum run finish ----------
@@ -614,7 +638,7 @@ test_cmd_run_finish_one_pull_request() {
   assert_eq "main
 $INT" "$(git --git-dir="$T/remote.git" for-each-ref --format='%(refname:short)' refs/heads)"
   assert_eq "$(git -C "$SCRUM_REPO_DIR" rev-parse "$INT")" "$(git --git-dir="$T/remote.git" rev-parse "$INT")"
-  assert_contains "$(gh_calls)" "pr create --repo acme/blog --base main --head $INT --title Sprint 5: 2 tasks by AI (#102, #107) --body-file"
+  assert_contains "$(gh_calls)" "pr create --repo acme/blog --base main --head $INT --title feat: 2 tasks by AI, Sprint 5 (#102, #107) --body-file"
   assert_contains "$OUT" "Opened the pull request into main: https://github.com/acme/blog/pull/200"
   assert_eq '200 main' "$(jq -r '.prs[0] | "\(.number) \(.base)"' "$(state_file)")"
   assert_eq "false" "$(jq '.finished_at == null' "$(state_file)")"
