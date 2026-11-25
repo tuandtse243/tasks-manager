@@ -1,6 +1,7 @@
 # scrum-github adoption guide
 
-For the whole team: Product Owner, Scrum Master and Developers. New to it? Read sections 1 to 4.
+For the whole team: Product Owner, Scrum Master and Developers. Not technical, or want the big
+picture first? Read [Start here](start-here.md). New to it? Read sections 1 to 4.
 Already using it? Look things up in the [command table](#2-commands) and the [flows](#5-flows).
 The full reference of commands and configuration is the
 [plugin README](../plugins/scrum-github/README.md).

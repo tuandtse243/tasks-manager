@@ -3,6 +3,34 @@
 The Scrum Master's commands in the order a sprint uses them. Type them in Claude Code, at the
 root of the project's repository. Every option: [the plugin's README](../plugins/scrum-github/README.md).
 Setting up a repository and the team's conventions: [the adoption guide](adoption-guide.md).
+New to all this? Read [Start here](start-here.md) first: it explains every word below.
+
+## In one minute
+
+You keep the **rhythm** of the team: open each sprint, watch that work keeps moving, close the
+sprint and publish the new version. Most of it is a handful of commands, and each one shows what
+it will do and waits for your yes.
+
+![One sprint: plan, build, follow, close, release](diagrams/sprint-cycle.svg)
+
+| Sprint step | You type | What happens |
+|---|---|---|
+| 1. Plan | `/scrum-github:sprint-new`, then `/scrum-github:sprint-fill` | The sprint is created with its dates; the tasks that fit the team's usual pace are moved into it |
+| 2. Build | (nothing: developers work) | Tasks move to In progress and In review on their own |
+| 3. Follow | `/scrum-github:sprint-status` | A table per person and a **"Needs attention"** list; the same arrives every morning in the digest |
+| 4. Close | `/scrum-github:sprint-report`, then `/scrum-github:sprint-close` | A report with a burndown chart; velocity is saved and unfinished tasks move to the next sprint |
+| 5. Release | `/scrum-github:release` | A new version with notes written from the tasks; the released tasks become Done |
+
+```mermaid
+flowchart LR
+    S1["Once per repository:<br/>init → protect → doctor"] --> S2["Each sprint:<br/>sprint-new → sprint-fill"]
+    S2 --> S3["Every day:<br/>sprint-status"]
+    S3 --> S4["End:<br/>sprint-report → sprint-close → release"]
+    S4 -->|"next sprint"| S2
+```
+
+The once-per-repository set-up needs someone with admin rights on GitHub; ask a developer if
+unsure. The sections below give the details.
 
 ## Once per repository
 

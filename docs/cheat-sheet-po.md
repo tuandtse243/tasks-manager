@@ -2,6 +2,36 @@
 
 The Product Owner's commands in the order a sprint uses them. Type them in Claude Code, at the
 root of the project's repository. Every option: [the plugin's README](../plugins/scrum-github/README.md).
+New to all this? Read [Start here](start-here.md) first: it explains every word below.
+
+## In one minute
+
+You decide **what** gets built and in which order. You do not write code: you describe what you
+want in normal sentences, check the plan Claude makes, and follow progress. Every command shows
+you what it will do and waits for your yes.
+
+```mermaid
+flowchart LR
+    A["💡 Idea"] -->|"/discover"| B["📝 Clear brief"]
+    B -->|"/plan"| C["🗺️ Plan to check"]
+    C -->|"you approve"| D["✅ Tasks on GitHub"]
+    D -->|"/sprint-fill"| E["🏃 In a sprint"]
+    E -->|"/sprint-status"| F["📊 Follow progress"]
+```
+
+![From an idea to tasks](diagrams/idea-to-tasks.svg)
+
+### Your week at a glance
+
+| When | You… | Type |
+|---|---|---|
+| Before planning | turn ideas into tasks | `/scrum-github:discover …`, then `/scrum-github:plan …` |
+| Any time | add a single task or bug | `/scrum-github:task-new …` |
+| Sprint Planning | choose what fits in the sprint, with the team | `/scrum-github:sprint-fill` |
+| Every day (optional) | see how it is going | `/scrum-github:sprint-status`, or read the morning digest |
+| End of the sprint | look at what got done, for the review | the summary posted on the `Sprint N digest` issue |
+
+The sections below give the details and more examples.
 
 ## Before Sprint Planning
 
@@ -60,6 +90,11 @@ The default capacity is the average velocity of up to the last three closed spri
 
 The digest is posted every morning on the issue `Sprint N digest` (and in a chat channel if the
 repository has the secret `SCRUM_DIGEST_WEBHOOK`).
+
+![A task card moves from New to In progress, In review and Done](diagrams/task-journey.svg)
+
+**In plain words:** "In review" with a small `on: develop` label means *finished, waiting for the
+next release*. It becomes Done when users get it.
 
 When the repository has a `develop` branch (presets `standard` and `environments`), a task whose
 pull request is merged is **not Done yet**: it stays In review, shown as "on `develop`" (or "on

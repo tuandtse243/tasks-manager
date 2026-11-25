@@ -6,6 +6,11 @@ Run Scrum on GitHub itself, without Jira or Trello. This repository is a **Claud
 marketplace**. It currently holds one plugin, [`scrum-github`](plugins/scrum-github/README.md)
 (version 0.14.2, see the [releases](https://github.com/tuandtse243/tasks-manager/releases)).
 
+> **New here, or not technical?** Read **[Start here](docs/start-here.md)**: what it does, the
+> words you will hear, and who does what, in plain language with pictures.
+
+![A task card moves by itself from New to In progress, In review and Done](docs/diagrams/task-journey.svg)
+
 | Scrum | On GitHub |
 |---|---|
 | Sprint | Milestone `Sprint {n}` |
@@ -70,6 +75,7 @@ publishes them (`standard`, `environments`).
 
 | You are | Read |
 |---|---|
+| New, or not technical (PO, SM, manager, stakeholder) | [Start here](docs/start-here.md), in plain words with pictures |
 | Product Owner | [PO cheat sheet](docs/cheat-sheet-po.md) |
 | Scrum Master | [SM cheat sheet](docs/cheat-sheet-sm.md), then the [adoption guide](docs/adoption-guide.md) to set up the repository and the team's conventions |
 | Developer | [Dev cheat sheet](docs/cheat-sheet-dev.md) |
@@ -87,8 +93,10 @@ plugins/scrum-github/             the plugin's source
   runtime/                        the `scrum` CLI (bash + jq), copied into the project repo by init
   templates/                      workflows, issue form and PR template installed in the project repo
   tests/                          offline tests with a fake `gh`
-docs/                             adoption guide, cheat sheets by role, project context
+docs/                             start here (plain language), adoption guide, cheat sheets by role,
+                                  project context
   diagrams/                       flow diagram (archify .json source, interactive .html, .png image)
+                                  and animated .svg pictures for the plain-language docs
 openspec/                         specs (specs/) and change history (changes/archive/)
 ```
 

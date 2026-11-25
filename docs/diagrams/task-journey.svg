@@ -1,0 +1,113 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 330" width="960" height="330" role="img" aria-labelledby="t d">
+  <title id="t">The journey of one task</title>
+  <desc id="d">A task card moves across four columns: New (someone adds the task), In progress (a developer or an AI agent works on it), In review (a teammate checks it) and Done (it reaches users with the next version). Nobody drags the card; it moves when people do their work on GitHub.</desc>
+  <style>
+    svg { --bg:#fbfaf7; --col:#f1efe9; --line:#dcd8cf; --ink:#1f2328; --muted:#5b616b; --card:#ffffff;
+          --new:#8a8f98; --prog:#2f6fdf; --rev:#c98a0b; --done:#1f8f4e; }
+    @media (prefers-color-scheme: dark) {
+      svg { --bg:#16181c; --col:#1f2228; --line:#353a43; --ink:#e8e6e3; --muted:#a2a7b0; --card:#2a2e36;
+            --new:#9aa0a9; --prog:#6b9cff; --rev:#e0a63a; --done:#3fbf74; }
+    }
+    text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; fill: var(--ink); }
+    .bg { fill: var(--bg); }
+    .col { fill: var(--col); stroke: var(--line); stroke-width: 1.5; }
+    .head { font-size: 17px; font-weight: 700; }
+    .act { font-size: 15px; font-weight: 600; }
+    .who { font-size: 13px; fill: var(--muted); }
+    .foot { font-size: 14px; fill: var(--muted); }
+    .card-bg { fill: var(--card); stroke: var(--line); stroke-width: 1.5; }
+    .card-title { font-size: 15px; font-weight: 600; }
+    .card-meta { font-size: 12.5px; fill: var(--muted); }
+    .pill { font-size: 12px; font-weight: 700; }
+
+    .card { animation: move 12s ease-in-out infinite; }
+    .strip { animation: strip 12s ease-in-out infinite; }
+    .glow { fill: none; stroke-width: 3; opacity: 0; }
+    .g1 { stroke: var(--new);  animation: on1 12s linear infinite; }
+    .g2 { stroke: var(--prog); animation: on2 12s linear infinite; }
+    .g3 { stroke: var(--rev);  animation: on3 12s linear infinite; }
+    .g4 { stroke: var(--done); animation: on4 12s linear infinite; }
+    .c1 { animation: cap1 12s linear infinite; }
+    .c2 { animation: cap2 12s linear infinite; }
+    .c3 { animation: cap3 12s linear infinite; }
+    .c4 { animation: cap4 12s linear infinite; }
+    .p1 { fill: var(--new);  animation: on1 12s linear infinite; }
+    .p2 { fill: var(--prog); animation: on2 12s linear infinite; }
+    .p3 { fill: var(--rev);  animation: on3 12s linear infinite; }
+    .p4 { fill: var(--done); animation: on4 12s linear infinite; }
+
+    @keyframes move {
+      0%   { transform: translate(0px, 8px); opacity: 0; }
+      5%   { transform: translate(0px, 0px); opacity: 1; }
+      20%  { transform: translate(0px, 0px); }
+      25%  { transform: translate(236px, 0px); }
+      42%  { transform: translate(236px, 0px); }
+      47%  { transform: translate(472px, 0px); }
+      64%  { transform: translate(472px, 0px); }
+      69%  { transform: translate(708px, 0px); }
+      92%  { transform: translate(708px, 0px); opacity: 1; }
+      97%  { transform: translate(708px, 0px); opacity: 0; }
+      100% { transform: translate(0px, 8px); opacity: 0; }
+    }
+    @keyframes strip {
+      0%, 21%   { fill: var(--new); }
+      24%, 43%  { fill: var(--prog); }
+      46%, 65%  { fill: var(--rev); }
+      68%, 100% { fill: var(--done); }
+    }
+    @keyframes on1 { 0%, 21% { opacity: 1; } 23%, 100% { opacity: 0; } }
+    @keyframes on2 { 0%, 22% { opacity: 0; } 24%, 44% { opacity: 1; } 46%, 100% { opacity: 0; } }
+    @keyframes on3 { 0%, 44% { opacity: 0; } 46%, 66% { opacity: 1; } 68%, 100% { opacity: 0; } }
+    @keyframes on4 { 0%, 66% { opacity: 0; } 68%, 95% { opacity: 1; } 97%, 100% { opacity: 0; } }
+    @keyframes cap1 { 0%, 21% { opacity: 1; } 23%, 100% { opacity: .4; } }
+    @keyframes cap2 { 0%, 22% { opacity: .4; } 24%, 44% { opacity: 1; } 46%, 100% { opacity: .4; } }
+    @keyframes cap3 { 0%, 44% { opacity: .4; } 46%, 66% { opacity: 1; } 68%, 100% { opacity: .4; } }
+    @keyframes cap4 { 0%, 66% { opacity: .4; } 68%, 95% { opacity: 1; } 97%, 100% { opacity: .4; } }
+
+    @media (prefers-reduced-motion: reduce) {
+      .card, .strip, .glow, .c1, .c2, .c3, .c4, .p1, .p2, .p3, .p4 { animation: none; }
+      .c1, .c2, .c3, .c4 { opacity: 1; }
+      .p2, .p3, .p4 { opacity: 0; }
+    }
+  </style>
+
+  <rect class="bg" x="0" y="0" width="960" height="330" rx="14"/>
+
+  <!-- Columns -->
+  <g>
+    <rect class="col" x="16"  y="16" width="220" height="256" rx="12"/>
+    <rect class="col" x="252" y="16" width="220" height="256" rx="12"/>
+    <rect class="col" x="488" y="16" width="220" height="256" rx="12"/>
+    <rect class="col" x="724" y="16" width="220" height="256" rx="12"/>
+    <rect class="glow g1" x="16"  y="16" width="220" height="256" rx="12"/>
+    <rect class="glow g2" x="252" y="16" width="220" height="256" rx="12"/>
+    <rect class="glow g3" x="488" y="16" width="220" height="256" rx="12"/>
+    <rect class="glow g4" x="724" y="16" width="220" height="256" rx="12"/>
+
+    <circle cx="38"  cy="44" r="6" fill="var(--new)"/>  <text class="head" x="52"  y="50">New</text>
+    <circle cx="274" cy="44" r="6" fill="var(--prog)"/> <text class="head" x="288" y="50">In progress</text>
+    <circle cx="510" cy="44" r="6" fill="var(--rev)"/>  <text class="head" x="524" y="50">In review</text>
+    <circle cx="746" cy="44" r="6" fill="var(--done)"/> <text class="head" x="760" y="50">Done</text>
+  </g>
+
+  <!-- What happens in each column -->
+  <g class="c1"><text class="act" x="32"  y="208">Someone adds the task</text><text class="who" x="32"  y="230">Product Owner, or the plan</text><text class="who" x="32" y="248">created from a requirement</text></g>
+  <g class="c2"><text class="act" x="268" y="208">The work starts</text><text class="who" x="268" y="230">A developer, or an AI agent,</text><text class="who" x="268" y="248">picks the task up</text></g>
+  <g class="c3"><text class="act" x="504" y="208">The work is checked</text><text class="who" x="504" y="230">A teammate reviews it and</text><text class="who" x="504" y="248">tries it by hand</text></g>
+  <g class="c4"><text class="act" x="740" y="208">It reaches users</text><text class="who" x="740" y="230">Shipped with the next</text><text class="who" x="740" y="248">version (a "release")</text></g>
+
+  <!-- The moving card -->
+  <g class="card">
+    <rect class="card-bg" x="30" y="76" width="192" height="100" rx="10"/>
+    <rect class="strip" x="30" y="76" width="7" height="100" rx="3"/>
+    <text class="card-title" x="48" y="102">#12 Log in with email</text>
+    <text class="card-meta" x="48" y="124">3 points · Sprint 1</text>
+    <text class="card-meta" x="48" y="142">assigned to An</text>
+    <text class="pill p1" x="48" y="164">● New</text>
+    <text class="pill p2" x="48" y="164">● In progress</text>
+    <text class="pill p3" x="48" y="164">● In review</text>
+    <text class="pill p4" x="48" y="164">✓ Done</text>
+  </g>
+
+  <text class="foot" x="480" y="306" text-anchor="middle">Nobody drags the card. It moves by itself when people do their work on GitHub.</text>
+</svg>

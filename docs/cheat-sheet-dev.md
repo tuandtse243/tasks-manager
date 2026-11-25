@@ -2,6 +2,32 @@
 
 The commands for one task, in order. Type them in Claude Code, at the root of the project's
 repository. Every option: [the plugin's README](../plugins/scrum-github/README.md).
+The words and the big picture, for you and your non-technical teammates: [Start here](start-here.md).
+
+## In one minute
+
+You never move a task by hand: starting it, opening its pull request and merging it move it for
+you. With a `develop` branch (the default) a merged task waits In review until the release.
+
+![A task card moves from New to In progress, In review and Done](diagrams/task-journey.svg)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Dev as You
+    participant C as Claude Code
+    participant GH as GitHub
+    Dev->>C: /scrum-github:task-start 12
+    C->>GH: assign #12 to you, status In progress
+    C-->>Dev: branch feat/12-… created from develop
+    Dev->>Dev: code, commit, git push
+    Dev->>C: /scrum-github:task-pr
+    C->>GH: open the PR with "Closes #12"
+    Note over GH: checks run (title, base branch, task link)
+    Dev->>GH: merge the PR into develop
+    GH-->>GH: #12 In review, label on: develop
+    Note over GH: a release into main makes #12 Done
+```
 
 ## One task
 
