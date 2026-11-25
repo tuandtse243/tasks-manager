@@ -174,14 +174,18 @@ cmd_hotfix_prepare() {
   [ "$(printf '%s' "$plan" | jq -r .nothing)" != true ] || die "#$n is not a task (it is a feature, epic, meta issue or pull request)"
   notes="$(jqlib release-notes -r -n --argjson plan "$plan" --argjson prs '{}' --argjson parents '{}' \
     --argjson strings "$(strings_json)" --arg repo "$repo")"
-  plan="$(printf '%s' "$plan" | jq -c --argjson n "$n" --arg notes "$notes" --arg b "$cur" '
+  # files: what --yes would commit on this branch, as `scrum release` lists it ("Committed on it").
+  plan="$(printf '%s' "$plan" | jq -c --argjson n "$n" --arg notes "$notes" --arg b "$cur" --argjson cfg "$CONFIG_JSON" '
     {tag, version, previous: (.previous.tag // null), task: $n, marker: "<!-- scrum-release-tag: \(.tag) -->",
-     bump, branch: $b, notes: $notes, previous_version: (.previous.version // null)}')"
+     bump, branch: $b, notes: $notes, previous_version: (.previous.version // null),
+     files: ([$cfg.release.version_files[]?.path] + (if $cfg.release.changelog then [$cfg.release.changelog] else [] end))}')"
 
   if [ "$yes" != 1 ]; then
     if [ "$json" = 1 ]; then printf '%s\n' "$plan"; return 0; fi
     printf '%s' "$plan" | jq -r '
       "Hotfix #\(.task) on \(.branch): publishes \(.tag) (\(.bump); previous: \(.previous // "none")).",
+      (if (.files | length) > 0 then "Committed on it with --yes: \(.files | join(", "))"
+       else "Nothing to commit with --yes: no release.version_files or release.changelog is configured." end),
       "Put this line in the pull request description: \(.marker)", "", "Release notes:", "", .notes'
     info ""
     info "Nothing changed. To write the version files and the changelog and commit them here, run again with --yes."
