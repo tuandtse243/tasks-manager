@@ -6,6 +6,19 @@ All notable changes to the `scrum-github` plugin. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **The pull request of `scrum run` failed the plugin's own title check** in the presets
+  `standard` and `environments` ("Sprint 2: 2 tasks by AI (#42, #43)" is not a Conventional
+  Commit). The title is now `feat: 2 tasks by AI, Sprint 2 (#42, #43)` (and with `--pr-per-wave`
+  `feat: … , Sprint 2 wave 1 (…)`); change the type when the tasks are fixes. Found by the first
+  run on a real repository.
+- **Agents of a run no longer stop when their worktree starts from the wrong commit.** A new
+  worktree is often made from the default branch (`main`), so with the `standard` preset (and in
+  wave 2) the `implementer` agent found it was not based on the integration branch and stopped.
+  While it has changed nothing it now resets the worktree to the base commit, and stops only if
+  that fails.
+
 ### Changed
 
 - `scrum plan apply` ends by pointing at `plan.html` as the page to review the result on (with

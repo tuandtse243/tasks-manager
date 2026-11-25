@@ -30,8 +30,14 @@ worktree, no network calls the tests do not make).
 ## How to work
 
 0. Note the time you start: `date -u +%Y-%m-%dT%H:%M:%SZ`. Then check that your worktree starts
-   from the base commit: `git merge-base --is-ancestor <base commit> HEAD`. If it does not, stop
-   at once and report `failed` with the reason `worktree not based on the integration branch`.
+   from the base commit: `git merge-base --is-ancestor <base commit> HEAD`. A new worktree is
+   often made from the repository's default branch, not from the integration branch, so this can
+   fail on a fresh worktree (seen on every run with the `standard` preset, where `main` is behind
+   `develop`). While you have changed nothing (`git status --porcelain` prints nothing), move it:
+   `git reset --hard <base commit>`; the branch of this worktree is yours alone, so nothing is
+   lost. Check again with `merge-base --is-ancestor`. If the worktree has changes, or the base
+   commit cannot be read, or the check still fails, stop at once and report `failed` with the
+   reason `worktree not based on the integration branch`.
    A fresh worktree has none of the ignored files of the main working tree (`node_modules`,
    virtual environments, `.env`, build output): install the dependencies there (the way the
    README or the lock file says) before running the tests, and never copy secrets into it.
