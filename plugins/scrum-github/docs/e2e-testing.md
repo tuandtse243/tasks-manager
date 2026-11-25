@@ -309,8 +309,8 @@ Result of the last run (2026-11-25, `tuandtse243/scrum-sandbox`, private, free p
 - `hotfix prepare` previewed `v0.1.1` (patch, previous `v0.1.0`) with release notes from the task
   title. The sandbox's `.github/scrum.yml` has no `release.version_files` or `release.changelog`, so
   `--yes` committed nothing and said so, and `--json` gave `marker`
-  `<!-- scrum-release-tag: v0.1.1 -->`. Writing version files and a changelog on a hotfix branch was
-  therefore not exercised by this run.
+  `<!-- scrum-release-tag: v0.1.1 -->`. That run did not write version files or a changelog; the
+  next part does.
 - PR #47 into `main` with `fix: give a new post an id above every existing id`, "Closes #46", the
   line "Merging this publishes v0.1.1." and the marker: `pr-check` passed (a `hotfix/*` source into
   `main` is allowed). Merged with a merge commit.
@@ -320,6 +320,51 @@ Result of the last run (2026-11-25, `tuandtse243/scrum-sandbox`, private, free p
 - Everything matched the specs ("Start a hotfix", "Hotfix release", "Publishing on merge"); no
   plugin problem found. Noted: the sandbox's `npm test` (`node --test tests/`) fails on a directory
   argument with the Node of this machine; `node --test tests/*.test.js` passes (7 of 7).
+
+### With version files and a changelog
+
+```bash
+# Sandbox config: release.version_files [{path: package.json}], release.changelog CHANGELOG.md;
+# package.json "version" equal to the latest tag; CHANGELOG.md holding only "# Changelog"
+bash "$SCRUM" init                                     # refreshes the vendored runtime .github/scrum
+#    PR into develop ("chore: ...", label no-task), checks pass, squash-merge
+bash "$SCRUM" release 0.2.0 --yes                      # one commit: package.json and CHANGELOG.md
+#    merge the release PR with a merge commit; close and reopen the back-merge PR, merge it
+bash "$SCRUM" task new --bug --points 1 --backlog --title "..." --body "..."
+bash "$SCRUM" hotfix <n>                               # fix, test, commit, push
+bash "$SCRUM" hotfix prepare                           # preview: v0.2.1, notes
+bash "$SCRUM" hotfix prepare --yes                     # ONE commit: package.json 0.2.1, CHANGELOG.md
+git push                                               # prepare never pushes
+#    PR into main ("fix: ...", "Closes #<n>", "Merging this publishes v0.2.1.", the marker)
+#    pr-check passes; merge with a merge commit; close and reopen the back-merge PR, merge it
+```
+
+Result of the last run (2026-11-25, `tuandtse243/scrum-sandbox`, private, free plan, `node --test`):
+- Setup: PR #49 (`chore: set up version files and a changelog for releases`, label `no-task`) added
+  the two `release` keys, set `package.json` to `0.1.1` (it said `0.1.0` while the latest tag was
+  `v0.1.1`), created `CHANGELOG.md` with its title, and `init` refreshed `.github/scrum` from
+  0.13.0 to 0.14.0. Checks passed, squash-merged.
+- `release 0.2.0` previewed "Committed on it: package.json, CHANGELOG.md"; `--yes` opened #50 with
+  one extra commit (`Release v0.2.0`, exactly those two files): `package.json` `"version": "0.2.0"`
+  and `## v0.2.0 (2026-11-25)` right after `# Changelog`. Merged with a merge commit: tag `v0.2.0`
+  on the merge commit, GitHub Release, back-merge #51 (checks only after close and reopen), merged.
+- Bug task #52 ("createPost answers 500 when the title is not a string"). `hotfix 52` branched from
+  `origin/main`; the fix and its test were committed by hand (`node --test` 13 of 13).
+  `hotfix prepare` previewed `v0.2.1` (patch, previous `v0.2.0`) and `--yes` made one local commit
+  (`Release v0.2.1`, 2 files, not pushed) with `package.json` `"version": "0.2.1"` and a
+  `## v0.2.1 (2026-11-25)` section on top of the `v0.2.0` one, holding the notes of the task
+  (headings one level down, the "Full changelog" line). `--json` gave `tag` `v0.2.1`, `version`
+  `0.2.1`, `previous` `v0.2.0` and the marker.
+- PR #53 into `main` (`fix: answer 400 when the title is not a string`, "Closes #52", the line
+  "Merging this publishes v0.2.1." and the marker): `pr-check` passed; merged with a merge commit.
+  `scrum-release.yml` tagged `v0.2.1` on the merge commit, published the Release with the same
+  notes, set #52 Done and closed, and opened back-merge #54. #54 ran its checks after close and
+  reopen, was mergeable with no conflict, and merged: `main` and then `develop` both hold
+  `"version": "0.2.1"` and the `v0.2.1` and `v0.2.0` sections of the changelog.
+- Matched the specs ("Hotfix release", "Version files and changelog"). Noted: the preview of
+  `hotfix prepare` (text and `--json`) does not list the files it will change, unlike `release`
+  ("Committed on it: ..."), so the hotfix skill's "Show" step has to read them from `scrum.yml`.
+  The sandbox's tests write to `/tmp`, so run them outside the Claude sandbox.
 
 ## AI run (0.11.0)
 
