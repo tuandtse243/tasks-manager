@@ -1,0 +1,126 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 270" width="960" height="270" role="img" aria-labelledby="t d">
+  <title id="t">From an idea to tasks</title>
+  <desc id="d">Four steps: you say what you want in your own words; the discover command asks questions until the idea is clear and writes a brief; the plan command splits it into features and tasks and you approve once; then the tasks appear on GitHub, assigned to people and placed in a sprint.</desc>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="var(--accent)"/>
+    </marker>
+  </defs>
+  <style>
+    svg { --bg:#fbfaf7; --box:#f1efe9; --line:#dcd8cf; --ink:#1f2328; --muted:#5b616b; --paper:#ffffff;
+          --accent:#2f6fdf; --ok:#1f8f4e; --soft:#e3ebfb; }
+    @media (prefers-color-scheme: dark) {
+      svg { --bg:#16181c; --box:#1f2228; --line:#353a43; --ink:#e8e6e3; --muted:#a2a7b0; --paper:#2a2e36;
+            --accent:#6b9cff; --ok:#3fbf74; --soft:#25324a; }
+    }
+    text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; fill: var(--ink); }
+    .bg { fill: var(--bg); }
+    .box { fill: var(--box); stroke: var(--line); stroke-width: 1.5; }
+    .paper { fill: var(--paper); stroke: var(--line); stroke-width: 1.5; }
+    .head { font-size: 16px; font-weight: 700; }
+    .cap { font-size: 13.5px; fill: var(--muted); text-anchor: middle; }
+    .small { font-size: 12.5px; }
+    .tiny { font-size: 11.5px; fill: var(--muted); }
+    .bar { fill: var(--line); }
+    .arrow { stroke: var(--accent); stroke-width: 2.5; fill: none; }
+    .node { fill: var(--soft); stroke: var(--accent); stroke-width: 1.5; }
+    .edge { stroke: var(--accent); stroke-width: 1.5; }
+
+    .sA { animation: sA 10s ease-out infinite; }
+    .a1 { animation: a1 10s ease-out infinite; }
+    .sB { animation: sB 10s ease-out infinite; }
+    .a2 { animation: a2 10s ease-out infinite; }
+    .sC { animation: sC 10s ease-out infinite; }
+    .ok { animation: ok 10s ease-out infinite; }
+    .a3 { animation: a3 10s ease-out infinite; }
+    .t1 { animation: t1 10s ease-out infinite; }
+    .t2 { animation: t2 10s ease-out infinite; }
+    .t3 { animation: t3 10s ease-out infinite; }
+
+    @keyframes sA { 0% { opacity: 0; transform: translateY(8px); } 6%, 92% { opacity: 1; transform: none; } 98%, 100% { opacity: 0; } }
+    @keyframes a1 { 0%, 10% { opacity: 0; } 14%, 92% { opacity: 1; } 98%, 100% { opacity: 0; } }
+    @keyframes sB { 0%, 14% { opacity: 0; transform: translateY(8px); } 20%, 92% { opacity: 1; transform: none; } 98%, 100% { opacity: 0; } }
+    @keyframes a2 { 0%, 30% { opacity: 0; } 34%, 92% { opacity: 1; } 98%, 100% { opacity: 0; } }
+    @keyframes sC { 0%, 34% { opacity: 0; transform: translateY(8px); } 40%, 92% { opacity: 1; transform: none; } 98%, 100% { opacity: 0; } }
+    @keyframes ok { 0%, 46% { opacity: 0; } 50%, 92% { opacity: 1; } 98%, 100% { opacity: 0; } }
+    @keyframes a3 { 0%, 52% { opacity: 0; } 56%, 92% { opacity: 1; } 98%, 100% { opacity: 0; } }
+    @keyframes t1 { 0%, 56% { opacity: 0; transform: translateX(-14px); } 61%, 92% { opacity: 1; transform: none; } 98%, 100% { opacity: 0; } }
+    @keyframes t2 { 0%, 62% { opacity: 0; transform: translateX(-14px); } 67%, 92% { opacity: 1; transform: none; } 98%, 100% { opacity: 0; } }
+    @keyframes t3 { 0%, 68% { opacity: 0; transform: translateX(-14px); } 73%, 92% { opacity: 1; transform: none; } 98%, 100% { opacity: 0; } }
+
+    @media (prefers-reduced-motion: reduce) {
+      .sA, .a1, .sB, .a2, .sC, .ok, .a3, .t1, .t2, .t3 { animation: none; }
+    }
+  </style>
+
+  <rect class="bg" x="0" y="0" width="960" height="270" rx="14"/>
+
+  <!-- The four frames stay; only their contents animate -->
+  <rect class="box" x="10" y="14" width="196" height="186" rx="12"/>
+  <text class="head" x="28" y="42">1 · Idea</text>
+  <rect class="box" x="258" y="14" width="196" height="186" rx="12"/>
+  <text class="head" x="276" y="42">2 · Brief</text>
+  <rect class="box" x="506" y="14" width="196" height="186" rx="12"/>
+  <text class="head" x="524" y="42">3 · Plan</text>
+
+  <!-- 1. Idea -->
+  <g class="sA">
+    <path class="paper" d="M34 64 h148 a12 12 0 0 1 12 12 v52 a12 12 0 0 1 -12 12 h-110 l-18 18 v-18 h-20 a12 12 0 0 1 -12 -12 v-52 a12 12 0 0 1 12 -12 z"/>
+    <text class="small" x="108" y="98" text-anchor="middle">"Let users comment</text>
+    <text class="small" x="108" y="118" text-anchor="middle">under a post"</text>
+  </g>
+  <path class="arrow a1" d="M212 107 H 250" marker-end="url(#ah)"/>
+
+  <!-- 2. Brief -->
+  <g class="sB">
+    <rect class="paper" x="278" y="58" width="112" height="128" rx="6"/>
+    <text class="tiny" x="290" y="78">brief.md</text>
+    <rect class="bar" x="290" y="90" width="86" height="6" rx="3"/>
+    <rect class="bar" x="290" y="104" width="70" height="6" rx="3"/>
+    <rect class="bar" x="290" y="118" width="80" height="6" rx="3"/>
+    <rect class="bar" x="290" y="132" width="56" height="6" rx="3"/>
+    <rect class="bar" x="290" y="146" width="76" height="6" rx="3"/>
+    <rect class="node" x="350" y="66" width="94" height="40" rx="10"/>
+    <text class="tiny" x="397" y="82" text-anchor="middle" style="fill:var(--ink)">Who can delete</text>
+    <text class="tiny" x="397" y="97" text-anchor="middle" style="fill:var(--ink)">a comment?</text>
+    <rect class="node" x="360" y="140" width="84" height="26" rx="10"/>
+    <text class="tiny" x="402" y="157" text-anchor="middle" style="fill:var(--ink)">The author.</text>
+  </g>
+  <path class="arrow a2" d="M460 107 H 498" marker-end="url(#ah)"/>
+
+  <!-- 3. Plan -->
+  <g class="sC">
+    <line class="edge" x1="604" y1="80" x2="562" y2="114"/>
+    <line class="edge" x1="604" y1="80" x2="646" y2="114"/>
+    <line class="edge" x1="562" y1="126" x2="540" y2="152"/>
+    <line class="edge" x1="562" y1="126" x2="584" y2="152"/>
+    <line class="edge" x1="646" y1="126" x2="646" y2="152"/>
+    <rect class="node" x="574" y="60" width="60" height="22" rx="6"/><text class="tiny" x="604" y="75" text-anchor="middle" style="fill:var(--ink)">Epic</text>
+    <rect class="node" x="530" y="108" width="64" height="20" rx="6"/><text class="tiny" x="562" y="122" text-anchor="middle" style="fill:var(--ink)">Feature</text>
+    <rect class="node" x="614" y="108" width="64" height="20" rx="6"/><text class="tiny" x="646" y="122" text-anchor="middle" style="fill:var(--ink)">Feature</text>
+    <rect class="paper" x="528" y="150" width="24" height="16" rx="4"/>
+    <rect class="paper" x="572" y="150" width="24" height="16" rx="4"/>
+    <rect class="paper" x="634" y="150" width="24" height="16" rx="4"/>
+  </g>
+  <g class="ok">
+    <rect x="590" y="172" width="104" height="22" rx="11" fill="var(--ok)"/>
+    <text x="642" y="187" text-anchor="middle" style="fill:#fff;font-size:12.5px;font-weight:700">✓ You approve</text>
+  </g>
+  <path class="arrow a3" d="M708 107 H 746" marker-end="url(#ah)"/>
+
+  <!-- 4. Tasks -->
+  <rect class="box" x="754" y="14" width="196" height="186" rx="12"/>
+  <text class="head" x="772" y="42">4 · Tasks</text>
+  <g class="t1"><rect class="paper" x="768" y="58" width="168" height="40" rx="8"/><rect x="768" y="58" width="5" height="40" rx="2" fill="var(--accent)"/><text class="small" x="782" y="76">#21 Store comments</text><text class="tiny" x="782" y="91">3 pts · An · Sprint 2</text></g>
+  <g class="t2"><rect class="paper" x="768" y="104" width="168" height="40" rx="8"/><rect x="768" y="104" width="5" height="40" rx="2" fill="var(--accent)"/><text class="small" x="782" y="122">#22 Show comments</text><text class="tiny" x="782" y="137">3 pts · Binh · Sprint 2</text></g>
+  <g class="t3"><rect class="paper" x="768" y="150" width="168" height="40" rx="8"/><rect x="768" y="150" width="5" height="40" rx="2" fill="var(--accent)"/><text class="small" x="782" y="168">#23 Delete a comment</text><text class="tiny" x="782" y="183">1 pt · An · backlog</text></g>
+
+  <text class="cap" x="108" y="226">Say what you want,</text>
+  <text class="cap" x="108" y="244">in your own words</text>
+  <text class="cap" x="356" y="226">Claude asks questions</text>
+  <text class="cap" x="356" y="244">until it is clear</text>
+  <text class="cap" x="604" y="226">Claude splits it up;</text>
+  <text class="cap" x="604" y="244">you check it once</text>
+  <text class="cap" x="852" y="226">The tasks appear on GitHub,</text>
+  <text class="cap" x="852" y="244">assigned and in a sprint</text>
+</svg>

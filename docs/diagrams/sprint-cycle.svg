@@ -1,0 +1,116 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 260" width="960" height="260" role="img" aria-labelledby="t d">
+  <title id="t">One sprint, step by step</title>
+  <desc id="d">A sprint has five steps: plan (choose the work that fits), build (developers and AI agents do the work), follow (check progress every day), close (see what got done) and release (users get the new version). Then the next sprint begins.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="var(--muted)"/>
+    </marker>
+  </defs>
+  <style>
+    svg { --bg:#fbfaf7; --line:#dcd8cf; --ink:#1f2328; --muted:#5b616b; --node:#ffffff; --accent:#2f6fdf; --on:#ffffff; }
+    @media (prefers-color-scheme: dark) {
+      svg { --bg:#16181c; --line:#353a43; --ink:#e8e6e3; --muted:#a2a7b0; --node:#2a2e36; --accent:#6b9cff; --on:#0e1116; }
+    }
+    text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; fill: var(--ink); }
+    .bg { fill: var(--bg); }
+    .track { stroke: var(--line); stroke-width: 6; stroke-linecap: round; }
+    .progress { stroke: var(--accent); stroke-width: 6; stroke-linecap: round; stroke-dasharray: 768; stroke-dashoffset: 768;
+                animation: draw 12s ease-in-out infinite; }
+    .ring { fill: var(--node); stroke: var(--line); stroke-width: 2.5; }
+    .fill { fill: var(--accent); opacity: 0; }
+    .num { font-size: 20px; font-weight: 700; text-anchor: middle; }
+    .numon { font-size: 20px; font-weight: 700; text-anchor: middle; fill: var(--on); opacity: 0; }
+    .title { font-size: 17px; font-weight: 700; text-anchor: middle; }
+    .cap { font-size: 13.5px; fill: var(--muted); text-anchor: middle; }
+    .back { fill: none; stroke: var(--muted); stroke-width: 1.8; stroke-dasharray: 6 6; }
+    .backlabel { font-size: 13.5px; fill: var(--muted); text-anchor: middle; font-style: italic; }
+    .dot { fill: var(--accent); animation: travel 12s ease-in-out infinite; }
+    .n1 { animation: n1 12s linear infinite; }
+    .n2 { animation: n2 12s linear infinite; }
+    .n3 { animation: n3 12s linear infinite; }
+    .n4 { animation: n4 12s linear infinite; }
+    .n5 { animation: n5 12s linear infinite; }
+
+    @keyframes travel {
+      0%   { transform: translate(0px, 0px); opacity: 0; }
+      3%   { opacity: 1; }
+      12%  { transform: translate(0px, 0px); }
+      20%  { transform: translate(192px, 0px); }
+      32%  { transform: translate(192px, 0px); }
+      40%  { transform: translate(384px, 0px); }
+      52%  { transform: translate(384px, 0px); }
+      60%  { transform: translate(576px, 0px); }
+      72%  { transform: translate(576px, 0px); }
+      80%  { transform: translate(768px, 0px); }
+      92%  { transform: translate(768px, 0px); opacity: 1; }
+      96%  { transform: translate(768px, 0px); opacity: 0; }
+      100% { transform: translate(0px, 0px); opacity: 0; }
+    }
+    @keyframes draw {
+      0%, 12% { stroke-dashoffset: 768; }
+      20%, 32% { stroke-dashoffset: 576; }
+      40%, 52% { stroke-dashoffset: 384; }
+      60%, 72% { stroke-dashoffset: 192; }
+      80%, 92% { stroke-dashoffset: 0; opacity: 1; }
+      96% { stroke-dashoffset: 0; opacity: 0; }
+      100% { stroke-dashoffset: 768; opacity: 0; }
+    }
+    @keyframes n1 { 0%, 2% { opacity: 0; } 4%, 93% { opacity: 1; } 96%, 100% { opacity: 0; } }
+    @keyframes n2 { 0%, 19% { opacity: 0; } 21%, 93% { opacity: 1; } 96%, 100% { opacity: 0; } }
+    @keyframes n3 { 0%, 39% { opacity: 0; } 41%, 93% { opacity: 1; } 96%, 100% { opacity: 0; } }
+    @keyframes n4 { 0%, 59% { opacity: 0; } 61%, 93% { opacity: 1; } 96%, 100% { opacity: 0; } }
+    @keyframes n5 { 0%, 79% { opacity: 0; } 81%, 93% { opacity: 1; } 96%, 100% { opacity: 0; } }
+
+    @media (prefers-reduced-motion: reduce) {
+      .progress, .dot, .n1, .n2, .n3, .n4, .n5 { animation: none; }
+      .dot { opacity: 0; }
+    }
+  </style>
+
+  <rect class="bg" x="0" y="0" width="960" height="260" rx="14"/>
+
+  <!-- "Then the next sprint begins" loop -->
+  <path class="back" d="M864 84 C 864 22, 96 22, 96 84" marker-end="url(#arrow)"/>
+  <rect x="380" y="26" width="200" height="24" rx="12" fill="var(--bg)"/>
+  <text class="backlabel" x="480" y="43">then the next sprint begins</text>
+
+  <!-- Track and progress -->
+  <line class="track" x1="96" y1="120" x2="864" y2="120"/>
+  <line class="progress" x1="96" y1="120" x2="864" y2="120"/>
+
+  <!-- Steps -->
+  <g>
+    <circle class="ring" cx="96"  cy="120" r="30"/><circle class="fill n1" cx="96"  cy="120" r="30"/>
+    <text class="num" x="96"  y="127">1</text><text class="numon n1" x="96"  y="127">1</text>
+    <circle class="ring" cx="288" cy="120" r="30"/><circle class="fill n2" cx="288" cy="120" r="30"/>
+    <text class="num" x="288" y="127">2</text><text class="numon n2" x="288" y="127">2</text>
+    <circle class="ring" cx="480" cy="120" r="30"/><circle class="fill n3" cx="480" cy="120" r="30"/>
+    <text class="num" x="480" y="127">3</text><text class="numon n3" x="480" y="127">3</text>
+    <circle class="ring" cx="672" cy="120" r="30"/><circle class="fill n4" cx="672" cy="120" r="30"/>
+    <text class="num" x="672" y="127">4</text><text class="numon n4" x="672" y="127">4</text>
+    <circle class="ring" cx="864" cy="120" r="30"/><circle class="fill n5" cx="864" cy="120" r="30"/>
+    <text class="num" x="864" y="127">5</text><text class="numon n5" x="864" y="127">5</text>
+  </g>
+
+  <circle class="dot" cx="96" cy="120" r="9"/>
+
+  <text class="title" x="96"  y="186">Plan</text>
+  <text class="cap"   x="96"  y="208">Choose the work</text>
+  <text class="cap"   x="96"  y="226">that fits the sprint</text>
+
+  <text class="title" x="288" y="186">Build</text>
+  <text class="cap"   x="288" y="208">Developers and AI</text>
+  <text class="cap"   x="288" y="226">agents do the tasks</text>
+
+  <text class="title" x="480" y="186">Follow</text>
+  <text class="cap"   x="480" y="208">Check progress daily,</text>
+  <text class="cap"   x="480" y="226">read the morning digest</text>
+
+  <text class="title" x="672" y="186">Close</text>
+  <text class="cap"   x="672" y="208">See what got done,</text>
+  <text class="cap"   x="672" y="226">carry over the rest</text>
+
+  <text class="title" x="864" y="186">Release</text>
+  <text class="cap"   x="864" y="208">Users get the</text>
+  <text class="cap"   x="864" y="226">new version</text>
+</svg>
