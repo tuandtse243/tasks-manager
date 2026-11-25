@@ -97,7 +97,9 @@ def plan_load($members; $sprint_tasks; $title):
 # Input: a plan. What fits in the open sprint (design 6): the plan's new tasks that are not
 # named for another sprint, by wave then plan order, adding points to $planned (already in the sprint).
 # A task that would pass $capacity, or that depends on a task left for the backlog, should stay
-# in the backlog. Unknown capacity (null) leaves every task in. No open sprint ($title null):
+# in the backlog. A task the plan names for this very sprint ("sprint": "Sprint 2", not "current"
+# or empty) is the user's choice: it always fits, counts first and is never suggested out
+# (plan-insights warns about it instead). Unknown capacity (null) leaves every task in. No open sprint ($title null):
 # every task stays in the backlog. Suggestions only: the plan is not changed.
 # Output: {capacity, planned, into, after, tasks: [{id, points, wave, fit: "sprint"|"backlog", reason}]}
 # reason: null | "over_capacity" | "depends_on_backlog" | "no_sprint"
@@ -107,15 +109,17 @@ def plan_fit($capacity; $planned; $title):
   | [plan_tasks | to_entries[] | .key as $i | .value | select(.issue == null)
      | select(task_sprint($plan) as $s | $s == "" or ($s | ascii_downcase) == "current"
               or ($title != null and ($s | ascii_downcase) == ($title | ascii_downcase)))
-     | {id, points: (.points // null), deps: deps, wave: $w[.id], order: $i}]
+     | {id, points: (.points // null), deps: deps, wave: $w[.id], order: $i,
+        explicit: (task_sprint($plan) as $s | $s != "" and ($s | ascii_downcase) != "current")}]
   | sort_by(.wave, .order) | map(del(.order))
-  | reduce .[] as $t ({sum: $planned, out: [], tasks: []};
+  | reduce .[] as $t ({sum: ($planned + ([.[] | select(.explicit) | .points // 0] | add // 0)), out: [], tasks: []};
       . as $st
-      | (if $title == null then "no_sprint"
+      | if $t.explicit then .tasks += [$t + {fit: "sprint", reason: null}] else
+      (if $title == null then "no_sprint"
        elif any($t.deps[]; . as $d | $st.out | index($d) != null) then "depends_on_backlog"
        elif $capacity != null and ($st.sum + ($t.points // 0)) > $capacity then "over_capacity"
        else null end) as $why
       | if $why == null then .sum += ($t.points // 0) | .tasks += [$t + {fit: "sprint", reason: null}]
-        else .out += [$t.id] | .tasks += [$t + {fit: "backlog", reason: $why}] end)
+        else .out += [$t.id] | .tasks += [$t + {fit: "backlog", reason: $why}] end end)
   | { capacity: $capacity, planned: $planned, into: (.sum - $planned), after: .sum,
-      tasks: [.tasks[] | del(.deps)] };
+      tasks: [.tasks[] | del(.deps, .explicit)] };
