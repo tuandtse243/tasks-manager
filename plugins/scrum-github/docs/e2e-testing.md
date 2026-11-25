@@ -285,6 +285,42 @@ applied all three rulesets; `release 0.13.1 --yes` committed `plugin.json`, `run
 the README version on `release/v0.13.1` (PR #29); merging it tagged `v0.13.1` on the merge commit,
 published the release and opened back-merge #30, merged after close and reopen.
 
+## Hotfix (0.13.0)
+
+```bash
+# In a sandbox clone with preset standard, v0.1.0 already tagged on main
+bash "$SCRUM" task new --title "..." --bug --points 1 --backlog   # a bug task with acceptance criteria
+bash "$SCRUM" hotfix <n>                               # hotfix/<n>-slug from origin/main; task In progress
+#    fix it with a test, commit, push
+bash "$SCRUM" hotfix prepare                           # preview: version, marker, notes; changes nothing
+bash "$SCRUM" hotfix prepare --yes                     # version files and changelog, one commit
+bash "$SCRUM" hotfix prepare --json                    # {tag, version, previous, task, marker, bump, notes}
+#    open the PR into main ("fix: ...", "Closes #<n>", "Merging this publishes vX.Y.Z.", the marker)
+#    pr-check passes; merge it with a merge commit     -> scrum-release.yml: tag, GitHub Release,
+#                                                         task Done and closed, back-merge PR
+#    close and reopen the back-merge PR (its checks), merge it with a merge commit
+```
+
+Result of the last run (2026-11-25, `tuandtse243/scrum-sandbox`, private, free plan, `node --test`):
+- Bug task #46 ("createPost reuses an id after a gap", `bug`, 1 point, backlog). `hotfix 46` created
+  `hotfix/46-createpost-reuses-an-id-after-a-gap` from `origin/main` (its parent is the head of
+  `main`, not of `develop`), assigned #46 and set it In progress. The fix and its test were
+  committed and pushed by hand.
+- `hotfix prepare` previewed `v0.1.1` (patch, previous `v0.1.0`) with release notes from the task
+  title. The sandbox's `.github/scrum.yml` has no `release.version_files` or `release.changelog`, so
+  `--yes` committed nothing and said so, and `--json` gave `marker`
+  `<!-- scrum-release-tag: v0.1.1 -->`. Writing version files and a changelog on a hotfix branch was
+  therefore not exercised by this run.
+- PR #47 into `main` with `fix: give a new post an id above every existing id`, "Closes #46", the
+  line "Merging this publishes v0.1.1." and the marker: `pr-check` passed (a `hotfix/*` source into
+  `main` is allowed). Merged with a merge commit.
+- `scrum-release.yml` ran (17 s): annotated tag `v0.1.1` pointing at the merge commit, GitHub Release
+  `v0.1.1` with the notes, #46 Done and closed, back-merge PR #48 into `develop` opened. #48 ran its
+  checks only after close and reopen; merged with a merge commit, `develop` contained `main`.
+- Everything matched the specs ("Start a hotfix", "Hotfix release", "Publishing on merge"); no
+  plugin problem found. Noted: the sandbox's `npm test` (`node --test tests/`) fails on a directory
+  argument with the Node of this machine; `node --test tests/*.test.js` passes (7 of 7).
+
 ## AI run (0.11.0)
 
 ```bash
@@ -311,5 +347,5 @@ Result of the last run (2026-11-25, `tuandtse243/scrum-sandbox`, a Node API, `no
 - The headless attempts (`claude -p`) could not run it: `gh` fails its certificate check inside the
   Claude sandbox (OSStatus -26276). Run it in a terminal.
 
-Not run yet on GitHub: `promote` (preset `environments`), `hotfix` with `hotfix prepare`, the
+Not run yet on GitHub: `promote` (preset `environments`), the
 deployment templates, and `--pr-per-wave`.
