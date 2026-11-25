@@ -19,7 +19,7 @@ Dev) run Scrum on GitHub alone. Sprints are milestones, tasks are issues, and st
 are labels; there is no separate database and no Jira or Trello (docs/adoption-guide.md,
 README.md). It replaces manual steps with slash commands, a `scrum` Bash CLI and GitHub Actions
 workflows installed into the target repo (plugins/scrum-github/README.md). The current version is
-0.14.0 (plugins/scrum-github/.claude-plugin/plugin.json, runtime/VERSION).
+0.14.1 (plugins/scrum-github/.claude-plugin/plugin.json, runtime/VERSION).
 
 What it covers today (README.md, plugins/scrum-github/README.md):
 
@@ -82,7 +82,7 @@ Who uses it in practice beyond a sandbox repo: unknown.
 |---|---|
 | `.claude-plugin/` | Marketplace manifest `tasks-manager` pointing to `./plugins/scrum-github` (.claude-plugin/marketplace.json) |
 | `.github/workflows/` | `ci.yml`: this repo's CI (tests and shellcheck) (.github/workflows/ci.yml) |
-| `plugins/scrum-github/.claude-plugin/` | Plugin manifest: name, version 0.14.0, description, keywords (plugin.json) |
+| `plugins/scrum-github/.claude-plugin/` | Plugin manifest: name, version 0.14.1, description, keywords (plugin.json) |
 | `plugins/scrum-github/bin/` | `scrum`, a wrapper that forwards to `runtime/bin/scrum`; on Claude Code's PATH while the plugin is enabled (bin/scrum) |
 | `plugins/scrum-github/runtime/bin/` | `scrum`, the single CLI entry point; dispatches to `lib/cmd_*.sh` (runtime/bin/scrum) |
 | `plugins/scrum-github/runtime/lib/` | Shell libraries: `common.sh` (gh wrappers, helpers), `config.sh`, `project.sh` (board), `branching.sh` (branch roles), `attention.sh` (needs attention), one `cmd_*.sh` per command group (21 of them) |
