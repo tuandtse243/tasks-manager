@@ -1317,6 +1317,23 @@ test_apply_reads_github_state_once() {
   assert_eq "2" "$(grep -c 'repos/acme/blog/milestones' "$FAKE_GH_LOG")"
 }
 
+test_fit_task_the_user_put_in_the_sprint_is_never_suggested_out() {
+  local fit out
+  # T1 (3) is named for Sprint 5 by hand; capacity 2 would otherwise push it out.
+  fit="$(jqp "$(plan5 | jq -c '.features[0].tasks[0].sprint = "Sprint 5"')" 'plan_fit(2; 0; "Sprint 5")')"
+  assert_eq "sprint" "$(printf '%s' "$fit" | jq -r '.tasks[] | select(.id == "T1") | .fit')"
+  assert_eq "3" "$(printf '%s' "$fit" | jq -r '.into')" "only T1 counted (the others do not fit)"
+  assert_eq "backlog" "$(printf '%s' "$fit" | jq -r '.tasks[] | select(.id == "T5") | .fit')" "tasks without a sprint stay a suggestion"
+  # plan check text: a warning about the choice, no suggestion for T1
+  out="$(insights "$(plan5 | jq -c '.features[0].tasks[0].sprint = "Sprint 5"')" "$MS5V" "[$(s5issue 40 13 an-nguyen)]")"
+  assert_contains "$(printf '%s' "$out" | jq -r '.warnings[]')" "T1 is in Sprint 5, which is over capacity (29 of 15 points)"
+  assert_eq "sprint" "$(printf '%s' "$out" | jq -r '.fit.tasks[] | select(.id == "T1") | .fit')"
+  # no sprint chosen: the suggestion stays and no such warning
+  out="$(insights "$(plan5)" "$MS5V" "[$(s5issue 40 13 an-nguyen)]")"
+  assert_eq "backlog" "$(printf '%s' "$out" | jq -r '.fit.tasks[] | select(.id == "T1") | .fit')"
+  assert_not_contains "$(printf '%s' "$out" | jq -r '.warnings[]')" "T1 is in Sprint 5"
+}
+
 test_fit_ties_follow_plan_order() {
   local p
   p='{"version":2,"title":"x","features":[{"id":"F1","title":"F","tasks":[{"id":"T2","title":"a","points":1},{"id":"T10","title":"b","points":1}]}]}'

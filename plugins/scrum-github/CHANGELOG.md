@@ -8,6 +8,10 @@ All notable changes to the `scrum-github` plugin. The format follows
 
 ### Fixed
 
+- **`plan check` (and plan.html / plan.md) no longer says "better left in the backlog" about a task
+  the user put in the sprint by hand** (`"sprint": "Sprint 2"` on the task). It is now a warning
+  about the choice, "T1 is in Sprint 2, which is over capacity (27 of 10 points)"; a task with no
+  sprint in the plan keeps the suggestion.
 - **The pull request of `scrum run` failed the plugin's own title check** in the presets
   `standard` and `environments` ("Sprint 2: 2 tasks by AI (#42, #43)" is not a Conventional
   Commit). The title is now `feat: 2 tasks by AI, Sprint 2 (#42, #43)` (and with `--pr-per-wave`

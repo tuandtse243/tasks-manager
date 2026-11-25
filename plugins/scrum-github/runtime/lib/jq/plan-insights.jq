@@ -52,6 +52,10 @@ include "plan";
            elif $avg == null then "the capacity of \($s.title) is not known yet: no closed sprint has a velocity"
            elif ($planned + $adding) > $avg then "\($s.title) would have \($planned + $adding) / \($avg) points after apply (over capacity by \($planned + $adding - $avg))"
            else empty end),
+          (if $s != null and $avg != null and ($planned + $adding) > $avg then
+             $new[] | select(task_sprint($plan) as $t | ($t | ascii_downcase) != "current" and $t != "")
+             | "\(.id) is in \($s.title), which is over capacity (\($planned + $adding) of \($avg) points)"
+           else empty end),
           ($load // [] | .[] | select(.over) | "@\(.login) would have \(.total) / \(.capacity) points in \($s.title) (over capacity by \(.total - .capacity))")
         ] }
   end
