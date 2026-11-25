@@ -4,7 +4,7 @@ All notable changes to the `scrum-github` plugin. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the plugin uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.14.0] - 2026-11-25
+## [Unreleased]
 
 ### Fixed
 
@@ -12,6 +12,11 @@ All notable changes to the `scrum-github` plugin. The format follows
   the user put in the sprint by hand** (`"sprint": "Sprint 2"` on the task). It is now a warning
   about the choice, "T1 is in Sprint 2, which is over capacity (27 of 10 points)"; a task with no
   sprint in the plan keeps the suggestion.
+
+## [0.14.0] - 2026-11-25
+
+### Fixed
+
 - **The pull request of `scrum run` failed the plugin's own title check** in the presets
   `standard` and `environments` ("Sprint 2: 2 tasks by AI (#42, #43)" is not a Conventional
   Commit). The title is now `feat: 2 tasks by AI, Sprint 2 (#42, #43)` (and with `--pr-per-wave`
