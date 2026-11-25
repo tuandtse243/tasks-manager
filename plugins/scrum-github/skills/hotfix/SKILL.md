@@ -37,11 +37,13 @@ the task Done and opens the back-merge pull requests.
 When the fix is committed on the hotfix branch:
 
 1. **Preview.** Run `scrum hotfix prepare --json`. It changes nothing and returns `{tag, version,
-   previous, task, marker, notes}`: the version this hotfix publishes (from the labels of the task,
-   a patch for a bug, after the highest version tag on the release branch) and the `marker` line.
-2. **Show.** Tell the user the previous and the new version, and the files that will change
-   (`release.version_files` and `release.changelog` of `.github/scrum.yml`; none when neither is
-   set).
+   previous, task, marker, files, notes}`: the version this hotfix publishes (from the labels of the
+   task, a patch for a bug, after the highest version tag on the release branch), the `marker`
+   line and the `files` that `--yes` would commit (`release.version_files` and `release.changelog`
+   of `.github/scrum.yml`; empty when neither is set).
+2. **Show.** Tell the user the previous and the new version, and the `files` that will change (or
+   that there are none). Without `--json` the preview prints the same as "Committed on it with
+   --yes: ...".
 3. **Wait for the user's answer** before writing. Do not go on without a clear yes in this
    conversation.
 4. **Write.** Only after the yes, run `scrum hotfix prepare --json --yes`. It writes the version

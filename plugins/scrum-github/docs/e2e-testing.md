@@ -361,9 +361,10 @@ Result of the last run (2026-11-25, `tuandtse243/scrum-sandbox`, private, free p
   notes, set #52 Done and closed, and opened back-merge #54. #54 ran its checks after close and
   reopen, was mergeable with no conflict, and merged: `main` and then `develop` both hold
   `"version": "0.2.1"` and the `v0.2.1` and `v0.2.0` sections of the changelog.
-- Matched the specs ("Hotfix release", "Version files and changelog"). Noted: the preview of
-  `hotfix prepare` (text and `--json`) does not list the files it will change, unlike `release`
-  ("Committed on it: ..."), so the hotfix skill's "Show" step has to read them from `scrum.yml`.
+- Matched the specs ("Hotfix release", "Version files and changelog"). Found: the preview of
+  `hotfix prepare` (text and `--json`) did not list the files it would change, unlike `release`
+  ("Committed on it: ..."). Fixed in 0.14.2: the preview prints "Committed on it with --yes: ..."
+  and `--json` has `files`.
   The sandbox's tests write to `/tmp`, so run them outside the Claude sandbox.
 
 ## AI run (0.11.0)
