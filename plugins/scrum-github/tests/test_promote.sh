@@ -183,6 +183,23 @@ test_hotfix_prepare_json() {
     "$(printf '%s' "$OUT" | jq -r '"\(.tag) \(.version) \(.previous) \(.task) \(.marker)"')"
   assert_eq "" "$(gh_writes)"
   assert_eq "files" "$(git -C "$SCRUM_REPO_DIR" log -1 --format=%s)" "nothing committed without --yes"
+  # The files --yes would commit are in the plan, as in `scrum release` (live run 2026-11-25).
+  assert_json_eq '["package.json","CHANGELOG.md"]' "$(printf '%s' "$OUT" | jq -c .files)"
+}
+
+# The text preview names the files before the user says yes, or says there are none.
+test_hotfix_prepare_preview_lists_the_files() {
+  prepare_env
+  run_scrum hotfix prepare
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "Committed on it with --yes: package.json, CHANGELOG.md"
+  assert_eq "files" "$(git -C "$SCRUM_REPO_DIR" log -1 --format=%s)" "nothing committed without --yes"
+  printf 'version: 1\nbranching:\n  preset: standard\nstatuses:\n  in_review: In review\n' > "$SCRUM_REPO_DIR/.github/scrum.yml"
+  run_scrum hotfix prepare
+  assert_status 0 "$STATUS" "$ERR"
+  assert_contains "$OUT" "Nothing to commit with --yes: no release.version_files or release.changelog is configured."
+  run_scrum hotfix prepare --json
+  assert_json_eq '[]' "$(printf '%s' "$OUT" | jq -c .files)"
 }
 
 # spec "Hotfix release": the version files and changelog on the hotfix branch, one local commit.
